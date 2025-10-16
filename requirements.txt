@@ -1,0 +1,21 @@
+# Core data and ETL
+pandas==2.2.2
+numpy==1.26.4
+matplotlib==3.9.1
+scipy==1.13.1
+tqdm==4.66.4
+
+# Machine learning / modeling
+scikit-learn==1.5.0
+tensorflow==2.15.0
+xgboost==2.0.3
+joblib==1.4.2
+
+# Explainability / drift
+shap==0.45.0
+river==0.21.1
+
+# Utilities
+jupyterlab==4.2.3
+notebook==7.2.1
+pyyaml==6.0.1
