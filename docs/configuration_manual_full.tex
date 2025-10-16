@@ -1,0 +1,130 @@
+% ======================================================
+% Configuration Manual – N-of-1 ADHD + Bipolar Disorder
+% Practicum Part 2 – MSc Artificial Intelligence for Business
+% National College of Ireland – Rodrigo Marques Teixeira
+% ======================================================
+
+\documentclass[12pt,a4paper]{article}
+
+% ---------- Packages ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{setspace}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{pgfplots}
+
+% ---------- Layout ----------
+\geometry{margin=2.5cm}
+\setstretch{1.3}
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Configuration Manual – Practicum Part 2}
+\lhead{Rodrigo Marques Teixeira}
+\cfoot{\thepage}
+
+% ---------- Title ----------
+\title{\textbf{Configuration Manual (Full Version)}\\N-of-1 Study – ADHD + Bipolar Disorder\\\vspace{0.4cm}\large Practicum Part 2 – MSc in Artificial Intelligence for Business}
+\author{\textbf{Rodrigo Marques Teixeira} \\ National College of Ireland \\ Supervisor: Dr. Agatha Mattos}
+\date{October 2025}
+
+% ---------- Document ----------
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% ======================================================
+% 1. Introduction
+% ======================================================
+\section{Introduction}
+This Configuration Manual describes the technical and ethical setup of the Practicum Part 2 project, focusing on the reproducible data pipeline and modeling workflow for the N-of-1 longitudinal study on comorbidity ADHD and Bipolar Disorder. The document complements the brief version submitted earlier and extends it with detailed configuration, architecture, and reproducibility notes.
+
+% ======================================================
+% 2. System Architecture
+% ======================================================
+\section{System Architecture}
+This section outlines the architecture of the project, from raw data ingestion to explainability outputs. Include or reference one system diagram (e.g., ETL → Modeling → Explainability).\\
+\textbf{Main components:}
+\begin{itemize}
+    \item Data sources: Apple Health, Amazfit GTR4, Helio Ring, EMA.
+    \item ETL pipeline: Python script with z-score normalization, segmentation (S1–S6), and NaN handling.
+    \item Modeling: Kaggle notebooks executing baselines and LSTM.
+    \item Explainability: SHAP drift detection and feature attribution.
+\end{itemize}
+
+% ======================================================
+% 3. Environment Setup
+% ======================================================
+\section{Environment Setup}
+\subsection{Requirements}
+The environment is Python-based (version 3.10+) and relies on open-source libraries. The complete dependency list is provided in \texttt{requirements.txt}.
+
+\subsection{Execution}
+\begin{verbatim}
+cd etl
+pip install -r requirements.txt
+python etl_pipeline.py
+\end{verbatim}
+For modeling, notebooks can be executed in Kaggle (GPU T4) or locally via JupyterLab.
+
+% ======================================================
+% 4. Data Management and Preprocessing
+% ======================================================
+\section{Data Management and Preprocessing}
+Describe the segmentation (S1–S6), feature normalization, and fallback methods. Reference \texttt{etl_qc_summary.csv} for quality metrics. Detail how missing data are handled and aggregated daily.
+
+% ======================================================
+% 5. Modeling Framework
+% ======================================================
+\section{Modeling Framework}
+Summarize the notebook workflows:\\
+\textbf{01\_feature\_engineering.ipynb}: feature creation and aggregation.\\
+\textbf{02\_model\_training.ipynb}: baselines (Naïve, Logistic Regression) and LSTM architectures.\\
+\textbf{03\_shap\_analysis.ipynb}: explainability with SHAP and drift detection.\\
+\textbf{04\_rule\_based\_baseline.ipynb}: heuristic comparison model.
+
+Include mention of 6-fold temporal cross-validation, evaluation metrics (F1, AUROC, Balanced ACC, Cohen’s kappa), and export of best model as \texttt{best\_model.tflite}.
+
+% ======================================================
+% 6. Ethics and Governance
+% ======================================================
+\section{Ethics and Governance}
+Summarize the ethical scope and compliance procedures:\\
+\textbf{Phase 1:} self-data collection.\\
+\textbf{Phase 2:} expansion to relatives/friends with informed consent and anonymisation.\\
+Refer to the \textit{Ethics Submission Plan} and Consent documentation stored under \texttt{/docs}.
+
+% ======================================================
+% 7. Reproducibility and Version Control
+% ======================================================
+\section{Reproducibility and Version Control}
+Describe GitHub repository structure, tagging conventions (v2.0–v2.3), and dataset version tracking. Mention that the repository contains only anonymised or synthetic examples.
+
+% ======================================================
+% 8. Future Work and Extensions
+% ======================================================
+\section{Future Work and Extensions}
+Outline potential expansions such as:\\
+\begin{itemize}
+    \item S7–S9 data collection phases with new participants.
+    \item Automated drift detection and retraining.
+    \item Integration of emotion data from Helio Ring (via Zepp Cloud API).
+    \item Validation of heuristic labels with clinical psychology collaborators.
+\end{itemize}
+
+% ======================================================
+% Appendix
+% ======================================================
+\appendix
+\section{Appendix}
+Include diagrams, configuration tables, or excerpts of key scripts (e.g., ETL pipeline pseudocode).
+
+\end{document}
