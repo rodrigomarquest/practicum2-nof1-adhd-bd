@@ -1,5 +1,10 @@
 # N-of-1 Study – ADHD + Bipolar Disorder (Practicum Part 2)
 
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Kaggle](https://img.shields.io/badge/Platform-Kaggle-lightgrey.svg)](https://www.kaggle.com/)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+[![Last Updated](https://img.shields.io/badge/Last%20Updated-October%202025-brightgreen.svg)]()
+
 **Author:** Rodrigo Marques Teixeira
 **Supervisor:** Dr. Agatha Mattos
 **Course:** MSc Artificial Intelligence for Business – National College of Ireland
@@ -96,8 +101,6 @@ If referencing this repository in academic work:
 ---
 
 ## 🔒 License
-
-[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 This work is licensed under a **Creative Commons Attribution–NonCommercial–ShareAlike 4.0 International License (CC BY-NC-SA 4.0)**.
 It may be reused for educational or academic purposes with proper credit and under the same license terms.
