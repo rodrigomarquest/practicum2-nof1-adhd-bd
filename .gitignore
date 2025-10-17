@@ -10,7 +10,7 @@ data_etl/
 
 # iOS extraction artefacts and decrypted outputs (personal/PII)
 decrypted_output/
-ios_extract/decrypted_output/
+!decrypted_output/.keep
 ios_extract/**/*.db
 ios_extract/**/*.plist
 ios_extract/**/*.tsv

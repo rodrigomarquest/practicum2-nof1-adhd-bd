@@ -28,7 +28,7 @@ EXTRACT_PLISTS       := $(IOS_DIR)/smart_extract_plists.py
 PLISTS_TO_CSV        := $(IOS_DIR)/plist_to_usage_csv.py
 EXTRACT_KNOWLEDGEC   := $(IOS_DIR)/extract_knowledgec.py
 PARSE_KNOWLEDGEC     := $(IOS_DIR)/parse_knowledgec_usage.py
-ETL_PIPELINE         := $(ETL_DIR)/etl_pipeline.py
+ETL_PIPELINE         := etl_pipeline.py
 
 # Flags
 CUTOVER ?= 2023-04-10
