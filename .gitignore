@@ -3,12 +3,37 @@
 # Git ignore rules for ETL, Kaggle notebooks, and ethical compliance
 # ================================
 
-# --- System / OS ---
+# -------------------------------------------------------------------
+# 📂 ETL local data (raw / decrypted iOS backups)
+data_etl/
+!data_etl/.keep
+
+# iOS extraction artefacts and decrypted outputs (personal/PII)
+decrypted_output/
+ios_extract/decrypted_output/
+ios_extract/**/*.db
+ios_extract/**/*.plist
+ios_extract/**/*.tsv
+ios_extract/**/*.csv
+ios_extract/**/*.sqlite*
+ios_extract/**/ios_backup/
+*_manifest.db
+*_knowledgec.db
+*_usage_daily.csv
+*.bplist
+
+# -------------------------------------------------------------------
+# 🧩 System / OS
 .DS_Store
 Thumbs.db
 desktop.ini
+ehthumbs.db
+Icon?
+$RECYCLE.BIN/
+*.lnk
 
-# --- Python / Virtual env ---
+# -------------------------------------------------------------------
+# 🐍 Python / Virtual environments
 __pycache__/
 *.py[cod]
 *.pyo
@@ -24,14 +49,16 @@ pip-wheel-metadata/
 build/
 dist/
 
-# --- Jupyter / Kaggle notebooks ---
+# -------------------------------------------------------------------
+# 📓 Jupyter / Kaggle notebooks
 .ipynb_checkpoints/
 *.ipynb_backup
 *.nbconvert.ipynb
 notebook.log
 .kaggle/
 
-# --- Logs / temp / cache ---
+# -------------------------------------------------------------------
+# 🧾 Logs / temp / cache
 *.log
 *.tmp
 *.bak
@@ -42,13 +69,15 @@ __logs__/
 __temp__/
 tmp/
 
-# --- IDE / Editor ---
+# -------------------------------------------------------------------
+# 🧰 IDE / Editors
 .vscode/
 .idea/
 .history/
 *.code-workspace
 
-# --- Data files ---
+# -------------------------------------------------------------------
+# 📊 Data files
 data/
 !data/sample_input/**
 !data/sample_output/**
@@ -62,7 +91,8 @@ data/
 *.npy
 *.npz
 
-# --- Models / weights ---
+# -------------------------------------------------------------------
+# 🤖 Models / weights / serialized
 *.tflite
 *.h5
 *.hdf5
@@ -72,7 +102,8 @@ data/
 *.pt
 *.ckpt
 
-# --- Outputs / results ---
+# -------------------------------------------------------------------
+# 📈 Outputs / results / figures
 *.png
 *.jpg
 *.jpeg
@@ -86,10 +117,11 @@ data/
 *.txt
 !README.md
 
-# --- Config / secrets ---
+# -------------------------------------------------------------------
+# 🔐 Config / secrets / credentials
 .env
 .env.*
-secrets.json
+secrets*.json
 config.yaml
 config.yml
 token_*.txt
@@ -97,21 +129,20 @@ credentials.json
 apikey.txt
 *.pem
 *.key
+*.pfx
+*.cer
 
-# --- OS / metadata ---
-*.DS_Store
-ehthumbs.db
-Icon?
-$RECYCLE.BIN/
-*.lnk
-
-# --- Jupyter auto-save / metadata ---
-*/.ipynb_checkpoints/*
-*/.ipynb_checkpoints
-*.ipynb_checkpoints
-
-# --- Ignore any temporary test or debug artifacts ---
+# -------------------------------------------------------------------
+# 🧪 Test / sandbox / scratch
 test_*.py
 debug_*.py
 sandbox/
 scratch/
+
+# -------------------------------------------------------------------
+# 🧬 Keep sample data, docs, and LaTeX
+!docs/**
+!notebooks/**
+!models/**
+!ios_extract/README.md
+!README.md
