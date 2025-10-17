@@ -24,8 +24,8 @@ ETL_DIR    := etl
 # Scripts
 DEC_MANIFEST         := $(IOS_DIR)/decrypt_manifest.py
 PROBE                := $(IOS_DIR)/quick_post_backup_probe.py
-EXTRACT_PLISTS       := $(IOS_DIR)/smart_extract_plists.py
-PLISTS_TO_CSV        := $(IOS_DIR)/plist_to_usage_csv.py
+EXTRACT_PLISTS       := $(IOS_DIR)/extract_plist_screentime.py
+PLISTS_TO_CSV        := $(IOS_DIR)/plist_to_usage.py
 EXTRACT_KNOWLEDGEC   := $(IOS_DIR)/extract_knowledgec.py
 PARSE_KNOWLEDGEC     := $(IOS_DIR)/parse_knowledgec_usage.py
 ETL_PIPELINE         := etl_pipeline.py
