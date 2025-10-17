@@ -1,0 +1,16 @@
+# Core ETL – Windows + Python 3.13 (safe)
+numpy>=2.1
+pandas>=2.2.3
+python-dateutil>=2.9.0.post0
+pytz>=2024.1
+tzlocal>=5.2
+
+# QoL / logs
+rich>=13.7.1
+colorama>=0.4.6
+
+# SQLite helpers (opcional mas útil p/ inspeções)
+sqlite-utils>=3.36.0
+
+# Visualização leve (opcional; remover se quiser ETL headless)
+matplotlib>=3.9.0
