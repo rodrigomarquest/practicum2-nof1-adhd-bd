@@ -117,6 +117,10 @@ data/
 *.txt
 !README.md
 
+# --- Allow requirements files to be tracked ---
+!requirements_*.txt
+
+
 # -------------------------------------------------------------------
 # 🔐 Config / secrets / credentials
 .env
