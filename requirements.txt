@@ -1,1 +1,8 @@
--r etl/requirements.txt
+# Practicum2 – unified root requirements
+-r requirements_etl.txt
+# Instalar ios só quando necessário, no venv de extração:
+# -r requirements_ios.txt
+
+# Shared utilities (podem duplicar com ETL sem problema)
+python-dotenv>=1.0.1
+tqdm>=4.66.5
