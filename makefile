@@ -59,8 +59,19 @@ venv:
 
 install:
 	$(PIP) install --upgrade pip setuptools wheel
-	$(PIP) install --upgrade -r $(ETL_DIR)/requirements.txt || true
-	$(PIP) install --upgrade iphone-backup-decrypt==0.9.0 pycryptodome
+	$(PIP) install --upgrade -r requirements_etl.txt
+
+install-ios:
+	$(PIP) install --upgrade -r requirements_ios.txt
+
+install-ai:
+	$(PIP) install --upgrade -r requirements_ai_kaggle.txt
+
+install-dev:
+	$(PIP) install --upgrade -r requirements_dev.txt
+
+install-all:
+	$(PIP) install --upgrade -r requirements.txt
 
 decrypt:
 	@BACKUP_DIR="$(BACKUP_DIR)" $(PY) $(DEC_MANIFEST)
