@@ -82,7 +82,42 @@ python etl_pipeline.py
 % 4. Data Management and Preprocessing
 % ======================================================
 \section{Data Management and Preprocessing}
-Daily features are normalised per version segment $S_1,\ldots,S_6$ using z-score: $z_i = (x_i-\mu)/\sigma$. Missing values are handled via documented fallback rules. Quality checks are summarised in \texttt{etl\_qc\_summary.csv}.
+
+The data used in this study originate from wearable and smartphone-based sensors, collected continuously over multiple months as part of an N-of-1 longitudinal experiment on ADHD and Bipolar Disorder comorbidity. 
+Primary data sources include Apple Health (heart rate, heart rate variability, sleep stages, step count, screen time), Amazfit devices (heart rate and HRV), and Helio Ring (temperature and emotional state), complemented by Ecological Momentary Assessments (EMA) and Apple “State of Mind” self-reports.
+
+All raw data are exported in CSV format and processed locally through a reproducible Python pipeline (\texttt{etl\_pipeline.py}). The ETL system is responsible for daily feature generation, data normalization, segmentation, and quality control. The overall flow is shown in Figure~\ref{fig:etl-pipeline}.
+
+\subsection*{Normalization}
+Each physiological or behavioral feature is normalized using z-score standardization, ensuring comparability across signals and devices:
+\[
+z_i = \frac{x_i - \mu}{\sigma}
+\]
+where $x_i$ is the raw value for day $i$, $\mu$ is the rolling mean, and $\sigma$ is the rolling standard deviation over a defined window.
+
+\subsection*{Segmentation}
+The dataset is divided into six temporal segments ($S_1$–$S_6$), each corresponding to distinct device firmware versions or clinical states. This segmentation supports drift analysis and model retraining in a controlled time-aware fashion.
+
+\subsection*{Feature Extraction}
+Daily-level features are aggregated from multiple raw channels (e.g., HR mean, HRV standard deviation, sleep duration, screen time, temperature variation). 
+New engineered features are derived through moving averages, differences, and z-score trends, resulting in a structured dataset suitable for time-series modeling.
+
+\subsection*{Fallback and Missing Data Handling}
+In the presence of missing or inconsistent records, fallback rules are applied:
+\begin{itemize}
+    \item Forward-fill for short gaps ($\leq$ 1 day) in continuous data;
+    \item Median replacement within the same segment for longer gaps;
+    \item Removal of invalid or out-of-range values after cross-source validation.
+\end{itemize}
+A detailed summary of missingness and replacements is logged in \texttt{etl\_qc\_summary.csv}.
+
+\subsection*{Outputs}
+The final ETL stage produces two main outputs:
+\begin{enumerate}
+    \item \textbf{features\_daily.csv} – the normalized, aggregated dataset ready for modeling;
+    \item \textbf{etl\_qc\_summary.csv} – a data quality and missingness report.
+\end{enumerate}
+These files are regenerated automatically each time the pipeline is executed, ensuring full traceability and version control.
 
 \begin{figure}[H]
   \centering

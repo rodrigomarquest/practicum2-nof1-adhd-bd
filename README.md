@@ -1,119 +1,131 @@
-# N-of-1 Study – ADHD + Bipolar Disorder (Practicum Part 2)
+N-of-1 Study – ADHD + Bipolar Disorder (Practicum Part 2)
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Kaggle](https://img.shields.io/badge/Platform-Kaggle-lightgrey.svg)](https://www.kaggle.com/)
-[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Last Updated](https://img.shields.io/badge/Last%20Updated-October%202025-brightgreen.svg)]()
+![Last Updated](https://img.shields.io/badge/Last%20Updated-October 2025-brightgreen.svg)
 
-**Author:** Rodrigo Marques Teixeira
-**Supervisor:** Dr. Agatha Mattos
-**Course:** MSc Artificial Intelligence for Business – National College of Ireland
-**Student ID:** 24130664
-**Period:** Jan 2023 – Jan 2026
+Author: Rodrigo Marques Teixeira
+Supervisor: Dr. Agatha Mattos
+Course: MSc Artificial Intelligence for Business – National College of Ireland
+Student ID: 24130664
+Period: Jan 2023 – Jan 2026
 
----
+📘 About the Project
 
-## 📘 About the Project
+This repository consolidates the full technical and ethical framework developed during Practicum Part 2 of the MSc in Artificial Intelligence for Business at NCI.
+It integrates data pre-processing (ETL), feature engineering, time-series modeling (baselines + LSTM), SHAP explainability, and complete GDPR/ethics documentation.
 
-This repository consolidates the full technical and ethical framework developed during **Practicum Part 2** of the MSc in Artificial Intelligence for Business at the National College of Ireland.
-It integrates **data preprocessing (ETL)**, **feature engineering**, **model training (baselines and LSTM)**, **SHAP explainability**, and **ethical documentation** compliant with GDPR and NCI Ethics requirements.
+The project extends the previous Practicum (Part 1) phase and focuses on reprocessing and modelling data from an N-of-1 longitudinal study on comorbidity ADHD + Bipolar Disorder, collected from wearable sensors (Apple Health, Amazfit GTR 4, Helio Ring) and self-reports (EMA / State of Mind).
 
-The project extends the previous Practicum (CA2) phase and focuses on reprocessing and modelling data from an **N-of-1 longitudinal study on comorbidity ADHD + Bipolar Disorder**, collected from wearable sensors (Apple Health, Amazfit GTR4, Helio Ring) and EMA-based self-reports.
+📊 Repository Structure
+etl/ → ETL scripts and data quality control
+ios_extract/ → iPhone Screen Time and KnowledgeC extraction tools
+notebooks/ → Feature engineering and model training (Kaggle-compatible)
+models/ → Trained models, metrics and SHAP explainability
+docs/ → Ethics, consent, configuration manual, governance
+data/ → Synthetic or anonymised samples for reproducibility
 
----
-
-## 📊 Repository Structure
-
-```
-etl/            → ETL scripts and data quality control
-notebooks/      → Feature engineering and model training notebooks (Kaggle-compatible)
-models/         → Trained models and explainability results
-docs/           → Ethics, consent, configuration manual, and data governance
-data/           → Synthetic or anonymised sample data for reproducibility
-```
-
----
-
-## ⚙️ Reproducibility and Environment
-
-### 1. Requirements
-
-```bash
+⚙️ Reproducibility and Environment
 cd etl
 pip install -r requirements.txt
 python etl_pipeline.py
-```
 
-### 2. Output
+Outputs
 
-* Generates `features_daily_sample.csv` and `etl_qc_summary.csv`
-* Normalises physiological and behavioural signals per segment (S1–S6)
-* Handles missingness, z-score scaling, and fallback replacements
+features_daily_sample.csv
 
----
+etl_qc_summary.csv
 
-## 🔷 Modeling and Explainability
+Includes z-score scaling, missing-value handling, and segment normalization (S1–S6).
 
-The modeling stage extends the ETL outputs to time-series classification notebooks executed in Kaggle (GPU T4, Python 3.10):
+🧩 iOS Screen Time / Usage Extraction
 
-1. **01_feature_engineering.ipynb** – Daily feature extraction and aggregation
-2. **02_model_training.ipynb** – Baselines (Naïve, Moving Average, Logistic Regression) and LSTM models (M1–M3)
-3. **03_shap_analysis.ipynb** – SHAP explainability for drift detection and top feature attribution
-4. **04_rule_based_baseline.ipynb** – Clinical heuristic baseline (rule-based model)
+A dedicated sub-module (ios_extract/) automates the pipeline from encrypted local iTunes backup → decrypted Manifest → Screen Time/KnowledgeC data.
 
-**Cross-validation:** 6 temporal folds (4 months training / 2 months validation)
-**Metrics:** F1-macro, AUROC-OvR, Balanced Accuracy, Cohen’s κ, and McNemar p-test
-**Output:** `models/best_model.tflite`, `metrics_summary.csv`, and `shap_top5_features.csv`
+ios_extract/
+├─ decrypt_manifest.py # decrypts Manifest.db and validates SQLite
+├─ quick_post_backup_probe.py # probes blobs present (flags=1)
+├─ extract_plist_screentime.py # extracts DeviceActivity & ScreenTimeAgent plists
+├─ smart_extract_plists.py # adaptive extractor (multi-strategy)
+├─ plist_to_usage_csv.py # parses plists → usage_daily_from_plists.csv
+├─ extract_knowledgec.py # extracts CoreDuet/KnowledgeC.db when present
+└─ parse_knowledgec_usage.py # parses KnowledgeC.db → usage_daily_from_knowledgec.csv
 
----
+Typical workflow
 
-## 🧠 Ethics and Data Protection
+python decrypt_manifest.py
+python quick_post_backup_probe.py
+python smart_extract_plists.py
+python plist_to_usage_csv.py
 
-* Repository contains **no identifiable data**.
-* All sensitive raw data are stored locally and encrypted.
-* Consent forms, participant information, and data management plan are available in `/docs`.
-* Data collection follows GDPR, NCI Ethics Committee procedures, and anonymisation guidelines.
+Expected outputs
 
-### Ethical Scope
+decrypted_output/
+├─ Manifest_decrypted.db
+├─ screentime_plists/
+│ ├─ DeviceActivity.plist
+│ ├─ ScreenTimeAgent.plist
+│ └─ usage_daily_from_plists.csv
+└─ knowledgec/
+└─ KnowledgeC.db → usage_daily_from_knowledgec.csv
 
-* **Phase 1:** Self-data (personal wearable and app-based metrics)
-* **Phase 2:** Expansion to family/friends/classmates with consent and anonymisation
+If only plists exist, the CSV may be empty (settings-only snapshot).
+Once KnowledgeC.db appears, the parser aggregates daily app-level usage.
 
----
+Dependencies
 
-## 🖊️ Version Control and Tagging
+python -m pip install iphone-backup-decrypt==0.9.0 pycryptodome
 
-| Tag                      | Description                                                      |
-| ------------------------ | ---------------------------------------------------------------- |
-| `v2.0-pre-ethics`        | ETL + documentation prior to ethics approval                     |
-| `v2.1-ethics-approved`   | Documents reviewed and approved by supervisor / ethics committee |
-| `v2.2-modeling-complete` | Modeling and SHAP results finalised                              |
-| `v2.3-final-report`      | CA3 / Dissertation submission version                            |
+🔷 Modeling and Explainability
+Notebook Focus Output
+01_feature_engineering.ipynb Daily feature aggregation 97 features (27 engineered)
+02_model_training.ipynb Baselines (Naïve, MA, LogReg) + LSTM M1–M3 best_model.tflite + metrics
+03_shap_analysis.ipynb SHAP drift + top-5 features shap_top5_features.csv
+04_rule_based_baseline.ipynb Clinical heuristic baseline Rule-based comparison
 
----
+Temporal CV: 6 folds (4 m train / 2 m val)
+Metrics: F1-macro/weighted, AUROC-OvR, Balanced ACC, Cohen κ, McNemar p.
 
-## 🌐 Citation
+🧠 Ethics and Data Protection
 
-If referencing this repository in academic work:
+No identifiable data committed.
 
-> Teixeira, R. M. (2025). *N-of-1 Study – ADHD + Bipolar Disorder (Practicum Part 2)*. National College of Ireland. GitHub repository: [https://github.com/rodrigomarques/practicum2-nof1-adhd-bd](https://github.com/rodrigomarques/practicum2-nof1-adhd-bd)
+Raw exports encrypted locally.
 
----
+/docs contains consent forms and data management plan.
 
-## 🔒 License
+GDPR + NCI Ethics compliance with anonymisation.
 
-This work is licensed under a **Creative Commons Attribution–NonCommercial–ShareAlike 4.0 International License (CC BY-NC-SA 4.0)**.
-It may be reused for educational or academic purposes with proper credit and under the same license terms.
+Phases
 
----
+Self-data (Apple Health, Amazfit, Helio Ring).
 
-## 📞 Contact
+Future opt-in collection from family/friends with consent.
 
-* **Rodrigo Marques Teixeira** – MSc AI for Business, National College of Ireland
-* **Supervisor:** Dr. Agatha Mattos
-* Email: [insert academic or contact email here]
+🧮 Version Control and Tagging
+Tag Description
+v2.0-pre-ethics ETL + docs before ethics approval
+v2.1-ethics-approved Ethics approved revision
+v2.2-modeling-complete Final models and SHAP results
+v2.3-final-report CA3 / dissertation submission
+🧭 Execution Timeline (Oct → Jan)
+Week Milestone
+W1 – Oct 2025 KnowledgeC integration + ETL update
+W2 – Nov 2025 Model retraining + LSTM drift analysis
+W3 – Dec 2025 Final LaTeX report + appendices
+Jan 2026 Viva defense and repository archival
+🌐 Citation
 
----
+Teixeira, R. M. (2025). N-of-1 Study – ADHD + Bipolar Disorder (Practicum Part 2).
+National College of Ireland. GitHub repository: https://github.com/rodrigomarques/practicum2-nof1-adhd-bd
 
-**Version:** v2.0-pre-ethics
-**Last updated:** October 2025
+🔒 License
+
+Licensed under CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike).
+Reuse allowed for academic purposes with proper credit.
+
+📞 Contact
+
+Rodrigo Marques Teixeira – MSc AI for Business (NCI)
+Supervisor: Dr. Agatha Mattos
+Email: x24130664@student.ncirl.ie
+
+Version: v2.0-pre-ethics  Last updated: October 2025
