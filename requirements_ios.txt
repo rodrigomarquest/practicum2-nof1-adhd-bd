@@ -1,0 +1,7 @@
+# iOS encrypted backup / Screen Time extraction
+pycryptodome>=3.20.0
+
+# A lib comprovada no teu fluxo; mais estável em Py 3.10–3.12.
+# Em Python 3.13 ainda há relatos de incompatibilidades — por isso deixamos
+# num arquivo separado e instalamos apenas no venv certo.
+iphone-backup-decrypt==0.9.0
