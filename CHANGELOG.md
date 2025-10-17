@@ -10,6 +10,48 @@ This project adheres to Semantic Versioning where applicable.
 - Export `best_model.tflite` and latency measurements.
 - Finalise LaTeX `main.tex` with updated figures + Appendices C–D.
 
+## [v2.0.2] – October 2025
+
+**Status:** Structural consolidation complete
+
+### Summary
+
+This release finalises the repository’s folder architecture and naming consistency for the N-of-1 ADHD + BD Practicum Part 2 project.  
+All iOS extraction scripts are now fully consolidated under `ios_extract/`, while the global ETL pipeline remains at the project root.
+
+### Added
+
+- Centralised iOS extraction utilities:
+  - `ios_extract/decrypt_manifest.py`
+  - `ios_extract/export_screentime.py`
+  - `ios_extract/extract_deviceactivity.py`
+  - `ios_extract/extract_knowledgec.py`
+  - `ios_extract/extract_plist_screentime.py`
+  - `ios_extract/plist_to_usage.py`
+  - `ios_extract/probe_deviceactivity_blobs.py`
+  - `ios_extract/quick_post_backup_probe.py`
+  - `ios_extract/screentime_ios_backup.py`
+  - `ios_extract/smart_extract_plists.py`
+
+### Changed
+
+- Fixed filename typo: `extract_knowledgegc.py` → `extract_knowledgec.py`
+- Updated `Makefile` targets to match new script paths
+- Improved `.gitignore` with explicit exceptions for `.keep` placeholders  
+  and consistent ignoring of decrypted output and manifests
+
+### Removed / Cleaned
+
+- Deleted temporary `manifest_*.tsv` and local generated PDF (`Configuration_Manual_Full.pdf`)
+- Removed duplicate `decrypted_output/` under `ios_extract/`
+- Eliminated redundant ETL scripts from project root (migrated to `ios_extract/`)
+
+### Notes
+
+- **ETL pipeline:** remains at root (`etl_pipeline.py`)
+- **Next milestone:** add `parse_knowledgec_usage.py` once `KnowledgeC.db` schema is confirmed
+- Repository is now compliant with the Practicum CA3 submission layout and ready for academic archiving
+
 ## [v2.0-pre-ethics] — 2025-10-17
 
 ### Added
