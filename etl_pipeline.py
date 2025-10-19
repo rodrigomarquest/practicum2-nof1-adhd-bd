@@ -30,18 +30,17 @@ import re
 import sys
 from collections import defaultdict
 from datetime import datetime, date
+from pathlib import Path
 import xml.etree.ElementTree as ET
 
 from etl_modules.extract_screen_time import extract_apple_screen_time
-from etl_modules.iphone_backup.iphone_backup import EncryptedBackup
+from etl_modules.iphone_backup.iphone_backup import EncryptedBackup  # mantido por compat
 
 import numpy as np
 import pandas as pd
-
-# --- Multi-participant / multi-snapshot discovery ---
-from pathlib import Path
 import json
 
+# --- Multi-participant / multi-snapshot discovery ---
 RAW_ROOT = Path("data_etl")
 AI_ROOT  = Path("data_ai")
 MANIFEST = Path("data_ai/DATA_MANIFEST.json")  # opcional; se existir, é priorizado
@@ -336,6 +335,7 @@ def zscore_by_segment(feat: pd.DataFrame, seg_col="segment_id"):
             sd = g[c].std(ddof=0)
             if not np.isfinite(sd) or sd == 0:
                 sd = 1.0
+            g[c] = g[c].astype(float)
             g[c + "_z"] = (g[c] - mu) / sd
         return g
 
@@ -414,7 +414,32 @@ def etl(xml_file: Path, outdir: Path, cutover_str: str, tz_before: str, tz_after
         lab = pd.read_csv(labels_csv, parse_dates=["date"])
         feat = feat.merge(lab, on="date", how="left")
 
+    # write features
     feat.to_csv(outdir / "features_daily.csv", index=False)
+
+    # ----- Zepp join (opcional, resiliente) -----
+    try:
+        from etl_modules.zepp_join import join_into_features
+
+        # inferir PID a partir de outdir: data_ai/<PID>/snapshots/<SNAP>
+        pid = "P000001"
+        try:
+            parts = outdir.resolve().parts
+            if "data_ai" in parts:
+                pid = parts[parts.index("data_ai") + 1]
+        except Exception:
+            pass
+
+        zepp_dir = Path("data_etl") / pid / "zepp_processed" / "_latest"
+
+        join_ok = join_into_features(
+            features_daily_path=outdir / "features_daily.csv",
+            zepp_daily_dir=zepp_dir,
+            version_log_path=outdir / "version_log_enriched.csv"
+        )
+        print(f"Zepp join ({pid}): {'OK' if join_ok else 'no-data'}")
+    except Exception as e:
+        print(f"⚠️ Zepp join skipped: {e}")
 
     # ---------- QC accumulation ----------
     qc = []
@@ -441,9 +466,9 @@ def etl(xml_file: Path, outdir: Path, cutover_str: str, tz_before: str, tz_after
         )
         if df_usage.empty or int(df_usage.shape[0]) == 0:
             print("ℹ️ Apple Health export.xml does not contain Screen Time records. "
-                "If you need real Screen Time, provide either an iOS encrypted backup "
-                "SQLite (ScreenTime.sqlite) or a daily CSV from Shortcuts under "
-                f"{(outdir.parent.parent / '.../screen_time/')}.")
+                  "If you need real Screen Time, provide either an iOS encrypted backup "
+                  "SQLite (ScreenTime.sqlite) or a daily CSV from Shortcuts under "
+                  f"{(outdir.parent.parent / '.../screen_time/')}.")
         mean_min = float(df_usage["screen_time_min"].mean()) if not df_usage.empty else 0.0
         print(f"📱 Screen Time → {out_usage} | days={len(df_usage)} | mean={mean_min:.1f} min/day")
 
@@ -452,11 +477,11 @@ def etl(xml_file: Path, outdir: Path, cutover_str: str, tz_before: str, tz_after
             {"metric": "screen_time_days", "value": int(len(df_usage))},
             {"metric": "screen_time_mean_min", "value": mean_min},
             {"metric": "screen_time_median_min",
-            "value": float(df_usage["screen_time_min"].median()) if not df_usage.empty else 0.0},
+             "value": float(df_usage["screen_time_min"].median()) if not df_usage.empty else 0.0},
             {"metric": "screen_time_min_min",
-            "value": float(df_usage["screen_time_min"].min()) if not df_usage.empty else 0.0},
+             "value": float(df_usage["screen_time_min"].min()) if not df_usage.empty else 0.0},
             {"metric": "screen_time_max_min",
-            "value": float(df_usage["screen_time_min"].max()) if not df_usage.empty else 0.0},
+             "value": float(df_usage["screen_time_min"].max()) if not df_usage.empty else 0.0},
         ])
     except Exception as e:
         print(f"⚠️ Screen Time extraction skipped: {e}")
@@ -467,10 +492,9 @@ def etl(xml_file: Path, outdir: Path, cutover_str: str, tz_before: str, tz_after
     print(f"Done. Wrote: {outdir} (features_daily.csv, version_log_enriched.csv, per-metric CSVs).")
 
 def main():
-    import argparse, sys
     parser = argparse.ArgumentParser(description="ETL Apple Health → data_ai/")
     parser.add_argument("--participant", help="Participant ID, e.g., P000001")
-    parser.add_argument("--snapshot", help="Snapshot id ddmmyyyy, e.g., 16102025")
+    parser.add_argument("--snapshot", help="Snapshot id (YYYY-MM-DD or YYYYMMDD)")
     parser.add_argument("--cutover", required=True, help="Cutover date YYYY-MM-DD (BR→IE)")
     parser.add_argument("--tz_before", required=True, help="IANA TZ before cutover, e.g., America/Sao_Paulo")
     parser.add_argument("--tz_after", required=True, help="IANA TZ after cutover, e.g., Europe/Dublin")
@@ -501,7 +525,6 @@ def main():
             tz_before=args.tz_before,
             tz_after=args.tz_after)
         return
-
 
     # Batch-run (auto discovery)
     jobs = discover_etl_jobs()
