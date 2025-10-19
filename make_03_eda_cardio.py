@@ -1,0 +1,174 @@
+import json, os
+from pathlib import Path
+
+NB = {
+ "cells": [
+  {"cell_type":"markdown","metadata":{},"source":[
+"# 03 · EDA — Cardiovascular\n",
+"\n",
+"**Purpose**: sanity-check and characterize cardiovascular features (HR/HRV),\n",
+"validate ETL end-to-end, and produce figures/tables for CA3.\n",
+"\n",
+"**Inputs**: `features_cardiovascular.csv`, `features_daily_updated.csv`, manifests.\n",
+"**Outputs**: figures in `eda_outputs/` and `eda_summary.json`.\n"
+  ]},
+  {"cell_type":"code","metadata":{},"source":[
+"import os, json\n",
+"from pathlib import Path\n",
+"import pandas as pd\n",
+"import numpy as np\n",
+"import matplotlib.pyplot as plt\n",
+"\n",
+"# ---- Parameters ----\n",
+"PID = 'P000001'\n",
+"SNAP = '2025-09-29'  # change if needed\n",
+"SNAPDIR = Path('data_ai')/PID/'snapshots'/SNAP\n",
+"OUTDIR = SNAPDIR/'eda_outputs'\n",
+"OUTDIR.mkdir(parents=True, exist_ok=True)\n",
+"print('SNAPDIR =', SNAPDIR)\n"
+  ]},
+  {"cell_type":"markdown","metadata":{},"source":["## 01 | Read manifests (reproducibility)"]},
+  {"cell_type":"code","metadata":{},"source":[
+"extract_manifest = {}\n",
+"cardio_manifest = {}\n",
+"em = SNAPDIR/'extract_manifest.json'\n",
+"cm = SNAPDIR/'cardio_manifest.json'\n",
+"if em.exists():\n",
+"    extract_manifest = json.loads(em.read_text(encoding='utf-8'))\n",
+"if cm.exists():\n",
+"    cardio_manifest = json.loads(cm.read_text(encoding='utf-8'))\n",
+"extract_manifest, cardio_manifest\n"
+  ]},
+  {"cell_type":"markdown","metadata":{},"source":["## 02 | Load data & QC"]},
+  {"cell_type":"code","metadata":{},"source":[
+"feat_cardio = pd.read_csv(SNAPDIR/'features_cardiovascular.csv', parse_dates=['date']) if (SNAPDIR/'features_cardiovascular.csv').exists() else pd.DataFrame()\n",
+"feat_dailyu = pd.read_csv(SNAPDIR/'features_daily_updated.csv', parse_dates=['date']) if (SNAPDIR/'features_daily_updated.csv').exists() else pd.DataFrame()\n",
+"print('feat_cardio rows:', len(feat_cardio), '| cols:', list(feat_cardio.columns)[:10], '...')\n",
+"print('feat_daily_updated rows:', len(feat_dailyu))\n",
+"\n",
+"def qc_report(df: pd.DataFrame, name: str):\n",
+"    if df.empty:\n",
+"        print(f\"{name}: EMPTY\")\n",
+"        return {}\n",
+"    rep = {\n",
+"        'n_rows': int(len(df)),\n",
+"        'date_min': str(df['date'].min().date()) if 'date' in df else None,\n",
+"        'date_max': str(df['date'].max().date()) if 'date' in df else None,\n",
+"        'na_counts': df.isna().sum().to_dict(),\n",
+"    }\n",
+"    print(name, 'QC:', rep['n_rows'], rep['date_min'], '→', rep['date_max'])\n",
+"    return rep\n",
+"\n",
+"qc_cardio = qc_report(feat_cardio, 'features_cardiovascular')\n",
+"qc_dailyu = qc_report(feat_dailyu, 'features_daily_updated')\n"
+  ]},
+  {"cell_type":"markdown","metadata":{},"source":["## 03 | Temporal trends (HR / HRV)"]},
+  {"cell_type":"code","metadata":{},"source":[
+"plt.figure(figsize=(10,3))\n",
+"if not feat_cardio.empty and 'date' in feat_cardio:\n",
+"    x = feat_cardio['date']\n",
+"    y = feat_cardio.filter(regex=r'(^|_)hr_mean(_|$)', axis=1)\n",
+"    if not y.empty:\n",
+"        plt.plot(x, y.iloc[:,0])\n",
+"plt.title('Daily HR mean')\n",
+"plt.xlabel('date'); plt.ylabel('bpm'); plt.tight_layout()\n",
+"plt.savefig(OUTDIR/'trend_hr_mean.png'); plt.show()\n",
+"\n",
+"plt.figure(figsize=(10,3))\n",
+"if not feat_cardio.empty and 'date' in feat_cardio:\n",
+"    x = feat_cardio['date']\n",
+"    y = feat_cardio.filter(regex=r'hrv.*(sdnn|sdnn_ms).*mean', axis=1)\n",
+"    if not y.empty:\n",
+"        plt.plot(x, y.iloc[:,0])\n",
+"plt.title('Daily HRV (SDNN) mean')\n",
+"plt.xlabel('date'); plt.ylabel('ms'); plt.tight_layout()\n",
+"plt.savefig(OUTDIR/'trend_hrv_sdnn_mean.png'); plt.show()\n"
+  ]},
+  {"cell_type":"markdown","metadata":{},"source":["## 04 | Distributions & correlations"]},
+  {"cell_type":"code","metadata":{},"source":[
+"num_cols = []\n",
+"if not feat_cardio.empty:\n",
+"    num_cols = [c for c in feat_cardio.columns if c != 'date' and pd.api.types.is_numeric_dtype(feat_cardio[c])]\n",
+"    dfnum = feat_cardio[num_cols].copy()\n",
+"    desc = dfnum.describe().T\n",
+"    desc.to_csv(OUTDIR/'desc_cardio.csv')\n",
+"    display(desc.head())\n",
+"\n",
+"    # simple correlation heatmap-like (matplotlib only)\n",
+"    corr = dfnum.corr(method='spearman')\n",
+"    plt.figure(figsize=(6,5))\n",
+"    plt.imshow(corr.values, aspect='auto')\n",
+"    plt.xticks(range(len(corr.columns)), corr.columns, rotation=90)\n",
+"    plt.yticks(range(len(corr.index)), corr.index)\n",
+"    plt.colorbar()\n",
+"    plt.title('Spearman correlation (cardio features)')\n",
+"    plt.tight_layout()\n",
+"    plt.savefig(OUTDIR/'corr_cardio.png'); plt.show()\n"
+  ]},
+  {"cell_type":"markdown","metadata":{},"source":["## 05 | Segment analysis (S1–S6)"]},
+  {"cell_type":"code","metadata":{},"source":[
+"if not feat_cardio.empty and 'segment_id' in feat_cardio.columns:\n",
+"    seg_counts = feat_cardio['segment_id'].value_counts(dropna=False).sort_index()\n",
+"    print('segment counts:\\n', seg_counts)\n",
+"    plt.figure(figsize=(6,3))\n",
+"    plt.bar(seg_counts.index.astype(str), seg_counts.values)\n",
+"    plt.title('Days per segment'); plt.tight_layout()\n",
+"    plt.savefig(OUTDIR/'segments_counts.png'); plt.show()\n",
+"\n",
+"    # boxplot HR by segment (first HR mean-like col)\n",
+"    hrcols = [c for c in feat_cardio.columns if re.search(r'(^|_)hr_mean(_|$)', c)]\n",
+"    if hrcols:\n",
+"        import re\n",
+"        data = [feat_cardio.loc[feat_cardio['segment_id']==sid, hrcols[0]].dropna().values for sid in sorted(feat_cardio['segment_id'].dropna().unique())]\n",
+"        plt.figure(figsize=(8,3))\n",
+"        plt.boxplot(data)\n",
+"        plt.title(f'HR mean by segment ({hrcols[0]})')\n",
+"        plt.tight_layout(); plt.savefig(OUTDIR/'box_hr_by_segment.png'); plt.show()\n"
+  ]},
+  {"cell_type":"markdown","metadata":{},"source":["## 06 | Label preview (optional)"]},
+  {"cell_type":"code","metadata":{},"source":[
+"label_cols = [c for c in feat_dailyu.columns if c.lower()=='label'] if not feat_dailyu.empty else []\n",
+"if label_cols:\n",
+"    df = feat_dailyu[['date', label_cols[0]]].merge(feat_cardio, on='date', how='left')\n",
+"    lab = label_cols[0]\n",
+"    print('label distribution:\\n', df[lab].value_counts(dropna=False))\n",
+"    # HR by label (first HR mean-like col)\n",
+"    hrcols = [c for c in feat_cardio.columns if re.search(r'(^|_)hr_mean(_|$)', c)]\n",
+"    if hrcols:\n",
+"        groups = [g.dropna().values for _, g in df.groupby(lab)[hrcols[0]]]\n",
+"        plt.figure(figsize=(6,3))\n",
+"        plt.boxplot(groups)\n",
+"        plt.title(f'{hrcols[0]} by label')\n",
+"        plt.tight_layout(); plt.savefig(OUTDIR/'box_hr_by_label.png'); plt.show()\n",
+"else:\n",
+"    print('No label column found; skipping label preview.')\n"
+  ]},
+  {"cell_type":"markdown","metadata":{},"source":["## 07 | Export EDA summary"]},
+  {"cell_type":"code","metadata":{},"source":[
+"summ = {\n",
+"    'pid': PID,\n",
+"    'snapshot': SNAP,\n",
+"    'feat_cardio_rows': int(len(feat_cardio)) if not feat_cardio.empty else 0,\n",
+"    'feat_daily_updated_rows': int(len(feat_dailyu)) if not feat_dailyu.empty else 0,\n",
+"    'manifests': {\n",
+"        'extract': extract_manifest.get('export_sha256',''),\n",
+"        'cardio_outputs': list((cardio_manifest.get('outputs') or {}).keys()),\n",
+"    }\n",
+"}\n",
+"(SNAPDIR/'eda_outputs'/'eda_summary.json').write_text(json.dumps(summ, indent=2), encoding='utf-8')\n",
+"print('Wrote', SNAPDIR/'eda_outputs'/'eda_summary.json')\n"
+  ]}
+ ],
+ "metadata": {
+  "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+  "language_info": {"name": "python", "pygments_lexer": "ipython3"}
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
+
+out = Path('notebooks'); out.mkdir(exist_ok=True)
+nbpath = out/'03_eda_cardio.ipynb'
+import json
+nbpath.write_text(json.dumps(NB), encoding='utf-8')
+print('CREATED:', nbpath)
