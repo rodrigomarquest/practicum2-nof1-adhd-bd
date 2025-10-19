@@ -1,107 +1,109 @@
-"""
-etl_pipeline.py — Apple Health ETL (streaming) → daily CSVs + features_daily.csv
+# -*- coding: utf-8 -*-
+from __future__ import annotations
 
-Converte Apple Health export.xml em tabelas diárias para:
-- HR (Heart Rate), HRV SDNN, Sleep (horas dormidas), Temperature.
-Gera version log por device/firmware, define segment_id, e (opcional) faz z-score
-por segmento. Stream-parse via ElementTree.iterparse (memória constante).
-
-USO (PowerShell/bash):
-  python etl_pipeline.py PATH/TO/export.xml OUT_DIR ^
-    --cutover-date 2024-03-11 --tz-before America/Sao_Paulo --tz-after Europe/Dublin
-
-Saídas (OUT_DIR):
-  health_hr_daily.csv
-  health_hrv_sdnn_daily.csv
-  health_sleep_daily.csv
-  health_temp_daily.csv
-  version_raw.csv
-  version_log_enriched.csv     # segment_id, start/end, ios/watch/fw, tz_name, source_name
-  features_daily.csv           # wide (date, segment_id, *_mean, *_std, n_*)
-  etl_qc_summary.csv           # resumo básico
-
-Notas:
-- Screen Time NÃO vem no export.xml → pipeline separado.
-- Emotion EXCLUÍDO.
-- Sleep = horas dormidas (somando intervalos marcados como “Asleep”).
-"""
+# stdlib
 import argparse
-import re
+import os
 import sys
-from collections import defaultdict
+import re
+import json
+import glob
+import io
+import tempfile
+import hashlib
 from datetime import datetime, date
 from pathlib import Path
+from typing import Optional, Iterable, Tuple, Any, Dict, Union
 import xml.etree.ElementTree as ET
 
-from etl_modules.extract_screen_time import extract_apple_screen_time
-from etl_modules.iphone_backup.iphone_backup import EncryptedBackup  # mantido por compat
-
+# third-party
 import numpy as np
 import pandas as pd
-import json
 
-# --- Multi-participant / multi-snapshot discovery ---
+# local
+from etl_modules.common.progress import Timer, progress_open
+
+# ----------------------------------------------------------------------
+# Atomic write helpers
+# ----------------------------------------------------------------------
+def _write_atomic_csv(df: 'pd.DataFrame', out_path: str | os.PathLike[str]):
+    d = os.path.dirname(out_path) or "."
+    fd, tmp = tempfile.mkstemp(prefix=".tmp_", dir=d, suffix=".csv")
+    os.close(fd)
+    try:
+        df.to_csv(tmp, index=False)
+        os.replace(tmp, out_path)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+
+def _write_atomic_json(obj: dict, out_path: str | os.PathLike[str]):
+    d = os.path.dirname(out_path) or "."
+    fd, tmp = tempfile.mkstemp(prefix=".tmp_", dir=d, suffix=".json")
+    os.close(fd)
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(obj, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, out_path)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+
+# ----------------------------------------------------------------------
+# Paths e snapshots
+# ----------------------------------------------------------------------
 RAW_ROOT = Path("data_etl")
 AI_ROOT  = Path("data_ai")
-MANIFEST = Path("data_ai/DATA_MANIFEST.json")  # opcional; se existir, é priorizado
 
-# Canonical snapshot id: YYYY-MM-DD. Accept legacy YYYYMMDD and convert.
 _SNAP_ISO  = re.compile(r"^20\d{2}-[01]\d-[0-3]\d$")
 _SNAP_8DIG = re.compile(r"^20\d{6}$")  # YYYYMMDD
 
-def _canon_snap_id(name: str) -> str:
-    """
-    Return snapshot id as YYYY-MM-DD.
-    Accepts 'YYYY-MM-DD' or legacy 'YYYYMMDD'; rejects ddmmyyyy to avoid ambiguity.
-    """
+def canon_snap_id(name: str) -> str:
     name = name.strip()
     if _SNAP_ISO.match(name):
         return name
     if _SNAP_8DIG.match(name):
-        # YYYYMMDD -> YYYY-MM-DD
-        return f"{name[0:4]}-{name[4:6]}-{name[6:8]}"
-    raise ValueError(f"Invalid snapshot folder '{name}'. Expected YYYY-MM-DD (or YYYYMMDD legacy).")
-
-def discover_etl_jobs():
-    """
-    Discover (participant_id, snapshot_id, xml_file).
-
-    Accepts both:
-      data_etl/<PID>/snapshots/<YYYY-MM-DD>/export.xml
-      data_etl/<PID>/<YYYY-MM-DD>/export.xml
-
-    Also accepts legacy <YYYYMMDD> and converts to ISO.
-    """
-    jobs = []
-    for pdir in sorted(RAW_ROOT.glob("P*/")):
-        pid = pdir.name
-
-        # We probe two bases: with and without 'snapshots'
-        for base in (pdir / "snapshots", pdir):
-            if not base.exists():
-                continue
-            for sdir in sorted([d for d in base.iterdir() if d.is_dir()]):
-                try:
-                    snap_iso = _canon_snap_id(sdir.name)
-                except ValueError:
-                    continue  # skip non-date folders
-
-                xml = sdir / "export.xml"
-                if xml.exists():
-                    jobs.append({"pid": pid, "snap": snap_iso, "xml": xml})
-    return jobs
+        return f"{name[:4]}-{name[4:6]}-{name[6:8]}"
+    raise ValueError(f"Invalid snapshot '{name}'. Expected YYYY-MM-DD or YYYYMMDD.")
 
 def ensure_ai_outdir(pid: str, snap: str) -> Path:
-    snap_iso = _canon_snap_id(snap)
+    snap_iso = canon_snap_id(snap)
     outdir = AI_ROOT / pid / "snapshots" / snap_iso
     outdir.mkdir(parents=True, exist_ok=True)
     return outdir
 
+def find_export_xml(pid: str, snap: str) -> Optional[Path]:
+    snap_iso = canon_snap_id(snap)
+    cands = [
+        RAW_ROOT / pid / "snapshots" / snap_iso / "export.xml",
+        RAW_ROOT / pid / "snapshots" / snap_iso.replace("-", "") / "export.xml",
+        RAW_ROOT / pid / snap_iso / "export.xml",
+        RAW_ROOT / pid / snap_iso.replace("-", "") / "export.xml",
+    ]
+    for p in cands:
+        if p.exists():
+            return p
+    return None
 
-# ---------- Timezone (zoneinfo, fallback pytz) ----------
+def _sha256_file(path: str | os.PathLike[str]) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+# ----------------------------------------------------------------------
+# Timezone (zoneinfo, fallback pytz)
+# ----------------------------------------------------------------------
 try:
-    from zoneinfo import ZoneInfo  # 3.9+
-except Exception:  # pragma: no cover
+    from zoneinfo import ZoneInfo  # py3.9+
+except Exception:
     ZoneInfo = None
     try:
         import pytz  # type: ignore
@@ -115,7 +117,9 @@ def get_tz(tz_name: str):
         return pytz.timezone(tz_name)  # type: ignore
     raise RuntimeError("No timezone support. Use Python 3.9+ or install pytz.")
 
-# ---------- HealthKit types ----------
+# ----------------------------------------------------------------------
+# HealthKit parsing
+# ----------------------------------------------------------------------
 TYPE_MAP = {
     "HKQuantityTypeIdentifierHeartRate": ("hr", "count/min"),
     "HKQuantityTypeIdentifierHeartRateVariabilitySDNN": ("hrv_sdnn", "ms"),
@@ -125,9 +129,8 @@ TYPE_MAP = {
     "HKQuantityTypeIdentifierBasalBodyTemperature": ("temp", "degC"),
 }
 
-# Sleep categories (string moderna e int legado) — contamos só "asleep"
 ASLEEP_STR = {
-    "HKCategoryValueSleepAnalysisAsleep",              # genérico
+    "HKCategoryValueSleepAnalysisAsleep",
     "HKCategoryValueSleepAnalysisAsleepUnspecified",
     "HKCategoryValueSleepAnalysisAsleepCore",
     "HKCategoryValueSleepAnalysisAsleepDeep",
@@ -135,14 +138,18 @@ ASLEEP_STR = {
 }
 ASLEEP_INT = {1, 3, 4, 5}
 
-DEVICE_KEY_MAP = {"name":"name", "manufacturer":"manufacturer",
-                  "model":"watch_model", "hardware":"watch_fw", "software":"ios_version"}
+DEVICE_KEY_MAP = {
+    "name": "name",
+    "manufacturer": "manufacturer",
+    "model": "watch_model",
+    "hardware": "watch_fw",
+    "software": "ios_version",
+}
 
 def fix_iso_tz(s: str) -> str:
-    """Normaliza ISO da Apple p/ 'YYYY-MM-DD HH:MM:SS±HH:MM' ou +00:00."""
     if s.endswith("Z"):
         return s[:-1] + "+00:00"
-    m = re.search(r"([+-]\d{2})(\d{2})$", s)  # '+0100' → '+01:00'
+    m = re.search(r"([+-]\d{2})(\d{2})$", s)
     if m:
         s = s[:m.start()] + f"{m.group(1)}:{m.group(2)}"
     return s
@@ -150,8 +157,8 @@ def fix_iso_tz(s: str) -> str:
 def parse_dt(s: str) -> datetime:
     return datetime.fromisoformat(fix_iso_tz(s))
 
-def parse_device_string(device_str: str):
-    info = {}
+def parse_device_string(device_str: str) -> Dict[str, str]:
+    info: Dict[str, str] = {}
     if not device_str:
         return info
     parts = [p.strip() for p in device_str.strip("<>").split(",")]
@@ -159,8 +166,7 @@ def parse_device_string(device_str: str):
         if ":" in part:
             k, v = part.split(":", 1)
             info[k.strip().lower()] = v.strip()
-    # mapear chaves
-    mapped = {}
+    mapped: Dict[str, str] = {}
     for k, v in info.items():
         if k in DEVICE_KEY_MAP:
             mapped[DEVICE_KEY_MAP[k]] = v
@@ -170,14 +176,20 @@ def make_tz_selector(cutover: date, tz_before: str, tz_after: str):
     tz_b = get_tz(tz_before)
     tz_a = get_tz(tz_after)
     def selector(dt_aware: datetime):
-        # escolhe TZ pela data civil em UTC (determinístico)
         day_utc = dt_aware.astimezone(get_tz("UTC")).date()
         return tz_a if day_utc >= cutover else tz_b
     return selector
 
-def iter_health_records(xml_path: Path, tz_selector):
-    """Yield: (type_id, value, start_local, end_local, unit, device_dict, tz_name, source_version, source_name)."""
-    context = ET.iterparse(xml_path, events=("end",))
+def iter_health_records(
+    xml_source: Union[Path, io.BufferedReader], tz_selector
+) -> Iterable[
+    Tuple[str, Any, datetime, Optional[datetime], str, Dict[str, str], str, str, str]
+]:
+    """
+    xml_source: Path OU file-like binário (ex.: ProgressFile)
+    """
+    src = xml_source if hasattr(xml_source, "read") else str(xml_source)
+    context = ET.iterparse(src, events=("end",))
     for _, elem in context:
         if elem.tag != "Record":
             continue
@@ -201,7 +213,7 @@ def iter_health_records(xml_path: Path, tz_selector):
         val_raw = elem.attrib.get("value")
 
         if type_id == "HKCategoryTypeIdentifierSleepAnalysis":
-            value = val_raw  # string/int; tratamos depois
+            value = val_raw
         else:
             try:
                 value = float(val_raw) if val_raw is not None else None
@@ -216,91 +228,18 @@ def iter_health_records(xml_path: Path, tz_selector):
         yield type_id, value, s_local, e_local, unit, device, tz_name, source_version, source_name
         elem.clear()
 
-def aggregate_daily(records):
-    """Aggrega métricas/dia e constroi version log bruto."""
-    daily = defaultdict(list)
-    version_rows = []
-
-    for (type_id, value, s_local, e_local, unit,
-         device, tz_name, src_ver, src_name) in records:
-
-        metric, _ = TYPE_MAP[type_id]
-        day = s_local.date()
-
-        if type_id == "HKCategoryTypeIdentifierSleepAnalysis":
-            # soma horas dormidas (apenas categorias Asleep)
-            cat = None
-            if isinstance(value, str):
-                cat = value.strip()
-            else:
-                try:
-                    cat = int(value) if value is not None else None
-                except Exception:
-                    cat = None
-            if e_local is None:
-                continue
-            dur_h = (e_local - s_local).total_seconds() / 3600.0
-            is_asleep = (isinstance(cat, str) and cat in ASLEEP_STR) or (isinstance(cat, int) and cat in ASLEEP_INT)
-            if is_asleep:
-                daily[(metric, day)].append(dur_h)
-        else:
-            if value is not None:
-                daily[(metric, day)].append(float(value))
-
-        ios_ver = device.get("ios_version", "") or src_ver
-        if ios_ver or device:
-            version_rows.append({
-                "date": day,
-                "ios_version": ios_ver,
-                "watch_model": device.get("watch_model", ""),
-                "watch_fw": device.get("watch_fw", ""),
-                "tz_name": tz_name,
-                "source_name": src_name
-            })
-
-    metric_dfs = {}
-    for (metric, day), values in daily.items():
-        arr = np.array(values, dtype=float)
-        n = int(arr.size)
-        if metric == "sleep":
-            total_h = float(np.nansum(arr)) if n else 0.0  # total dormido no dia
-            mean = float(np.nanmean(arr)) if n else np.nan
-            std  = float(np.nanstd(arr, ddof=1)) if n > 1 else 0.0
-            row = {
-                "date": day,
-                "sleep_sum_h": total_h,
-                "sleep_mean": mean,
-                "sleep_std":  std,
-                "n_sleep": n
-            }
-        else:
-            mean = float(np.nanmean(arr)) if n else np.nan
-            std  = float(np.nanstd(arr, ddof=1)) if n > 1 else 0.0
-            row = {
-                "date": day,
-                f"{metric}_mean": mean,
-                f"{metric}_std":  std,
-                f"n_{metric}": n
-            }
-        metric_dfs.setdefault(metric, []).append(row)
-
-    metric_dfs = {m: pd.DataFrame(rows).sort_values("date") for m, rows in metric_dfs.items()}
-
-    vdf = pd.DataFrame(version_rows).drop_duplicates().sort_values("date") if version_rows else pd.DataFrame()
-    return metric_dfs, vdf
-
+# ----------------------------------------------------------------------
+# Segments
+# ----------------------------------------------------------------------
 def build_segments_from_versions(vdf: pd.DataFrame) -> pd.DataFrame:
-    """Cria segments (segment_id, start/end) ao mudar ios/watch/fw/tz."""
     if vdf.empty:
         return pd.DataFrame(columns=["segment_id","start","end","ios_version","watch_model","watch_fw","tz_name","source_name"])
-
     df = vdf.copy()
     df["date"] = pd.to_datetime(df["date"])
     df = df.sort_values("date")
     keys = ["ios_version","watch_model","watch_fw","tz_name","source_name"]
     sig = df[keys].astype(str).agg(" | ".join, axis=1)
     change = sig.ne(sig.shift(fill_value="__START__"))
-
     segments = []
     seg_id = 0
     seg_start = df["date"].iloc[0]
@@ -325,220 +264,235 @@ def build_segments_from_versions(vdf: pd.DataFrame) -> pd.DataFrame:
     })
     return pd.DataFrame(segments)
 
-def zscore_by_segment(feat: pd.DataFrame, seg_col="segment_id"):
-    cont_cols = [c for c in feat.columns if c.endswith(("_mean","_std")) and not c.startswith("n_")]
-
-    def _z(g: pd.DataFrame) -> pd.DataFrame:
-        g = g.copy()
-        for c in cont_cols:
-            mu = g[c].mean()
-            sd = g[c].std(ddof=0)
-            if not np.isfinite(sd) or sd == 0:
-                sd = 1.0
-            g[c] = g[c].astype(float)
-            g[c + "_z"] = (g[c] - mu) / sd
-        return g
-
-    # pandas ≥ 2.2 tem include_groups; anteriores não
-    try:
-        return (
-            feat.groupby(seg_col, dropna=False, as_index=False)
-                .apply(_z, include_groups=False)
-                .reset_index(drop=True)
-        )
-    except TypeError:
-        return (
-            feat.groupby(seg_col, dropna=False, as_index=False)
-                .apply(_z)
-                .reset_index(drop=True)
-        )
-
-def etl(xml_file: Path, outdir: Path, cutover_str: str, tz_before: str, tz_after: str,
-        do_zscore: bool = True, labels_csv: Path | None = None):
-    outdir.mkdir(parents=True, exist_ok=True)
+# ----------------------------------------------------------------------
+# Apple → per-metric (extract)
+# ----------------------------------------------------------------------
+def extract_apple_per_metric(xml_file: Path, outdir: Path, cutover_str: str, tz_before: str, tz_after: str) -> Dict[str,str]:
+    out_pm = outdir / "per-metric"
+    out_pm.mkdir(parents=True, exist_ok=True)
 
     y, m, d = map(int, cutover_str.split("-"))
     tz_selector = make_tz_selector(date(y, m, d), tz_before, tz_after)
 
-    records = iter_health_records(xml_file, tz_selector)
-    metric_dfs, vdf = aggregate_daily(records)
+    hr_rows, hrv_rows, sleep_rows, version_rows = [], [], [], []
+    HR_ID   = "HKQuantityTypeIdentifierHeartRate"
+    HRV_ID  = "HKQuantityTypeIdentifierHeartRateVariabilitySDNN"
+    SLEEP_ID= "HKCategoryTypeIdentifierSleepAnalysis"
 
-    # save per-metric CSVs
-    for metric, df in metric_dfs.items():
-        if not df.empty:
-            df["date"] = pd.to_datetime(df["date"]).dt.date
-        df.to_csv(outdir / f"health_{metric}_daily.csv", index=False)
+    with Timer("extract: parse export.xml"):
+        with progress_open(xml_file, desc="Parsing export.xml") as pf:
+            records = iter_health_records(pf, tz_selector)
+            for (type_id, value, s_local, e_local, unit, device, tz_name, src_ver, src_name) in records:
+                day = s_local.date()
+                ios_ver = device.get("ios_version", "") or src_ver
+                if ios_ver or device:
+                    version_rows.append({
+                        "date": day,
+                        "ios_version": ios_ver,
+                        "watch_model": device.get("watch_model", ""),
+                        "watch_fw": device.get("watch_fw", ""),
+                        "tz_name": tz_name,
+                        "source_name": src_name
+                    })
+                if type_id == HR_ID and value is not None:
+                    hr_rows.append({"timestamp": s_local.isoformat(), "bpm": float(value)})
+                elif type_id == HRV_ID and value is not None:
+                    hrv_rows.append({"timestamp": s_local.isoformat(), "sdnn_ms": float(value)})
+                elif type_id == SLEEP_ID and e_local is not None:
+                    sleep_rows.append({"start": s_local.isoformat(), "end": e_local.isoformat(), "raw_value": value})
+
+    written: Dict[str,str] = {}
+
+    if hr_rows:
+        p = out_pm / "apple_heart_rate.csv"
+        _write_atomic_csv(pd.DataFrame(hr_rows).sort_values("timestamp"), p)
+        written["apple_heart_rate"] = str(p)
+    if hrv_rows:
+        p = out_pm / "apple_hrv_sdnn.csv"
+        _write_atomic_csv(pd.DataFrame(hrv_rows).sort_values("timestamp"), p)
+        written["apple_hrv_sdnn"] = str(p)
+    if sleep_rows:
+        p = out_pm / "apple_sleep_intervals.csv"
+        _write_atomic_csv(pd.DataFrame(sleep_rows).sort_values("start"), p)
+        written["apple_sleep_intervals"] = str(p)
 
     # version logs
+    vdf = pd.DataFrame(version_rows).drop_duplicates().sort_values("date") if version_rows else pd.DataFrame()
     if not vdf.empty:
-        vdf.to_csv(outdir / "version_raw.csv", index=False)
+        _write_atomic_csv(vdf, outdir / "version_raw.csv")
         seg_df = build_segments_from_versions(vdf)
-        seg_df.to_csv(outdir / "version_log_enriched.csv", index=False)
+        _write_atomic_csv(seg_df, outdir / "version_log_enriched.csv")
+        written["version_raw"] = str(outdir / "version_raw.csv")
+        written["version_log_enriched"] = str(outdir / "version_log_enriched.csv")
     else:
-        seg_df = pd.DataFrame(columns=["segment_id","start","end","ios_version","watch_model","watch_fw","tz_name","source_name"])
+        _write_atomic_csv(pd.DataFrame(columns=["date","ios_version","watch_model","watch_fw","tz_name","source_name"]), outdir / "version_raw.csv")
+        _write_atomic_csv(pd.DataFrame(columns=["segment_id","start","end","ios_version","watch_model","watch_fw","tz_name","source_name"]), outdir / "version_log_enriched.csv")
 
-    # merge wide
-    dfs = []
-    for m in ("hr","hrv_sdnn","sleep","temp"):
-        f = outdir / f"health_{m}_daily.csv"
-        if f.exists():
-            dfi = pd.read_csv(f, parse_dates=["date"])
-            dfs.append(dfi)
-    if dfs:
-        feat = dfs[0]
-        for dfi in dfs[1:]:
-            feat = feat.merge(dfi, on="date", how="outer")
-        feat = feat.sort_values("date").reset_index(drop=True)
-    else:
-        feat = pd.DataFrame(columns=["date"])
-
-    # segment_id by date
-    if not seg_df.empty and not feat.empty:
-        s2 = seg_df.copy()
-        s2["start"] = pd.to_datetime(s2["start"])
-        s2["end"] = pd.to_datetime(s2["end"])
-        feat["segment_id"] = np.nan
-        for _, r in s2.iterrows():
-            mask = (feat["date"] >= r["start"]) & (feat["date"] <= r["end"])
-            feat.loc[mask, "segment_id"] = int(r["segment_id"])
-    else:
-        if "segment_id" not in feat.columns:
-            feat["segment_id"] = np.nan
-
-    # optional z-score by segment
-    if do_zscore and not feat.empty:
-        feat = zscore_by_segment(feat, seg_col="segment_id")
-
-    # optional labels merge
-    if labels_csv is not None and Path(labels_csv).exists() and not feat.empty:
-        lab = pd.read_csv(labels_csv, parse_dates=["date"])
-        feat = feat.merge(lab, on="date", how="left")
-
-    # write features
-    feat.to_csv(outdir / "features_daily.csv", index=False)
-
-    # ----- Zepp join (opcional, resiliente) -----
+    # manifest
+    manifest = {
+        "type": "extract",
+        "export_xml": str(xml_file),
+        "params": {"cutover": cutover_str, "tz_before": tz_before, "tz_after": tz_after},
+        "outputs": {},
+    }
     try:
-        from etl_modules.zepp_join import join_into_features
-
-        # inferir PID a partir de outdir: data_ai/<PID>/snapshots/<SNAP>
-        pid = "P000001"
+        if os.path.exists(xml_file):
+            manifest["export_sha256"] = _sha256_file(xml_file)
+    except Exception:
+        manifest["export_sha256"] = None
+    for k, v in list(written.items()):
         try:
-            parts = outdir.resolve().parts
-            if "data_ai" in parts:
-                pid = parts[parts.index("data_ai") + 1]
+            manifest["outputs"][k] = {"path": v, "sha256": _sha256_file(v)}
         except Exception:
-            pass
+            manifest["outputs"][k] = {"path": v, "sha256": None}
+    _write_atomic_json(manifest, outdir / "extract_manifest.json")
+    return written
 
-        zepp_dir = Path("data_etl") / pid / "zepp_processed" / "_latest"
+# ----------------------------------------------------------------------
+# Cardiovascular stage
+# ----------------------------------------------------------------------
+def run_stage_cardio(snapshot_dir: Path) -> Dict[str,str]:
+    from etl_modules.config import CardioCfg
+    from etl_modules.cardiovascular.cardio_etl import run_stage_cardio as _run
+    cfg = CardioCfg()
+    res = _run(str(snapshot_dir), str(snapshot_dir), cfg)
+    return {k: str(v) for k, v in res.items()}
 
-        join_ok = join_into_features(
-            features_daily_path=outdir / "features_daily.csv",
-            zepp_daily_dir=zepp_dir,
-            version_log_path=outdir / "version_log_enriched.csv"
-        )
-        print(f"Zepp join ({pid}): {'OK' if join_ok else 'no-data'}")
-    except Exception as e:
-        print(f"⚠️ Zepp join skipped: {e}")
-
-    # ---------- QC accumulation ----------
-    qc = []
-    for m in ("hr","hrv_sdnn","sleep","temp"):
-        m_cols = [c for c in feat.columns if c.startswith(m) and c.endswith("_mean")]
-        if not m_cols:
-            continue
-        present = int(pd.Series(feat[m_cols[0]]).notna().sum())
-        qc.append({"metric": m, "days_present": present})
-    if "segment_id" in feat.columns:
-        vc = pd.Series(feat["segment_id"]).value_counts(dropna=True)
-        for seg, cnt in vc.items():
-            qc.append({"metric": f"segment_{int(seg)}", "days_present": int(cnt)})
-
-    # --- Apple Screen Time (with BR→IE cutover) ---
-    try:
-        out_usage = outdir / "health_usage_daily.csv"
-        df_usage = extract_apple_screen_time(
-            export_xml_path=xml_file,
-            output_csv_path=out_usage,
-            cutover_str=cutover_str,
-            tz_before=tz_before,
-            tz_after=tz_after,
-        )
-        if df_usage.empty or int(df_usage.shape[0]) == 0:
-            print("ℹ️ Apple Health export.xml does not contain Screen Time records. "
-                  "If you need real Screen Time, provide either an iOS encrypted backup "
-                  "SQLite (ScreenTime.sqlite) or a daily CSV from Shortcuts under "
-                  f"{(outdir.parent.parent / '.../screen_time/')}.")
-        mean_min = float(df_usage["screen_time_min"].mean()) if not df_usage.empty else 0.0
-        print(f"📱 Screen Time → {out_usage} | days={len(df_usage)} | mean={mean_min:.1f} min/day")
-
-        # Append QC for screen time (even if 0 days; helps downstream)
-        qc.extend([
-            {"metric": "screen_time_days", "value": int(len(df_usage))},
-            {"metric": "screen_time_mean_min", "value": mean_min},
-            {"metric": "screen_time_median_min",
-             "value": float(df_usage["screen_time_min"].median()) if not df_usage.empty else 0.0},
-            {"metric": "screen_time_min_min",
-             "value": float(df_usage["screen_time_min"].min()) if not df_usage.empty else 0.0},
-            {"metric": "screen_time_max_min",
-             "value": float(df_usage["screen_time_min"].max()) if not df_usage.empty else 0.0},
-        ])
-    except Exception as e:
-        print(f"⚠️ Screen Time extraction skipped: {e}")
-
-    # write QC at the end (includes screen time metrics if extracted)
-    pd.DataFrame(qc).to_csv(outdir / "etl_qc_summary.csv", index=False)
-
-    print(f"Done. Wrote: {outdir} (features_daily.csv, version_log_enriched.csv, per-metric CSVs).")
-
+# ----------------------------------------------------------------------
+# CLI
+# ----------------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description="ETL Apple Health → data_ai/")
-    parser.add_argument("--participant", help="Participant ID, e.g., P000001")
-    parser.add_argument("--snapshot", help="Snapshot id (YYYY-MM-DD or YYYYMMDD)")
-    parser.add_argument("--cutover", required=True, help="Cutover date YYYY-MM-DD (BR→IE)")
-    parser.add_argument("--tz_before", required=True, help="IANA TZ before cutover, e.g., America/Sao_Paulo")
-    parser.add_argument("--tz_after", required=True, help="IANA TZ after cutover, e.g., Europe/Dublin")
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser(description="ETL Apple/Zepp — Nova arquitetura (definitivo)")
+    sub = ap.add_subparsers(dest="cmd", required=True)
 
-    # SINGLE RUN (when both provided)
-    if args.participant and args.snapshot:
-        pid = args.participant
-        snap_iso = _canon_snap_id(args.snapshot)
+    # extract
+    p_ext = sub.add_parser("extract", help="Apple → per-metric (a partir de export.xml)")
+    p_ext.add_argument("--participant", required=True)
+    p_ext.add_argument("--snapshot", required=True)
+    p_ext.add_argument("--cutover", required=True)
+    p_ext.add_argument("--tz_before", required=True)
+    p_ext.add_argument("--tz_after", required=True)
 
-        # Try with and without the 'snapshots' middle folder on input
-        candidates = [
-            RAW_ROOT / pid / "snapshots" / snap_iso / "export.xml",
-            RAW_ROOT / pid / "snapshots" / snap_iso.replace("-", "") / "export.xml",
-            RAW_ROOT / pid / snap_iso / "export.xml",
-            RAW_ROOT / pid / snap_iso.replace("-", "") / "export.xml",
-        ]
-        xml = next((p for p in candidates if p.exists()), None)
+    # cardio
+    p_car = sub.add_parser("cardio", help="Executa estágio Cardiovascular no snapshot")
+    p_car.add_argument("--zepp_dir", help="Diretório fixo com CSVs processados do Zepp (evita _latest)")
+    g = p_car.add_mutually_exclusive_group(required=True)
+    g.add_argument("--snapshot_dir", help="Caminho data_ai/<PID>/snapshots/<YYYY-MM-DD>")
+    g.add_argument("--participant", help="PID (usar com --snapshot)")
+    p_car.add_argument("--snapshot", help="Snapshot id (YYYY-MM-DD ou YYYYMMDD)")
+
+    # full
+    p_full = sub.add_parser("full", help="extract → cardio (pipeline novo ponta-a-ponta)")
+    p_full.add_argument("--participant", required=True)
+    p_full.add_argument("--snapshot", required=True)
+    p_full.add_argument("--cutover", required=True)
+    p_full.add_argument("--tz_before", required=True)
+    p_full.add_argument("--tz_after", required=True)
+    p_full.add_argument("--zepp_dir", help="Diretório fixo com CSVs processados do Zepp (evita _latest)")
+
+    args = ap.parse_args()
+
+    if args.cmd == "extract":
+        pid, snap = args.participant, args.snapshot
+        xml = find_export_xml(pid, snap)
         if xml is None:
-            print(f"⚠️ export.xml not found. Tried:\n  - " + "\n  - ".join(str(p) for p in candidates))
-            sys.exit(1)
-
-        outdir = ensure_ai_outdir(pid, snap_iso)
-        print(f"🚀 ETL single: {pid} / {snap_iso}")
-        etl(xml_file=xml,
-            outdir=outdir,
-            cutover_str=args.cutover,
-            tz_before=args.tz_before,
-            tz_after=args.tz_after)
-        return
-
-    # Batch-run (auto discovery)
-    jobs = discover_etl_jobs()
-    if not jobs:
-        print("⚠️ Nothing to process. Expected: data_etl/<PID>/snapshots/<YYYY-MM-DD>/export.xml (legacy YYYYMMDD also supported)")
-        sys.exit(0)
-
-    print(f"🚀 ETL batch: {len(jobs)} snapshot(s) found")
-    for j in jobs:
-        pid, snap, xml = j["pid"], j["snap"], j["xml"]
+            print("⚠️ export.xml não encontrado para:", pid, snap)
+            return 1
         outdir = ensure_ai_outdir(pid, snap)
-        print(f"→ {pid} / {snap}")
-        etl(xml_file=xml, outdir=outdir,
-            cutover_str=args.cutover, tz_before=args.tz_before, tz_after=args.tz_after)
+        with Timer(f"extract [{pid}/{snap}]"):
+            written = extract_apple_per_metric(xml_file=xml, outdir=outdir,
+                                               cutover_str=args.cutover,
+                                               tz_before=args.tz_before, tz_after=args.tz_after)
+        print("✅ extract concluído")
+        for k,v in written.items():
+            print(f" - {k}: {v}")
+        return 0
+
+    if args.cmd == "cardio":
+        if args.snapshot_dir:
+            snapdir = Path(args.snapshot_dir)
+        else:
+            if not args.participant or not args.snapshot:
+                print("Use --snapshot_dir OU (--participant e --snapshot).")
+                return 2
+            snapdir = ensure_ai_outdir(args.participant, args.snapshot)
+        if not snapdir.exists():
+            print("⚠️ snapshot_dir não existe:", snapdir)
+            return 1
+
+        if args.zepp_dir:
+            os.environ["ZEPPOVERRIDE_DIR"] = args.zepp_dir
+
+        with Timer(f"cardio [{snapdir}]"):
+            res = run_stage_cardio(snapdir)
+
+        # manifest do cardio (inputs e outputs com hashes)
+        inputs = {}
+        for pm in ["apple_heart_rate.csv","apple_hrv_sdnn.csv","apple_sleep_intervals.csv"]:
+            pth = snapdir / "per-metric" / pm
+            if pth.exists():
+                try:
+                    inputs[pm] = {"path": str(pth), "sha256": _sha256_file(pth)}
+                except Exception:
+                    inputs[pm] = {"path": str(pth), "sha256": None}
+        for name in ["version_log_enriched.csv","version_raw.csv"]:
+            pth = snapdir / name
+            if pth.exists():
+                try:
+                    inputs[name] = {"path": str(pth), "sha256": _sha256_file(pth)}
+                except Exception:
+                    inputs[name] = {"path": str(pth), "sha256": None}
+        zdir = os.environ.get("ZEPPOVERRIDE_DIR","")
+        zepp = {}
+        for z in (glob.glob(os.path.join(zdir, "*.csv")) if zdir else []):
+            try:
+                zepp[z] = {"path": z, "sha256": _sha256_file(z)}
+            except Exception:
+                zepp[z] = {"path": z, "sha256": None}
+
+        outputs = {}
+        for k,v in res.items():
+            try:
+                outputs[k] = {"path": v, "sha256": _sha256_file(v)}
+            except Exception:
+                outputs[k] = {"path": v, "sha256": None}
+
+        manifest = {
+            "type": "cardio",
+            "snapshot_dir": str(snapdir),
+            "zepp_dir": zdir or None,
+            "inputs": {"per_metric": inputs, "zepp": zepp},
+            "outputs": outputs
+        }
+        _write_atomic_json(manifest, snapdir / "cardio_manifest.json")
+
+        print("✅ cardio concluído")
+        print(res)
+        return 0
+
+    if args.cmd == "full":
+        pid, snap = args.participant, args.snapshot
+        xml = find_export_xml(pid, snap)
+        if xml is None:
+            print("⚠️ export.xml não encontrado para:", pid, snap)
+            return 1
+        outdir = ensure_ai_outdir(pid, snap)
+        with Timer(f"extract [{pid}/{snap}]"):
+            written = extract_apple_per_metric(xml_file=xml, outdir=outdir,
+                                               cutover_str=args.cutover,
+                                               tz_before=args.tz_before, tz_after=args.tz_after)
+        print("✅ extract concluído")
+        for k,v in written.items():
+            print(f" - {k}: {v}")
+        if args.zepp_dir:
+            os.environ["ZEPPOVERRIDE_DIR"] = args.zepp_dir
+        with Timer(f"cardio [{outdir}]"):
+            res = run_stage_cardio(outdir)
+        print("✅ cardio concluído")
+        print(res)
+        return 0
+
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

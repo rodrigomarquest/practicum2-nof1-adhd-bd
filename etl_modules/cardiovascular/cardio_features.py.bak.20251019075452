@@ -1,0 +1,159 @@
+"""
+Cardio feature derivation (functional minimal).
+"""
+import math, os
+import numpy as np
+import pandas as pd
+from etl_modules.config import CardioCfg
+from etl_modules.common.io import read_csv_if_exists
+
+def _ensure_date_col(df: pd.DataFrame) -> pd.DataFrame:
+    if "date" not in df.columns:
+        df = df.copy()
+        df["date"] = pd.to_datetime(df["timestamp"]).dt.date
+    return df
+
+def _split_awake_night(idx: pd.DatetimeIndex, cfg: CardioCfg) -> pd.Series:
+    hours = idx.tz_localize(None).hour
+    is_night = (hours >= 22) | (hours < 6)
+    return pd.Series(np.where(is_night, "night", "awake"), index=idx)
+
+def derive_hr_features(hr: pd.DataFrame | None, sleep, segments, cfg: CardioCfg) -> pd.DataFrame:
+    if hr is None or hr.empty:
+        return pd.DataFrame(columns=["date","segment_id"])
+    df = hr.copy()
+    df = _ensure_date_col(df)
+    df = df.dropna(subset=["timestamp"]).sort_values("timestamp").set_index("timestamp")
+
+    cov = df["bpm"].notna().groupby(df["date"]).mean().mul(100.0).rename("cv_hr_coverage_pct_day")
+    agg_day = df.groupby("date")["bpm"].agg(
+        cv_hr_mean_day="mean",
+        cv_hr_median_day="median",
+        cv_hr_std_day="std",
+        cv_hr_min_day="min",
+        cv_hr_max_day="max",
+        cv_hr_iqr_day=lambda s: (np.nanpercentile(s, 75) - np.nanpercentile(s, 25))
+    )
+    periods = _split_awake_night(df.index, cfg)
+    df["period"] = periods.values
+    agg_period = df.groupby(["date","period"])["bpm"].mean().unstack("period")
+    if "awake" not in agg_period.columns: agg_period["awake"] = np.nan
+    if "night" not in agg_period.columns: agg_period["night"] = np.nan
+    agg_period = agg_period.rename(columns={"awake":"cv_hr_mean_awake","night":"cv_hr_mean_night"})
+    agg_period["cv_hr_circ_amp"] = agg_period["cv_hr_mean_awake"] - agg_period["cv_hr_mean_night"]
+
+    out = pd.concat([agg_day, cov, agg_period], axis=1).reset_index()
+    out["cv_flag_low_coverage"] = (out["cv_hr_coverage_pct_day"] < cfg.low_coverage_pct).astype(int)
+
+    if segments is not None and not segments.empty:
+        seg = segments.copy()
+        seg["date"] = pd.to_datetime(seg["date"]).dt.date
+        out = out.merge(seg[["date","segment_id"]], on="date", how="left")
+    else:
+        out["segment_id"] = pd.NA
+    return out
+
+def derive_hrv_features(hrv: pd.DataFrame | None, hr, sleep, segments, cfg: CardioCfg) -> pd.DataFrame:
+    if hrv is None or hrv.empty:
+        return pd.DataFrame(columns=["date","segment_id"])
+    df = hrv.copy()
+    df = _ensure_date_col(df)
+    df = df.dropna(subset=["timestamp"]).sort_values("timestamp").set_index("timestamp")
+
+    day_mean = df.groupby("date")["val"].mean().rename("cv_hrv_day")
+    day_std  = df.groupby("date")["val"].std().rename("cv_hrv_std_day")
+
+    periods = _split_awake_night(df.index, cfg)
+    df["period"] = periods.values
+    agg_period = df.groupby(["date","period"])["val"].mean().unstack("period")
+    if "awake" not in agg_period.columns: agg_period["awake"] = np.nan
+    if "night" not in agg_period.columns: agg_period["night"] = np.nan
+    agg_period = agg_period.rename(columns={"awake":"cv_hrv_awake","night":"cv_hrv_night"})
+    agg_period["cv_hrv_delta"] = agg_period["cv_hrv_night"] - agg_period["cv_hrv_awake"]
+
+    out = pd.concat([day_mean, day_std, agg_period], axis=1).reset_index()
+
+    metric_name = "hrv_ms"
+    if "metric" in hrv.columns:
+        met = hrv["metric"].dropna().astype(str)
+        metric_name = met.iloc[0] if not met.empty else "hrv_ms"
+
+    out = out.rename(columns={
+        "cv_hrv_day": f"cv_{metric_name}_day",
+        "cv_hrv_std_day": f"cv_{metric_name}_std_day",
+        "cv_hrv_awake": f"cv_{metric_name}_awake",
+        "cv_hrv_night": f"cv_{metric_name}_night",
+        "cv_hrv_delta": f"cv_{metric_name}_delta",
+    })
+
+    if segments is not None and not segments.empty:
+        seg = segments.copy()
+        seg["date"] = pd.to_datetime(seg["date"]).dt.date
+        out = out.merge(seg[["date","segment_id"]], on="date", how="left")
+    else:
+        out["segment_id"] = pd.NA
+    return out
+
+def derive_circadian_features(hr: pd.DataFrame | None, segments, cfg: CardioCfg) -> pd.DataFrame:
+    if hr is None or hr.empty or "timestamp" not in hr.columns:
+        return pd.DataFrame(columns=["date","segment_id","cv_hr_cosinor_mesor","cv_hr_cosinor_amp","cv_hr_cosinor_acrophase"])
+    df = hr.copy()
+    df["date"] = pd.to_datetime(df["timestamp"]).dt.date
+    df = df.dropna(subset=["timestamp","bpm"]).sort_values("timestamp").set_index("timestamp")
+
+    rows = []
+    for d, g in df.groupby("date"):
+        cov = g["bpm"].notna().mean() * 100.0
+        if cov < 20:
+            rows.append({"date": d, "cv_hr_cosinor_mesor": np.nan, "cv_hr_cosinor_amp": np.nan, "cv_hr_cosinor_acrophase": np.nan})
+            continue
+        idx = g.index.tz_localize(None)
+        minutes = (idx.hour * 60 + idx.minute).astype(float).values
+        omega = 2.0 * math.pi / (24.0 * 60.0)
+        X = np.column_stack([np.ones_like(minutes), np.cos(omega * minutes), np.sin(omega * minutes)])
+        y = g["bpm"].astype(float).values
+        try:
+            beta, *_ = np.linalg.lstsq(X, y, rcond=None)
+            mesor = float(beta[0])
+            amp = float((beta[1]**2 + beta[2]**2) ** 0.5)
+            acroph = float(math.atan2(-beta[2], beta[1]))
+        except Exception:
+            mesor = amp = acroph = np.nan
+        rows.append({"date": d, "cv_hr_cosinor_mesor": mesor, "cv_hr_cosinor_amp": amp, "cv_hr_cosinor_acrophase": acroph})
+    out = pd.DataFrame(rows)
+
+    if segments is not None and not segments.empty:
+        seg = segments.copy()
+        seg["date"] = pd.to_datetime(seg["date"]).dt.date
+        out = out.merge(seg[["date","segment_id"]], on="date", how="left")
+    else:
+        out["segment_id"] = pd.NA
+    return out
+
+def merge_cardio_outputs(hr_feats: pd.DataFrame, hrv_feats: pd.DataFrame, circ_feats: pd.DataFrame) -> pd.DataFrame:
+    def _safe(df):
+        if df is None or df.empty:
+            return pd.DataFrame(columns=["date","segment_id"])
+        return df
+    out = _safe(hr_feats)
+    for df in (_safe(hrv_feats), _safe(circ_feats)):
+        out = out.merge(df, on=["date","segment_id"], how="outer")
+    out = out.sort_values("date")
+    return out
+
+def update_features_daily(features_cardio: pd.DataFrame, features_daily_path: str) -> str:
+    out_dir = os.path.dirname(features_daily_path)
+    out_path = os.path.join(out_dir, "features_daily_updated.csv")
+    base = read_csv_if_exists(features_daily_path)
+    if base is None or base.empty:
+        features_cardio.to_csv(out_path, index=False)
+        return out_path
+    base = base.copy()
+    if "date" in base.columns:
+        base["date"] = pd.to_datetime(base["date"]).dt.date
+    keys = ["date"]
+    if "segment_id" in base.columns and "segment_id" in features_cardio.columns:
+        keys.append("segment_id")
+    merged = base.merge(features_cardio, on=keys, how="left")
+    merged.to_csv(out_path, index=False)
+    return out_path
