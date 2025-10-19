@@ -1,23 +1,78 @@
-"""Provider interfaces and registry (Apple, Zepp, etc.)."""
+# etl_modules/common/adapters.py
+# -*- coding: utf-8 -*-
 from __future__ import annotations
+
+"""
+Adapters / Providers registry (cardio e futuros domínios).
+
+- Define o contrato (CardioProvider) e o contexto (ProviderContext).
+- Faz o registro resiliente dos providers disponíveis para cada domínio.
+- Para cardio, garante o provider 'apple' (per-metric) e, se existir, 'zepp'.
+"""
+
 from dataclasses import dataclass
-from typing import Protocol, Dict, Any, Optional
+from typing import Optional, Dict
 import pandas as pd
 
+
+# ----------------------------------------------------------------------
+# Contexto comum passado aos providers
+# ----------------------------------------------------------------------
 @dataclass
 class ProviderContext:
     snapshot_dir: str
-    tz: str = 'Europe/Dublin'
+    tz: Optional[str] = None
 
-class HRProvider(Protocol):
-    def load_hr(self, ctx: ProviderContext) -> Optional[pd.DataFrame]: ...
-    def load_hrv(self, ctx: ProviderContext) -> Optional[pd.DataFrame]: ...
 
-_REGISTRY: Dict[str, Dict[str, Any]] = {'cardio': {}}
+# ----------------------------------------------------------------------
+# Interfaces base (por domínio)
+# ----------------------------------------------------------------------
+class CardioProvider:
+    """Contrato mínimo para provedores do domínio 'cardio'."""
+    name: str = "base"
 
-def register_provider(domain: str, name: str, provider: Any) -> None:
-    _REGISTRY.setdefault(domain, {})[name] = provider
+    def load_hr(self, ctx: ProviderContext) -> Optional[pd.DataFrame]:
+        """
+        Retorna DataFrame com colunas:
+            ['timestamp', 'bpm']
+        ou None se o provider não tiver dados.
+        """
+        return None
 
-def get_providers(domain: str) -> Dict[str, Any]:
-    return _REGISTRY.get(domain, {})
+    def load_hrv(self, ctx: ProviderContext) -> Optional[pd.DataFrame]:
+        """
+        Retorna DataFrame com colunas:
+            ['timestamp', 'val', 'metric']   (ex.: metric='hrv_ms')
+        ou None se o provider não tiver dados.
+        """
+        return None
 
+
+# ----------------------------------------------------------------------
+# Registry
+# ----------------------------------------------------------------------
+def get_providers(domain: str) -> Dict[str, CardioProvider]:
+    """
+    Devolve dict de providers por domínio.
+    Para 'cardio', registra:
+      - 'apple' (obrigatório no fluxo atual; lê per-metric)
+      - 'zepp'  (opcional; depende de existência do módulo)
+    """
+    providers: Dict[str, CardioProvider] = {}
+
+    if domain == "cardio":
+        # Apple (per-metric)
+        try:
+            from etl_modules.cardiovascular.apple.loader import AppleCardioProvider
+            providers["apple"] = AppleCardioProvider()
+        except Exception as e:
+            print(f"[providers] Apple provider unavailable: {e}")
+
+        # Zepp (opcional)
+        try:
+            from etl_modules.cardiovascular.zepp.loader import ZeppCardioProvider
+            providers["zepp"] = ZeppCardioProvider()
+        except Exception as e:
+            print(f"[providers] Zepp provider unavailable: {e}")
+
+    return providers
