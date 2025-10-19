@@ -32,3 +32,4 @@ python-dotenv>=1.0.1
 # --- Optional debugging ---
 rich>=13.7.1
 colorama>=0.4.6
+matplotlib
