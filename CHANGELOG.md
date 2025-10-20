@@ -10,6 +10,77 @@ This project adheres to Semantic Versioning where applicable.
 - Export `best_model.tflite` and latency measurements.
 - Finalise LaTeX `main.tex` with updated figures + Appendices C–D.
 
+🧾 CHANGELOG – v2.1.1
+
+Release date: 2025-10-19
+Author: Rodrigo Marques Teixeira
+Project: MSc AI for Business – Practicum Part 2 (N-of-1 ADHD + BD)
+Previous: v2.1.0 – ETL Convergence & EDA Baseline
+
+Current: v2.1.1 – Cardio Stabilization & EDA Path Fix
+
+🚀 Overview
+
+This minor release finalizes the cardiovascular stage stabilization and ensures end-to-end reproducibility of the new ETL architecture.
+It introduces atomic write guarantees, UTC-safe datetime normalization, runtime profiling, and dynamic path resolution in the EDA notebooks.
+The pipeline is now robust, idempotent, and aligned with the research’s reproducibility standards.
+
+🧱 Core ETL Changes
+Type Component Description
+🧩 Refactor etl_pipeline.py Simplified orchestration; modular sub-commands (extract, cardio, full) with improved logging.
+⚙️ Enhancement cardio_etl.py Integrated the new Timer utility for execution profiling.
+⚙️ Enhancement cardio_features.py Fixed tz-aware datetime conversion (utc=True) preventing ValueError at high sample counts.
+🧰 Utility helpers/\_write_atomic_csv/json Introduced idempotent atomic writes using temporary files + replace pattern.
+📁 Pathing Directory schema Unified under data_ai/Pxxxxxx/snapshots/YYYY-MM-DD (applied repo-wide).
+💓 Cardiovascular Stage
+
+Aggregates heart-rate, HRV (SDNN), and sleep intervals into daily features.
+
+Outputs validated for participant P000001 snapshot 2025-09-29.
+
+Files generated:
+
+features_cardiovascular.csv ≈ 86 kB
+
+features_daily_updated.csv ≈ 276 kB
+
+Runtime: ≈ 230 seconds on Windows 10 (local Python 3.13).
+
+Internal manifest tracking (cardio_manifest.json) confirmed.
+
+📊 EDA & Visualization
+Type Component Description
+🧭 Fix 03_eda_cardio_plus.ipynb Corrected relative paths (removed “/notebooks/” prefix).
+🧩 Feature Notebook logic Auto-detects repo root and resolves data_ai/... dynamically.
+💾 Output Artifacts Generated charts saved to eda_outputs/ under each snapshot.
+📈 Rendering Plotly offline Activated pio.renderers.default = 'notebook' for seamless local use.
+🧪 Validation Summary
+Check Status Notes
+ETL runtime ✅ Stable; measured 230 s on local test.
+Atomic write ✅ Temp → final rename verified.
+Date parsing ✅ No tz-aware errors post-fix.
+Output presence ✅ 2 feature CSVs generated with valid content.
+Notebook ✅ Runs end-to-end with figures rendered.
+🧭 Next Milestones
+
+Add new participants (P000002–P000003).
+
+Implement 04_modeling_baseline.ipynb for first N-of-1 forecasting experiments.
+
+Build feature_catalogue.md for documentation of engineered variables.
+
+Start CA3 draft (Nov 2025): methods + EDA + baseline results.
+
+🧠 Acknowledgment
+
+This release was produced within the Practicum Part 2 module of the MSc AI for Business, under supervision of Dr. Agatha Mattos, and represents the first stable public milestone of the N-of-1 Longitudinal Phenotyping Pipeline.
+
+⚖️ License
+
+This project remains licensed under the
+Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) license.
+© 2025 Rodrigo Marques Teixeira. All rights reserved.
+
 ## [v2.0.3] – 2025-10-17
 
 ### 🔧 Dependency & Build Standardization
