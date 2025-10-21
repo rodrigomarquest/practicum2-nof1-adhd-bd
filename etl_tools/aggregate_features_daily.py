@@ -236,30 +236,68 @@ def aggregate_snapshot(snapshot_dir: Path, labels: str = 'none') -> Dict[str, st
     return {'features_daily_agg': str(out_csv), 'features_daily_labeled_agg': str(labeled_csv_path) if labeled_csv_path else None, 'manifest': str(manifest_path)}
 
 
-def parse_args():
-    ap = argparse.ArgumentParser(description='Aggregate features_daily_updated.csv to 1 row per date')
-    ap.add_argument('--participant', required=True)
-    ap.add_argument('--snapshot', required=True)
-    ap.add_argument('--labels', choices=['none', 'synthetic'], default='none')
-    return ap.parse_args()
+def run(snapshot_dir: Path, labels: str = "none") -> dict:
+    """Aggregates to one-row-per-day; optionally merges synthetic labels; returns paths and basic stats.
+
+    This is the public API expected by `etl_pipeline.py`.
+    """
+    # Call the core implementation
+    res = aggregate_snapshot(snapshot_dir, labels=labels)
+
+    # Re-open outputs to compute and print summary/logs (minimal, once per run)
+    features_path = snapshot_dir / 'features_daily_updated.csv'
+    fdf = pd.read_csv(features_path, dtype={'date': 'string'})
+    # numeric cols count
+    numeric_cols = [c for c in fdf.columns if pd.api.types.is_numeric_dtype(fdf[c])]
+    # rules summary: compute mapping from agg_map_for
+    amap = agg_map_for(fdf)
+    # compute agg_dict as in aggregate_snapshot to know which rules applied
+    sleep_dur_col = None
+    for c in fdf.columns:
+        if 'sleep_duration' in c.lower() or 'sleep_minutes' in c.lower() or 'sleep_min' in c.lower():
+            sleep_dur_col = c
+            break
+    agg_dict = {}
+    for c, rule in amap.items():
+        if c not in fdf.columns:
+            continue
+        if not pd.api.types.is_numeric_dtype(fdf[c]):
+            continue
+        if rule == 'sum':
+            agg_dict[c] = 'sum'
+        elif rule == 'mean':
+            agg_dict[c] = 'mean'
+        elif rule == 'wmean_sleep':
+            if sleep_dur_col:
+                agg_dict[c] = ('wmean_sleep', sleep_dur_col)
+            else:
+                agg_dict[c] = 'mean'
+        else:
+            agg_dict[c] = 'mean'
+
+    # dropped non-numeric from amap
+    dropped = [c for c in amap.keys() if c in fdf.columns and not pd.api.types.is_numeric_dtype(fdf[c]) and c != 'segment_id']
+
+    # summary by rule
+    summary_by_rule = {}
+    for v in agg_dict.values():
+        key = v[0] if isinstance(v, tuple) else v
+        summary_by_rule[key] = summary_by_rule.get(key, 0) + 1
+
+    print(f"[aggregate] numeric_cols={len(numeric_cols)}; dropped_non_numeric={len(dropped)}")
+    print(f"[aggregate] rules: {summary_by_rule}")
+
+    return res
 
 
-def main():
-    args = parse_args()
-    snap_dir = Path('data_ai') / args.participant / 'snapshots' / args.snapshot
-    if not snap_dir.exists():
-        print('⚠️ snapshot not found:', snap_dir)
-        return 1
-    try:
-        res = aggregate_snapshot(snap_dir, labels=args.labels)
-    except Exception as e:
-        print('❌ Error:', e)
-        return 1
-
-    print('✅ features_daily_agg.csv created; labeled:', args.labels != 'none')
-    print(res)
-    return 0
-
-
-if __name__ == '__main__':
-    raise SystemExit(main())
+if __name__ == "__main__":
+    import argparse as _arg
+    ap = _arg.ArgumentParser()
+    ap.add_argument("--participant", required=True)
+    ap.add_argument("--snapshot", required=True)
+    ap.add_argument("--labels", choices=["none", "synthetic"], default="none")
+    a = ap.parse_args()
+    from pathlib import Path as _P
+    snap = _P(f"data_ai/{a.participant}/snapshots/{a.snapshot}")
+    out = run(snap, labels=a.labels)
+    print("✅ aggregate done:", out)
