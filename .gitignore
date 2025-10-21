@@ -178,3 +178,8 @@ continue.config.yaml
 continue.config.json
 continue.config.yaml
 .continue/
+
+**/.continue/**
+continue.config.json
+continue.config.yaml
+.continue/
