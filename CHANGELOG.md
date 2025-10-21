@@ -1,14 +1,89 @@
-# Changelog — N-of-1 Study (Practicum Part 2)
+Changelog — N-of-1 Study (Practicum Part 2)
 
-All notable changes to this project will be documented in this file.  
+All notable changes to this project will be documented in this file.
 This project adheres to Semantic Versioning where applicable.
 
-## [Unreleased]
+[Unreleased]
 
-- KnowledgeC integration (device-specific schema) and `parse_knowledgec_usage.py`.
-- Notebook 02 re-run with rule-based baseline, SHAP top-5, drift metrics.
-- Export `best_model.tflite` and latency measurements.
-- Finalise LaTeX `main.tex` with updated figures + Appendices C–D.
+KnowledgeC integration (device-specific schema) and parse_knowledgec_usage.py.
+
+Notebook 02 re-run with rule-based baseline, SHAP top-5, drift metrics.
+
+Export best_model.tflite and latency measurements.
+
+Finalise LaTeX main.tex with updated figures + Appendices C–D.
+
+[v2.1.3] – 2025-10-21
+🚀 Kaggle Baseline Modelling (preview) & Repo Hygiene
+
+Release date: 2025-10-21
+Author: Rodrigo Marques Teixeira
+Project: MSc AI for Business – Practicum Part 2 (N-of-1 ADHD + BD)
+Previous: v2.1.1 – Cardio Stabilization & EDA Path Fix
+
+🔧 Summary
+
+This release freezes the environment for the first Kaggle baseline modelling preview and performs a safe repository hygiene pass.
+It ensures that only relevant source files, notebooks, and documentation are tracked, while sensitive or large data directories (data_ai/, data_etl/) remain strictly local.
+
+A clean tag (v2.1.3) marks the final pre-modelling checkpoint, establishing a reproducible, compliant foundation for feature consolidation and predictive analysis.
+
+🧩 Highlights
+🧹 Repository Hygiene
+
+Removed transient and system-specific directories: .venv/, **pycache**/, .pytest_cache/, and Jupyter checkpoints.
+
+Deleted obsolete decrypted outputs (decrypted*output*\*) — ETL and wearable data preserved.
+
+Cleaned temporary .bak, .fixbak, and .pre\_\* artifacts from prior ETL iterations.
+
+Added .gitattributes for export-ignore, enabling clean archive generation.
+
+🛡️ Data Protection & .gitignore
+
+Confirmed that no PII or wearable data is versioned.
+
+Duplicated .continue/ rules simplified for clarity.
+
+Retained .keep sentinels in data_ai/ and data_etl/ for structural integrity.
+
+📓 Baseline Notebook Integration
+
+Added baseline notebooks (practicum-ca2-final.ipynb, etc.) for early Kaggle environment validation.
+
+Ensured offline-safe artifact saving to notebooks/eda_outputs/ (ignored by VCS).
+
+Normalized Makefile for cross-platform compatibility (Windows ↔ Kaggle ↔ Linux).
+
+⚙️ Build & Tagging
+
+Explicit tag-based release process (v2.1.3) replacing previous multi-tag confusion.
+
+Safe selective staging (git add pathspec) to prevent accidental inclusion of local datasets.
+
+🧠 Next Steps
+
+Merge chore/repo-hygiene → main (complete).
+
+Extend ETL with:
+
+Consolidated features_daily_updated.csv (sleep/cardio/activity/screentime).
+
+state_of_mind.csv label integration (features_daily_labeled.csv).
+
+QC reporting (etl_qc_summary.csv, etl_report.md).
+
+Start 04_modeling_baseline.ipynb for cross-validation and metrics export.
+
+Prepare updated Feature Catalogue and appendices for Practicum CA3.
+
+⚖️ License
+
+This project remains licensed under the
+Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) license.
+© 2025 Rodrigo Marques Teixeira. All rights reserved.
+
+[v2.1.1] – 2025-10-19
 
 🧾 CHANGELOG – v2.1.1
 
@@ -192,3 +267,12 @@ All iOS extraction scripts are now fully consolidated under `ios_extract/`, whil
 
 - Explicit guidance to keep backup passphrases out of code.
 - Default `deepclean` target to remove decrypted outputs locally.
+
+# 🔗 Version Comparison Links
+
+[v2.1.3]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.1.1...v2.1.3
+[v2.1.1]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.1.0...v2.1.1
+[v2.1.0]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.0.3...v2.1.0
+[v2.0.3]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.0.2...v2.0.3
+[v2.0.2]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.0-pre-ethics...v2.0.2
+[v2.0-pre-ethics]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/releases/tag/v2.0-pre-ethics
