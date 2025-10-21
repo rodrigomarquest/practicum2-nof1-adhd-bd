@@ -1,0 +1,11 @@
+# Excluir do 'git archive' (release zip/tar) — preserva localmente
+data_ai/ export-ignore
+data_etl/ export-ignore
+decrypted_output/ export-ignore
+*.csv export-ignore
+*.tsv export-ignore
+*.db export-ignore
+*.plist export-ignore
+.ipynb_checkpoints/ export-ignore
+.vscode/ export-ignore
+.venv/ export-ignore
