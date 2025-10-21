@@ -164,3 +164,17 @@ notebooks/eda_outputs/
 # Local-only helper scripts
 /openchat.ps1
 *.local.ps1
+
+**/.continue/**
+continue.config.json
+continue.config.yaml
+.continue/
+**/.continue/**
+continue.config.json
+continue.config.yaml
+.continue/
+
+**/.continue/**
+continue.config.json
+continue.config.yaml
+.continue/
