@@ -1,4 +1,4 @@
- # make_scripts — extracted idempotent helpers
+# make_scripts — extracted idempotent helpers
 
 ## Purpose
 

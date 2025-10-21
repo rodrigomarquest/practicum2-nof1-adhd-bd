@@ -173,3 +173,16 @@ openchat.ps1
 
 # local timestamped backups
 *.bak.*
+
+# Local user configs and stray/temp files
+.bashrc
+@echo
+pytest
+python
+
+# Common Python repo ignores
+.venv/
+__pycache__/
+*.pyc
+.vscode/
+.DS_Store
