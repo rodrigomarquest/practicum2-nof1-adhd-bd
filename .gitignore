@@ -167,3 +167,9 @@ openchat.ps1
 
 # Local timestamped backups
 *.bak.*
+
+# Local timestamped backups
+*.bak.*
+
+# local timestamped backups
+*.bak.*
