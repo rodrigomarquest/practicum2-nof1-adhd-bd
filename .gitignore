@@ -161,3 +161,6 @@ scratch/
 !README.md
 notebooks/eda_outputs/
 openchat.ps1
+
+# local backups
+*.bak.*
