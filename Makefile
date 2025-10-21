@@ -368,51 +368,51 @@ REL_TAG  ?= v0.1.0
 
 weekly-report:
 	. .venv/Scripts/activate && \
-	python - <<'PY'
-import pandas as pd, pathlib as P, json, sys
-pid   = "$(PID)"
-snap  = "$(SNAP)"
-base  = P.Path(f"data_ai/{pid}/snapshots/{snap}")
-feat  = base/"features_daily.csv"
-join  = base/f"hybrid_join/$(POLICY)/join_hybrid_daily.csv"
-qc    = base/"etl_qc_summary.csv"
-outd  = P.Path("docs_build"); outd.mkdir(parents=True, exist_ok=True)
-md    = outd/f"weekly_report_{pid}_{snap}.md"
+	python - <<-'PY'
+	import pandas as pd, pathlib as P, json, sys
+	pid   = "$(PID)"
+	snap  = "$(SNAP)"
+	base  = P.Path(f"data_ai/{pid}/snapshots/{snap}")
+	feat  = base/"features_daily.csv"
+	join  = base/f"hybrid_join/$(POLICY)/join_hybrid_daily.csv"
+	qc    = base/"etl_qc_summary.csv"
+	outd  = P.Path("docs_build"); outd.mkdir(parents=True, exist_ok=True)
+	md    = outd/f"weekly_report_{pid}_{snap}.md"
 
-def span(p):
-    if not p.exists(): return ("–","–",0)
-    df = pd.read_csv(p, parse_dates=["date"])
-    return (str(df["date"].min().date()), str(df["date"].max().date()), len(df))
+	def span(p):
+		if not p.exists(): return ("–","–",0)
+		df = pd.read_csv(p, parse_dates=["date"])
+		return (str(df["date"].min().date()), str(df["date"].max().date()), len(df))
 
-fmin,fmax,fn = span(feat)
-jmin,jmax,jn = span(join)
+	fmin,fmax,fn = span(feat)
+	jmin,jmax,jn = span(join)
 
-qcrows = []
-if qc.exists():
-    q = pd.read_csv(qc)
-    qcrows = [f"- {r['metric']}: {int(r.get('value', r.get('days_present',0)))}" for _,r in q.iterrows()]
+	qcrows = []
+	if qc.exists():
+		q = pd.read_csv(qc)
+		qcrows = [f"- {r['metric']}: {int(r.get('value', r.get('days_present',0)))}" for _,r in q.iterrows()]
 
-md.write_text(f"""# Weekly Report — {pid} / {snap}
+	md.write_text(f"""# Weekly Report — {pid} / {snap}
 
-## Snapshot
-- Features: **{fn}** linhas · período **{fmin} → {fmax}**
-- Join (policy=`$(POLICY)`): **{jn}** linhas · período **{jmin} → {jmax}**
+	## Snapshot
+	- Features: **{fn}** linhas · período **{fmin} → {fmax}**
+	- Join (policy=`$(POLICY)`): **{jn}** linhas · período **{jmin} → {jmax}**
 
-## Diretores/artefatos
-- Features: `{feat.as_posix()}`
-- Join: `{join.as_posix()}`
-- Plots: `{(base/f'hybrid_join/$(POLICY)/plots').as_posix()}`
+	## Diretores/artefatos
+	- Features: `{feat.as_posix()}`
+	- Join: `{join.as_posix()}`
+	- Plots: `{(base/f'hybrid_join/$(POLICY)/plots').as_posix()}`
 
-## QC (ETL Apple)
-{chr(10).join(qcrows) if qcrows else "- (sem métricas adicionais)"}
+	## QC (ETL Apple)
+	{chr(10).join(qcrows) if qcrows else "- (sem métricas adicionais)"}
 
-## Observações
-- Outliers de sono no Zepp (> 16h) aparecem como colunas verticais nos scatters.
-- Política recomendada: **best_of_day** (para notebooks iniciais).
+	## Observações
+	- Outliers de sono no Zepp (> 16h) aparecem como colunas verticais nos scatters.
+	- Política recomendada: **best_of_day** (para notebooks iniciais).
 
-""", encoding="utf-8")
-print(f"✅ weekly report → {md}")
-PY
+	""", encoding="utf-8")
+	print(f"✅ weekly report → {md}")
+	PY
 
 changelog:
 	@mkdir -p docs_build
@@ -439,3 +439,49 @@ release-pack:
 release-all: weekly-report changelog release-pack
 	@echo "✔ release bundle pronto. Sugestão:"
 	@echo "  git add -A && git commit -m 'release $(REL_TAG)' && git tag $(REL_TAG)"
+
+# ----- Checagem LLM OLLAMA -----------------------SHELL := /usr/bin/env bash
+# Usa bash e mantém as linhas do alvo na MESMA shell
+SHELL := /usr/bin/env bash
+.ONESHELL:
+.SHELLFLAGS := -o pipefail -c
+
+PYTHON ?= python
+OLLAMA_HOST ?= http://localhost:11434
+CHAT_MODEL ?= llama3.1:8b
+CODER_MODEL ?= qwen2.5-coder:1.5b-base
+
+	@echo "Agent mode is working"
+
+.PHONY: sanity-llm
+sanity-llm:
+	@echo "🔍 Verifying local Ollama connectivity at $(OLLAMA_HOST) with model $(CHAT_MODEL)..."
+	# garante que o servidor está de pé
+	@if ! curl -s "$(OLLAMA_HOST)/api/tags" >/dev/null ; then \
+		echo "❌ Ollama server not reachable at $(OLLAMA_HOST)"; exit 1; \
+	fi
+	# baixa o modelo se não existir
+	@if ! curl -s "$(OLLAMA_HOST)/api/tags" | $(PYTHON) -c "import sys,json; d=json.load(sys.stdin); import sys; sys.exit(0 if any('$(CHAT_MODEL)'.split(':')[0] in m.get('name','') for m in d.get('models',[])) else 1)"; then \
+		echo "⬇️  Pulling $(CHAT_MODEL) ..."; \
+		ollama pull "$(CHAT_MODEL)"; \
+	fi
+	# chamada de teste
+	@RESP="$$(curl -s -X POST "$(OLLAMA_HOST)/api/generate" \
+		-H "Content-Type: application/json" \
+		-d "{ \"model\": \"$(CHAT_MODEL)\", \"prompt\": \"say OK\", \"stream\": false }")"; \
+	echo "$$RESP" | $(PYTHON) -c "import sys,json; r=sys.stdin.read(); \
+		print('✅ Ollama connected OK' if 'OK' in r else ('⚠️ Response empty' if not r.strip() else '⚠️ '+r[:160]))"
+
+.PHONY: ollama-status
+ollama-status:
+	@echo "🧠 Models installed:"
+	@curl -s "$(OLLAMA_HOST)/api/tags" \
+	| $(PYTHON) -c "import sys,json; d=json.load(sys.stdin); print('\n'.join(' - '+m.get('name','') for m in d.get('models',[])) or ' (none)')"
+
+.PHONY: clean-llm-cache
+clean-llm-cache:
+	@echo "🧹 Cleaning Ollama models (safe to ignore errors)..."
+	@ollama rm "$(CHAT_MODEL)" 2>/dev/null || true
+	@ollama rm "$(CODER_MODEL)" 2>/dev/null || true
+	@ollama rm "$(EMBED_MODEL)" 2>/dev/null || true
+	@echo "✅ Done. They will be re-downloaded on next use."
