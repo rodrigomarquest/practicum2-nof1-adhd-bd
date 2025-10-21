@@ -13,6 +13,44 @@ Export best_model.tflite and latency measurements.
 
 Finalise LaTeX main.tex with updated figures + Appendices C–D.
 
+## [v2.1.4] – 2025-10-21
+
+### 🚀 Modeling Exporter, Baseline & Makefile Refactor
+
+**Summary:**  
+This release completes the transition to a stable ETL → Modeling workflow with automated exports, baseline CV, and a fully modular Makefile.
+
+### Added
+
+- `etl_tools/export_modeling_dataset.py` — dataset exporter with manifest and zipped outputs.
+- `modeling/baseline_train.py` — 6-fold temporal CV baseline with latency profiling and optional TFLite export.
+- `make_scripts/` — contains modular scripts (weekly-report, helpers, etc.).
+- `make_scripts/common.py` — PID/SNAP argument parsing utilities.
+- `.github/workflows/ci.yml` — lightweight CI for pytest validation.
+
+### Changed
+
+- Makefile refactored with `.RECIPEPREFIX := >` (no tabs or heredocs).
+- Removed duplicated `weekly-report` recipes.
+- Updated `README.md` with new modeling and Makefile sections.
+
+### Fixed
+
+- Residual indentation and encoding issues in Makefile.
+- Pytest now runs cleanly (`5 passed in 1.08 s`).
+
+### Tests
+
+- Added small fixtures for aggregation sanity tests.
+- All existing tests pass.
+
+### Notes
+
+- TFLite export optional; skipped if TensorFlow unavailable.
+- Data paths (`data_ai/`, `data_etl/`) remain local and ignored by Git.
+
+---
+
 [v2.1.3] – 2025-10-21
 🚀 Kaggle Baseline Modelling (preview) & Repo Hygiene
 
@@ -270,6 +308,7 @@ All iOS extraction scripts are now fully consolidated under `ios_extract/`, whil
 
 # 🔗 Version Comparison Links
 
+[v2.1.4]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.1.3...v2.1.4
 [v2.1.3]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.1.1...v2.1.3
 [v2.1.1]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.1.0...v2.1.1
 [v2.1.0]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.0.3...v2.1.0

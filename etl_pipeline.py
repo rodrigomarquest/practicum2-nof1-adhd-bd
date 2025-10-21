@@ -19,6 +19,7 @@ import xml.etree.ElementTree as ET
 # third-party
 import numpy as np
 import pandas as pd
+import subprocess
 
 # local
 from etl_modules.common.progress import Timer, progress_open
@@ -31,7 +32,7 @@ def _write_atomic_csv(df: 'pd.DataFrame', out_path: str | os.PathLike[str]):
     fd, tmp = tempfile.mkstemp(prefix=".tmp_", dir=d, suffix=".csv")
     os.close(fd)
     try:
-        df.to_csv(tmp, index=False)
+        df_write_atomic_csv(tmp, index=False)
         os.replace(tmp, out_path)
     finally:
         if os.path.exists(tmp):
@@ -346,7 +347,27 @@ def extract_apple_per_metric(xml_file: Path, outdir: Path, cutover_str: str, tz_
         except Exception:
             manifest["outputs"][k] = {"path": v, "sha256": None}
     _write_atomic_json(manifest, outdir / "extract_manifest.json")
-    return written
+    
+    # ---- manifest com hashes do export.xml e saídas ----
+    manifest = {
+        "type": "extract",
+        "export_xml": str(xml_file),
+        "params": {"cutover": cutover_str, "tz_before": tz_before, "tz_after": tz_after},
+        "outputs": {},
+    }
+    try:
+        import os
+        if os.path.exists(xml_file):
+            manifest["export_sha256"] = _sha256_file(str(xml_file))
+    except Exception:
+        pass
+    for k, v in list(written.items()):
+        try:
+            manifest["outputs"][k] = {"path": v, "sha256": _sha256_file(v)}
+        except Exception:
+            manifest["outputs"][k] = {"path": v, "sha256": None}
+    _write_atomic_json(manifest, str(outdir / "extract_manifest.json"))
+return written
 
 # ----------------------------------------------------------------------
 # Cardiovascular stage
@@ -357,6 +378,144 @@ def run_stage_cardio(snapshot_dir: Path) -> Dict[str,str]:
     cfg = CardioCfg()
     res = _run(str(snapshot_dir), str(snapshot_dir), cfg)
     return {k: str(v) for k, v in res.items()}
+
+
+# ----------------------------------------------------------------------
+# Labels stage (synthetic)
+# ----------------------------------------------------------------------
+def _resolve_snapshot_dir(participant: str, snapshot: str) -> Path:
+    """Resolve snapshot dir without creating it (uses canonical snapshot id)."""
+    snap_iso = canon_snap_id(snapshot)
+    return AI_ROOT / participant / "snapshots" / snap_iso
+
+
+def run_stage_labels_synthetic(snapshot_dir: Path, synthetic_path: Path | None = None) -> Dict[str, str]:
+    """
+    Merge synthetic labels (state_of_mind_synthetic.csv) into features_daily_updated.csv
+
+    Returns dict with output path and manifest path.
+    """
+    features_path = snapshot_dir / "features_daily_updated.csv"
+    if not features_path.exists():
+        raise FileNotFoundError(f"features_daily_updated.csv not found in snapshot: {features_path}")
+
+    synth_path = synthetic_path or (snapshot_dir / "state_of_mind_synthetic.csv")
+    if not synth_path.exists():
+        raise FileNotFoundError(
+            f"Synthetic labels not found: {synth_path}.\nRun: python etl_tools/generate_heuristic_labels.py --participant <PID> --snapshot <SNAP>"
+        )
+
+    # load data
+    fdf = pd.read_csv(features_path, dtype={"date": "string"})
+    sdf = pd.read_csv(synth_path, dtype={"date": "string"})
+
+    if fdf.empty:
+        raise ValueError(f"features_daily_updated.csv is empty: {features_path}")
+
+    if sdf.empty:
+        raise ValueError(f"Synthetic labels file is empty: {synth_path}")
+
+    # normalize date -> datetime.date
+    fdf["date"] = pd.to_datetime(fdf["date"], errors="coerce").dt.date
+
+    # normalize synthetic columns: prefer columns named like raw_label, label, score
+    cols_l = {c.lower(): c for c in sdf.columns}
+    if "date" not in cols_l:
+        raise ValueError(f"Synthetic labels must contain a 'date' column: {synth_path}")
+
+    # find label/raw_label/score candidate
+    def _find(cols_map, keywords):
+        for kw in keywords:
+            for k, orig in cols_map.items():
+                if kw == k or kw in k:
+                    return orig
+        return None
+
+    label_col = _find(cols_l, ["raw_label"]) or _find(cols_l, ["label"]) or _find(cols_l, ["state"])
+    # if label_col is raw_label, try to find a nicer 'label' column
+    if label_col and label_col.lower().startswith("raw_"):
+        raw_label_col = label_col
+        label_col = _find(cols_l, ["label"]) or raw_label_col
+    else:
+        raw_label_col = _find(cols_l, ["raw_label"]) or None
+
+    if not label_col:
+        # try any column that contains 'label'
+        label_col = _find(cols_l, ["label"]) if _find(cols_l, ["label"]) else None
+
+    score_col = _find(cols_l, ["score", "value", "prob"]) or None
+
+    # standardize synthetic df
+    sdf = sdf.rename(columns={cols_l.get('date'): 'date'} if 'date' in cols_l else {})
+    sdf['date'] = pd.to_datetime(sdf['date'], errors='coerce').dt.date
+
+    # ensure label column exists
+    if label_col:
+        sdf = sdf.rename(columns={label_col: 'label'})
+    else:
+        raise ValueError(f"No label-like column found in synthetic labels: {synth_path}")
+
+    if raw_label_col:
+        sdf = sdf.rename(columns={raw_label_col: 'raw_label'})
+    else:
+        # create raw_label same as label
+        sdf['raw_label'] = sdf['label']
+
+    if score_col:
+        sdf = sdf.rename(columns={score_col: 'score'})
+    else:
+        if 'score' not in sdf.columns:
+            sdf['score'] = pd.NA
+
+    # aggregate synthetic by date in case of duplicates: mean score, mode label
+    def _mode_series(s):
+        try:
+            m = s.mode(dropna=True)
+            return m.iloc[0] if not m.empty else s.iloc[0]
+        except Exception:
+            return s.iloc[0]
+
+    aggs = {}
+    if 'score' in sdf.columns:
+        aggs['score'] = 'mean'
+    aggs['label'] = lambda x: _mode_series(x)
+    aggs['raw_label'] = lambda x: _mode_series(x)
+
+    sdf_grouped = sdf.groupby('date', dropna=False).agg(aggs).reset_index()
+
+    # merge
+    out = fdf.merge(sdf_grouped, on='date', how='left')
+
+    # write outputs
+    out_csv = snapshot_dir / 'features_daily_labeled.csv'
+    _write_atomic_csv(out, out_csv)
+
+    # manifest
+    counts = {}
+    try:
+        counts = dict(pd.Series(out['label'].dropna()).value_counts().to_dict())
+    except Exception:
+        counts = {}
+
+    manifest = {
+        "type": "labels_synthetic",
+        "snapshot_dir": str(snapshot_dir),
+        "inputs": {
+            "features_daily_updated.csv": str(features_path),
+            "state_of_mind_synthetic.csv": str(synth_path)
+        },
+        "outputs": {
+            "features_daily_labeled.csv": _sha256_file(str(out_csv)),
+            "label_counts": counts,
+            "rows_labeled": int(out['label'].notna().sum()),
+            "rows_total": int(len(out))
+        }
+    }
+
+    manifest_path = snapshot_dir / 'labels_manifest.json'
+    _write_atomic_json(manifest, manifest_path)
+
+    return {"features_daily_labeled": str(out_csv), "labels_manifest": str(manifest_path)}
 
 # ----------------------------------------------------------------------
 # CLI
@@ -376,6 +535,7 @@ def main():
     # cardio
     p_car = sub.add_parser("cardio", help="Executa estágio Cardiovascular no snapshot")
     p_car.add_argument("--zepp_dir", help="Diretório fixo com CSVs processados do Zepp (evita _latest)")
+    p_car.add_argument("--zepp_dir", help="Diretório fixo com CSVs processados do Zepp (evita _latest)")
     g = p_car.add_mutually_exclusive_group(required=True)
     g.add_argument("--snapshot_dir", help="Caminho data_ai/<PID>/snapshots/<YYYY-MM-DD>")
     g.add_argument("--participant", help="PID (usar com --snapshot)")
@@ -389,6 +549,23 @@ def main():
     p_full.add_argument("--tz_before", required=True)
     p_full.add_argument("--tz_after", required=True)
     p_full.add_argument("--zepp_dir", help="Diretório fixo com CSVs processados do Zepp (evita _latest)")
+
+    # labels
+    p_lab = sub.add_parser("labels", help="Join labels into features_daily_labeled.csv")
+    g_lab = p_lab.add_mutually_exclusive_group(required=True)
+    g_lab.add_argument("--snapshot_dir", help="Caminho data_ai/<PID>/snapshots/<YYYY-MM-DD>")
+    g_lab.add_argument("--participant", help="PID (usar com --snapshot)")
+    p_lab.add_argument("--snapshot", help="Snapshot id (YYYY-MM-DD ou YYYYMMDD)")
+    p_lab.add_argument("--synthetic", action="store_true", help="Use synthetic labels (state_of_mind_synthetic.csv)")
+    p_lab.add_argument("--labels_path", help="Caminho alternativo para labels (opcional)")
+
+    # aggregate
+    p_agg = sub.add_parser("aggregate", help="Aggregate features to one row per day (optional synthetic labels)")
+    gagg = p_agg.add_mutually_exclusive_group(required=True)
+    gagg.add_argument("--snapshot_dir", help="Caminho data_ai/<PID>/snapshots/<YYYY-MM-DD>")
+    gagg.add_argument("--participant", help="PID (usar com --snapshot)")
+    p_agg.add_argument("--snapshot", help="Snapshot id (YYYY-MM-DD ou YYYYMMDD)")
+    p_agg.add_argument("--labels", choices=["none", "synthetic"], default="none", help="Join labels (synthetic) into aggregated output")
 
     args = ap.parse_args()
 
@@ -468,6 +645,59 @@ def main():
 
         print("✅ cardio concluído")
         print(res)
+        return 0
+
+    if args.cmd == "labels":
+        # resolve snapshot dir
+        if args.snapshot_dir:
+            snapdir = Path(args.snapshot_dir)
+        else:
+            if not args.participant or not args.snapshot:
+                print("Use --snapshot_dir OU (--participant e --snapshot).")
+                return 2
+            snapdir = _resolve_snapshot_dir(args.participant, args.snapshot)
+        if not snapdir.exists():
+            print("⚠️ snapshot_dir não existe:", snapdir)
+            return 1
+
+        if not args.synthetic:
+            print("Somente --synthetic implementado nesta fase.")
+            return 2
+
+        labels_path = Path(args.labels_path) if args.labels_path else None
+        try:
+            res = run_stage_labels_synthetic(snapdir, labels_path)
+        except FileNotFoundError as e:
+            print("⚠️", e)
+            return 1
+        except Exception as e:
+            print("❌ Erro ao rodar labels:", e)
+            return 1
+
+        print("✅ labels (synthetic) concluído:", res)
+        return 0
+
+    if args.cmd == "aggregate":
+        # resolve snapshot dir
+        if args.snapshot_dir:
+            snapdir = Path(args.snapshot_dir)
+        else:
+            if not args.participant or not args.snapshot:
+                print("Use --snapshot_dir OU (--participant e --snapshot).")
+                return 2
+            snapdir = AI_ROOT / args.participant / 'snapshots' / args.snapshot
+        if not snapdir.exists():
+            print("⚠️ snapshot_dir não existe:", snapdir)
+            return 1
+        # Call the aggregator via its public API. Import error or runtime will be shown to the user.
+        try:
+            from etl_tools.aggregate_features_daily import run as run_aggregate
+            run_aggregate(snapdir, labels=args.labels)
+        except Exception as e:
+            print("❌ Erro ao rodar aggregate via module:", e)
+            return 1
+
+        print("✅ aggregate concluído")
         return 0
 
     if args.cmd == "full":
