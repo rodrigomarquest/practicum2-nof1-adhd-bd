@@ -1,0 +1,20 @@
+{
+  "participant": "P000001",
+  "legacy_etl_dir": "data\\etl\\P000001",
+  "raw_dir": "data\\raw\\P000001",
+  "dry_run": false,
+  "timestamp": "20251022T060042Z",
+  "actions": [
+    {
+      "kind": "apple",
+      "result": {
+        "action": "moved",
+        "src": "data\\etl\\P000001\\exports\\apple\\export.zip",
+        "dst": "data\\raw\\P000001\\apple\\export.zip",
+        "size": 128933336,
+        "sha256": "e4d52eb8bfce6c728f0099571e3e33b3d35eb2043a19f84ee16b032468c43bc7",
+        "sha256_before": "e4d52eb8bfce6c728f0099571e3e33b3d35eb2043a19f84ee16b032468c43bc7"
+      }
+    }
+  ]
+}

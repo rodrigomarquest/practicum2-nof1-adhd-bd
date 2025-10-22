@@ -1,0 +1,8 @@
+{
+  "participant": "P000001",
+  "legacy_etl_dir": "data\\etl\\P000001",
+  "raw_dir": "data\\raw\\P000001",
+  "dry_run": false,
+  "timestamp": "20251022T060132Z",
+  "actions": []
+}

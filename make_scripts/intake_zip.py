@@ -59,20 +59,28 @@ def ensure_dir(p: Path):
 
 
 def copy_to_raw(src: Path, raw_dir: Path, source_label: str, dry_run: bool) -> Path:
+    """Copy src into RAW_DIR/<source>/ with canonical name.
+
+    Returns destination Path.
+    """
     ts = now_utc_compact()
+    orig_name = src.name
+    # Determine canonical name
     if source_label == 'apple':
-        name = f'apple_health_export_{ts}.zip'
+        canonical = f'apple_health_export_{ts}.zip'
     elif source_label == 'zepp':
-        name = f'zepp_export_{ts}.zip'
+        canonical = f'zepp_export_{ts}.zip'
     elif source_label == 'ios_backup':
-        name = f'ios_backup_{ts}.zip'
+        canonical = f'ios_backup_{ts}.zip'
     else:
-        name = f'unknown_{ts}.zip'
+        canonical = f'unknown_{ts}.zip'
+
     dest_dir = raw_dir / source_label
     ensure_dir(dest_dir)
-    dest = dest_dir / name
+    dest = dest_dir / canonical
     if dry_run:
-        print(f"DRY RUN: would copy {src} -> {dest}")
+        print(f"DRY RUN: would copy {src.name} -> {dest}")
+        # return expected dest so caller can compute metadata fields
         return dest
     shutil.copy2(src, dest)
     return dest
@@ -81,8 +89,8 @@ def copy_to_raw(src: Path, raw_dir: Path, source_label: str, dry_run: bool) -> P
 def write_run_logs(participant: str, run_id: str, log_json: Dict[str, Any], log_csv_row: Dict[str, Any]):
     base = Path('data') / 'etl' / participant / 'runs' / run_id / 'logs'
     ensure_dir(base)
-    ts = now_utc_compact()
-    json_path = base / f'intake_log_{ts}.json'
+    # Use explicit filenames for better IDE discoverability
+    json_path = base / 'intake_log.json'
     csv_path = base / 'intake_log.csv'
     with json_path.open('w', encoding='utf8') as fh:
         json.dump(log_json, fh, indent=2, ensure_ascii=False)
@@ -93,6 +101,7 @@ def write_run_logs(participant: str, run_id: str, log_json: Dict[str, Any], log_
         if write_header:
             writer.writeheader()
         writer.writerow(log_csv_row)
+    return json_path
 
 
 def extract_minimal(zpath: Path, dest_root: Path, kind: str, dry_run: bool) -> None:
@@ -143,6 +152,7 @@ def main(argv: Optional[list[str]] = None):
     p.add_argument('--extracted-dir', required=False)
     p.add_argument('--stage', action='store_true', help='Also stage minimal extracted files into extracted/')
     p.add_argument('--dry-run', action='store_true')
+    p.add_argument('--keep-original-name', action='store_true', help='Keep the original filename in RAW_DIR instead of canonicalizing')
     args = p.parse_args(argv)
 
     # ENV fallback
@@ -160,7 +170,30 @@ def main(argv: Optional[list[str]] = None):
         sys.exit(2)
 
     # ensure raw dir exists and copy
-    dest = copy_to_raw(src, raw_dir, args.source, dry_run)
+    # If keep-original-name is set, place the original filename into RAW_DIR/<source>/
+    if args.keep_original_name:
+        dest_dir = Path(raw_dir) / args.source
+        ensure_dir(dest_dir)
+        dest = dest_dir / src.name
+        if dry_run:
+            print(f"DRY RUN: would copy {src.name} -> {dest}")
+        else:
+            shutil.copy2(src, dest)
+        # compute canonical name string (do not create the canonical file)
+        ts = now_utc_compact()
+        if args.source == 'apple':
+            canonical_name = f'apple_health_export_{ts}.zip'
+        elif args.source == 'zepp':
+            canonical_name = f'zepp_export_{ts}.zip'
+        elif args.source == 'ios_backup':
+            canonical_name = f'ios_backup_{ts}.zip'
+        else:
+            canonical_name = f'unknown_{ts}.zip'
+        original_name = src.name
+    else:
+        dest = copy_to_raw(src, raw_dir, args.source, dry_run)
+        canonical_name = dest.name
+        original_name = src.name
 
     # compute checksum and metadata
     metadata: Dict[str, Any] = {}
@@ -202,6 +235,9 @@ def main(argv: Optional[list[str]] = None):
         'participant': participant,
         'source': args.source,
         'raw_path': str(dest),
+        'original_name': original_name,
+        'canonical_name': canonical_name,
+        'final_path': str(dest),
         'kind': kind,
         'metadata': metadata,
     }
@@ -216,8 +252,13 @@ def main(argv: Optional[list[str]] = None):
         'size_bytes': metadata.get('size_bytes'),
     }
 
-    write_run_logs(participant, run_id, log_json, log_csv_row)
-    print('Wrote run log for', run_id)
+    json_path = write_run_logs(participant, run_id, log_json, log_csv_row)
+    # Short console summary
+    print(f"Copied {original_name} -> {log_json['final_path']}")
+    print(f"(detected: {kind})")
+    # Optionally print SHA256 for provenance traceability
+    print(f"SHA256: {metadata.get('sha256')}")
+    print(f"Wrote run log: {json_path}")
 
 
 if __name__ == '__main__':
