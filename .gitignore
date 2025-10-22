@@ -9,6 +9,12 @@ data_ai/
 !data_ai/.keep
 data_etl/
 !data_etl/.keep
+# Canonical data layout used in Makefile: data/etl and data/ai
+# Keep both legacy (data_etl/data_ai) and canonical paths ignored.
+data/etl/
+!data/etl/.keep
+data/ai/
+!data/ai/.keep
 
 # iOS extraction artefacts and decrypted outputs (personal/PII)
 decrypted_output/
