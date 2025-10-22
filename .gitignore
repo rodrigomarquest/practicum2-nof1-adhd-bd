@@ -159,6 +159,9 @@ debug_*.py
 sandbox/
 scratch/
 
+# Allow the specific test helper used by Makefile even if make_scripts/ is broadly ignored
+!make_scripts/test_etl_one_skip.py
+
 # -------------------------------------------------------------------
 # 🧬 Keep sample data, docs, and LaTeX
 !docs/**
