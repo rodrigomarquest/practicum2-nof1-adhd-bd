@@ -8,7 +8,7 @@ import os
 import tempfile
 from pathlib import Path
 from collections import Counter
-from typing import Dict, Callable
+from typing import Dict, Callable, Any
 
 import numpy as np
 import pandas as pd
@@ -39,7 +39,7 @@ def wmean(s: pd.Series, w: pd.Series) -> float:
     return float((_np.average(s[valid], weights=w[valid])))
 
 
-def agg_map_for(df: pd.DataFrame) -> Dict[str, Callable]:
+def agg_map_for(df: pd.DataFrame) -> Dict[str, Any]:
     cols = df.columns.tolist()
     m: Dict[str, Callable] = {}
     for c in cols:
@@ -66,10 +66,14 @@ def agg_map_for(df: pd.DataFrame) -> Dict[str, Callable]:
     return m
 
 
-def aggregate_snapshot(snapshot_dir: Path, labels: str = 'none') -> Dict[str, str]:
-    features_path = snapshot_dir / 'features_daily_updated.csv'
+def aggregate_snapshot(snapshot_dir: Path, labels: str = 'none') -> Dict[str, str | None]:
+    # common filenames
+    FEATURES_UPDATED = 'features_daily_updated.csv'
+    STATE_SYNTHETIC = 'state_of_mind_synthetic.csv'
+
+    features_path = snapshot_dir / FEATURES_UPDATED
     if not features_path.exists():
-        raise FileNotFoundError(f"features_daily_updated.csv not found: {features_path}")
+        raise FileNotFoundError(f"{FEATURES_UPDATED} not found: {features_path}")
 
     fdf = pd.read_csv(features_path, dtype={'date': 'string'})
     if fdf.empty:
@@ -92,7 +96,7 @@ def aggregate_snapshot(snapshot_dir: Path, labels: str = 'none') -> Dict[str, st
             break
 
     # numeric cols only
-    numeric_cols = [c for c in fdf.columns if pd.api.types.is_numeric_dtype(fdf[c])]
+    # numeric_cols computed below when needed
 
     agg_dict = {}
     for c, rule in amap.items():
@@ -172,7 +176,7 @@ def aggregate_snapshot(snapshot_dir: Path, labels: str = 'none') -> Dict[str, st
     labeled_csv_path = None
     label_counts = None
     if labels == 'synthetic':
-        synth_path = snapshot_dir / 'state_of_mind_synthetic.csv'
+        synth_path = snapshot_dir / STATE_SYNTHETIC
         if synth_path.exists():
             sdf = pd.read_csv(synth_path, dtype={'date': 'string'})
             sdf['date'] = pd.to_datetime(sdf['date'], errors='coerce').dt.date
@@ -209,15 +213,15 @@ def aggregate_snapshot(snapshot_dir: Path, labels: str = 'none') -> Dict[str, st
                 label_counts = None
         else:
             # labels requested but no synthetic file
-            raise FileNotFoundError(f"Requested labels='synthetic' but not found: {snapshot_dir / 'state_of_mind_synthetic.csv'}")
+            raise FileNotFoundError(f"Requested labels='synthetic' but not found: {snapshot_dir / STATE_SYNTHETIC}")
 
     # manifest
     manifest = {
         'type': 'aggregate_daily',
         'snapshot_dir': str(snapshot_dir),
         'inputs': {
-            'features_daily_updated.csv': _sha256_file(features_path),
-            'state_of_mind_synthetic.csv': _sha256_file(snapshot_dir / 'state_of_mind_synthetic.csv') if (snapshot_dir / 'state_of_mind_synthetic.csv').exists() else None
+            FEATURES_UPDATED: _sha256_file(features_path),
+            STATE_SYNTHETIC: _sha256_file(snapshot_dir / STATE_SYNTHETIC) if (snapshot_dir / STATE_SYNTHETIC).exists() else None
         },
         'outputs': {
             'features_daily_agg.csv': _sha256_file(out_csv),

@@ -25,6 +25,8 @@ def main():
     s = s.replace('import math, os', 'import math, os, tempfile, hashlib')
 
     # Insert helper functions immediately before the definition of update_features_daily
+    UPDATE_FN = 'def update_features_daily('
+
     helper = (
         "def _sha256_file(path: str):\n"
         "    import hashlib\n"
@@ -47,8 +49,8 @@ def main():
         "            except: pass\n\n"
     )
 
-    if 'def update_features_daily(' in s:
-        s = s.replace('def update_features_daily(', helper + 'def update_features_daily(', 1)
+    if UPDATE_FN in s:
+        s = s.replace(UPDATE_FN, helper + UPDATE_FN, 1)
     else:
         # fallback: append helpers at top
         s = helper + s

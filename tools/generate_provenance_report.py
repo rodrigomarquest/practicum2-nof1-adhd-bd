@@ -49,7 +49,6 @@ def analyze_file(p: Path):
 
         # primary time column selection (priority list)
         priority = ['date', 'day', 'datetime', 'timestamp', 'start_time', 'end_time']
-        cols_lower = [c.lower() for c in df.columns]
         primary = None
         for key in priority:
             for c in df.columns:
@@ -105,12 +104,6 @@ def analyze_file(p: Path):
         try:
             import hashlib
 
-            def row_hash(row):
-                # stable order using df.columns
-                vals = [str(row[c]) if c in row.index else '' for c in df.columns]
-                s = '|'.join(vals)
-                return hashlib.sha256(s.encode('utf-8')).hexdigest()
-
             hashes = df.astype(str).apply(lambda r: hashlib.sha256('|'.join([str(r[c]) for c in df.columns]).encode('utf-8')).hexdigest(), axis=1)
             info['hash_count'] = str(int(len(hashes)))
             sample = hashes.head(5).tolist()
@@ -146,22 +139,26 @@ def analyze_file(p: Path):
         return info
 
 
-def detect_units_for_columns(columns):
-    # simple name-based heuristic mapping
+def detect_units_for_columns(columns: list[str]) -> dict:
+    """Heuristic mapping from column name to units.
+
+    columns: list of column names (strings)
+    returns: dict mapping column -> unit string
+    """
     mapping = {
         ('hr', 'heart_rate', 'median_hr', 'avg_hr', 'mean_hr', 'resting_hr'): 'bpm',
-        ('hrv', 'rmssd', 'rMSSD', 'sdnn'): 'ms',
+        ('hrv', 'rmssd', 'rmssd', 'sdnn'): 'ms',
         ('sleep_', 'waso', 'total_sleep_time', 'duration_minutes', 'screentime', 'app_minutes'): 'minutes',
         ('sleep_efficiency',): '%',
         ('temperature', 'skin_temp'): '°C',
     }
-    units = {}
-    lower_cols = [c.lower() for c in columns]
-    for i, c in enumerate(columns):
+    units: dict = {}
+    for c in columns:
         unit = None
+        lc = c.lower()
         for keys, u in mapping.items():
             for key in keys:
-                if key in c.lower():
+                if key in lc:
                     unit = u
                     break
             if unit:

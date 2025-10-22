@@ -14,3 +14,6 @@ sqlite-utils>=3.36.0
 
 # Visualização leve (opcional; remover se quiser ETL headless)
 matplotlib>=3.9.0
+	# Crypto primitives used by iOS backup helpers and AES operations
+	# pycryptodome provides the `Crypto` top-level package used in etl_modules.iphone_backup
+pycryptodome>=3.20.0

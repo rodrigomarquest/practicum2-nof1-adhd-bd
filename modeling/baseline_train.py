@@ -308,7 +308,7 @@ def run(args):
     # labels
     if args.target_col not in df.columns:
         LOG.warning("target column %s not present; expecting synthetic labels to exist", args.target_col)
-    y_ser, le = map_labels(df.get(args.target_col, pd.Series(["neutral"] * len(df))), args.target_col)
+    y_ser, _ = map_labels(df.get(args.target_col, pd.Series(["neutral"] * len(df))), args.target_col)
     df["_y"] = y_ser
 
     # numeric features
@@ -324,8 +324,9 @@ def run(args):
     # placeholders for best non-param baseline chosen later
     for fi, (train_mask, val_mask) in enumerate(folds):
         LOG.info(f"fold {fi+1}/{len(folds)}: train {train_mask.sum()} rows, val {val_mask.sum()} rows")
-        train_idx = np.where(train_mask)[0]
-        val_idx = np.where(val_mask)[0]
+        train_idx = np.nonzero(train_mask)[0]
+        val_idx = np.nonzero(val_mask)[0]
+
         X = df[numeric].astype(float).fillna(0.0)
         y = df["_y"].values.astype(int)
 
@@ -359,8 +360,8 @@ def run(args):
         # aggregate per-fold results
         fold_res = {
             "fold": fi,
-            "n_train": int(train_mask.sum()),
-            "n_val": int(val_mask.sum()),
+            "n_train": int(np.count_nonzero(train_mask)),
+            "n_val": int(np.count_nonzero(val_mask)),
             "baselines": baseline_results,
             "logistic": clf_res,
             "best_baseline": best_baseline_name,
@@ -383,11 +384,15 @@ def run(args):
                     "rule": rule_all,
                 }[best_baseline_name][val_idx]
                 table = pd.crosstab(clf_preds_val == y_val, baspred == y_val)
-                # table should be 2x2; fill missing
-                a = int(table.iloc[0, 0]) if table.shape == (2, 2) else 0
-                # fallback: compute with statsmodels mcnemar on boolean arrays
-                res_m = mcnemar(table)
-                fold_res["mcnemar_p"] = float(res_m.pvalue)
+                # table should be 2x2; only call mcnemar if so
+                if table.shape == (2, 2):
+                    try:
+                        res_m = mcnemar(table)
+                        fold_res["mcnemar_p"] = float(res_m.pvalue)
+                    except Exception:
+                        fold_res["mcnemar_p"] = None
+                else:
+                    fold_res["mcnemar_p"] = None
             except Exception:
                 fold_res["mcnemar_p"] = None
         else:

@@ -1,6 +1,9 @@
 # ================================================================
 # Practicum2 – N-of-1 ADHD + BD · Development Requirements
 # ================================================================
+# Also install ETL runtime requirements when creating a development environment
+# This ensures tools that depend on ETL helpers (pycryptodome, pyzipper, etc.) are available
+-r requirements_etl.txt
 # Includes linters, formatters, testing and Jupyter tooling
 # Use: pip install -r requirements-dev.txt
 # ================================================================

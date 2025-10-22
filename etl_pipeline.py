@@ -28,12 +28,13 @@ from etl_modules.common.progress import Timer, progress_open
 # Atomic write helpers
 # ----------------------------------------------------------------------
 def _write_atomic_csv(df: 'pd.DataFrame', out_path: str | os.PathLike[str]):
-    d = os.path.dirname(out_path) or "."
+    d = os.path.dirname(str(out_path)) or "."
     fd, tmp = tempfile.mkstemp(prefix=".tmp_", dir=d, suffix=".csv")
     os.close(fd)
     try:
-        df_write_atomic_csv(tmp, index=False)
-        os.replace(tmp, out_path)
+        # Use pandas to write the DataFrame to the temporary file, then atomically replace
+        df.to_csv(tmp, index=False)
+        os.replace(tmp, str(out_path))
     finally:
         if os.path.exists(tmp):
             try:
@@ -62,6 +63,18 @@ def _write_atomic_json(obj: dict, out_path: str | os.PathLike[str]):
 RAW_ROOT = Path("data_etl")
 AI_ROOT  = Path("data_ai")
 
+# common filenames used in paths/manifests
+EXPORT_XML = "export.xml"
+VERSION_RAW = "version_raw.csv"
+VERSION_LOG = "version_log_enriched.csv"
+
+# common help strings
+HELP_SNAPSHOT_DIR = "Caminho data_ai/<PID>/snapshots/<YYYY-MM-DD>"
+HELP_PARTICIPANT = "PID (usar com --snapshot)"
+HELP_SNAPSHOT_ID = "Snapshot id (YYYY-MM-DD ou YYYYMMDD)"
+USAGE_SNAPSHOT_OR_PARTICIPANT = "Use --snapshot_dir OU (--participant e --snapshot)."
+SNAPSHOT_NOT_EXISTS = "⚠️ snapshot_dir não existe:"
+
 _SNAP_ISO  = re.compile(r"^20\d{2}-[01]\d-[0-3]\d$")
 _SNAP_8DIG = re.compile(r"^20\d{6}$")  # YYYYMMDD
 
@@ -82,10 +95,10 @@ def ensure_ai_outdir(pid: str, snap: str) -> Path:
 def find_export_xml(pid: str, snap: str) -> Optional[Path]:
     snap_iso = canon_snap_id(snap)
     cands = [
-        RAW_ROOT / pid / "snapshots" / snap_iso / "export.xml",
-        RAW_ROOT / pid / "snapshots" / snap_iso.replace("-", "") / "export.xml",
-        RAW_ROOT / pid / snap_iso / "export.xml",
-        RAW_ROOT / pid / snap_iso.replace("-", "") / "export.xml",
+        RAW_ROOT / pid / "snapshots" / snap_iso / EXPORT_XML,
+        RAW_ROOT / pid / "snapshots" / snap_iso.replace("-", "") / EXPORT_XML,
+        RAW_ROOT / pid / snap_iso / EXPORT_XML,
+        RAW_ROOT / pid / snap_iso.replace("-", "") / EXPORT_XML,
     ]
     for p in cands:
         if p.exists():
@@ -184,7 +197,7 @@ def make_tz_selector(cutover: date, tz_before: str, tz_after: str):
 def iter_health_records(
     xml_source: Union[Path, io.BufferedReader], tz_selector
 ) -> Iterable[
-    Tuple[str, Any, datetime, Optional[datetime], str, Dict[str, str], str, str, str]
+    Tuple[str, Any, datetime, Optional[datetime], Optional[str], Dict[str, str], str, str, str]
 ]:
     """
     xml_source: Path OU file-like binário (ex.: ProgressFile)
@@ -320,14 +333,14 @@ def extract_apple_per_metric(xml_file: Path, outdir: Path, cutover_str: str, tz_
     # version logs
     vdf = pd.DataFrame(version_rows).drop_duplicates().sort_values("date") if version_rows else pd.DataFrame()
     if not vdf.empty:
-        _write_atomic_csv(vdf, outdir / "version_raw.csv")
+        _write_atomic_csv(vdf, outdir / VERSION_RAW)
         seg_df = build_segments_from_versions(vdf)
-        _write_atomic_csv(seg_df, outdir / "version_log_enriched.csv")
-        written["version_raw"] = str(outdir / "version_raw.csv")
-        written["version_log_enriched"] = str(outdir / "version_log_enriched.csv")
+        _write_atomic_csv(seg_df, outdir / VERSION_LOG)
+        written["version_raw"] = str(outdir / VERSION_RAW)
+        written["version_log_enriched"] = str(outdir / VERSION_LOG)
     else:
-        _write_atomic_csv(pd.DataFrame(columns=["date","ios_version","watch_model","watch_fw","tz_name","source_name"]), outdir / "version_raw.csv")
-        _write_atomic_csv(pd.DataFrame(columns=["segment_id","start","end","ios_version","watch_model","watch_fw","tz_name","source_name"]), outdir / "version_log_enriched.csv")
+        _write_atomic_csv(pd.DataFrame(columns=["date","ios_version","watch_model","watch_fw","tz_name","source_name"]), outdir / VERSION_RAW)
+        _write_atomic_csv(pd.DataFrame(columns=["segment_id","start","end","ios_version","watch_model","watch_fw","tz_name","source_name"]), outdir / VERSION_LOG)
 
     # manifest
     manifest = {
@@ -341,7 +354,7 @@ def extract_apple_per_metric(xml_file: Path, outdir: Path, cutover_str: str, tz_
             manifest["export_sha256"] = _sha256_file(xml_file)
     except Exception:
         manifest["export_sha256"] = None
-    for k, v in list(written.items()):
+    for k, v in written.items():
         try:
             manifest["outputs"][k] = {"path": v, "sha256": _sha256_file(v)}
         except Exception:
@@ -356,18 +369,17 @@ def extract_apple_per_metric(xml_file: Path, outdir: Path, cutover_str: str, tz_
         "outputs": {},
     }
     try:
-        import os
         if os.path.exists(xml_file):
             manifest["export_sha256"] = _sha256_file(str(xml_file))
     except Exception:
         pass
-    for k, v in list(written.items()):
+    for k, v in written.items():
         try:
             manifest["outputs"][k] = {"path": v, "sha256": _sha256_file(v)}
         except Exception:
             manifest["outputs"][k] = {"path": v, "sha256": None}
     _write_atomic_json(manifest, str(outdir / "extract_manifest.json"))
-return written
+    return written
 
 # ----------------------------------------------------------------------
 # Cardiovascular stage
@@ -535,11 +547,10 @@ def main():
     # cardio
     p_car = sub.add_parser("cardio", help="Executa estágio Cardiovascular no snapshot")
     p_car.add_argument("--zepp_dir", help="Diretório fixo com CSVs processados do Zepp (evita _latest)")
-    p_car.add_argument("--zepp_dir", help="Diretório fixo com CSVs processados do Zepp (evita _latest)")
     g = p_car.add_mutually_exclusive_group(required=True)
-    g.add_argument("--snapshot_dir", help="Caminho data_ai/<PID>/snapshots/<YYYY-MM-DD>")
-    g.add_argument("--participant", help="PID (usar com --snapshot)")
-    p_car.add_argument("--snapshot", help="Snapshot id (YYYY-MM-DD ou YYYYMMDD)")
+    g.add_argument("--snapshot_dir", help=HELP_SNAPSHOT_DIR)
+    g.add_argument("--participant", help=HELP_PARTICIPANT)
+    p_car.add_argument("--snapshot", help=HELP_SNAPSHOT_ID)
 
     # full
     p_full = sub.add_parser("full", help="extract → cardio (pipeline novo ponta-a-ponta)")
@@ -553,18 +564,18 @@ def main():
     # labels
     p_lab = sub.add_parser("labels", help="Join labels into features_daily_labeled.csv")
     g_lab = p_lab.add_mutually_exclusive_group(required=True)
-    g_lab.add_argument("--snapshot_dir", help="Caminho data_ai/<PID>/snapshots/<YYYY-MM-DD>")
-    g_lab.add_argument("--participant", help="PID (usar com --snapshot)")
-    p_lab.add_argument("--snapshot", help="Snapshot id (YYYY-MM-DD ou YYYYMMDD)")
+    g_lab.add_argument("--snapshot_dir", help=HELP_SNAPSHOT_DIR)
+    g_lab.add_argument("--participant", help=HELP_PARTICIPANT)
+    p_lab.add_argument("--snapshot", help=HELP_SNAPSHOT_ID)
     p_lab.add_argument("--synthetic", action="store_true", help="Use synthetic labels (state_of_mind_synthetic.csv)")
     p_lab.add_argument("--labels_path", help="Caminho alternativo para labels (opcional)")
 
     # aggregate
     p_agg = sub.add_parser("aggregate", help="Aggregate features to one row per day (optional synthetic labels)")
     gagg = p_agg.add_mutually_exclusive_group(required=True)
-    gagg.add_argument("--snapshot_dir", help="Caminho data_ai/<PID>/snapshots/<YYYY-MM-DD>")
-    gagg.add_argument("--participant", help="PID (usar com --snapshot)")
-    p_agg.add_argument("--snapshot", help="Snapshot id (YYYY-MM-DD ou YYYYMMDD)")
+    gagg.add_argument("--snapshot_dir", help=HELP_SNAPSHOT_DIR)
+    gagg.add_argument("--participant", help=HELP_PARTICIPANT)
+    p_agg.add_argument("--snapshot", help=HELP_SNAPSHOT_ID)
     p_agg.add_argument("--labels", choices=["none", "synthetic"], default="none", help="Join labels (synthetic) into aggregated output")
 
     args = ap.parse_args()
@@ -590,11 +601,11 @@ def main():
             snapdir = Path(args.snapshot_dir)
         else:
             if not args.participant or not args.snapshot:
-                print("Use --snapshot_dir OU (--participant e --snapshot).")
+                print(USAGE_SNAPSHOT_OR_PARTICIPANT)
                 return 2
             snapdir = ensure_ai_outdir(args.participant, args.snapshot)
         if not snapdir.exists():
-            print("⚠️ snapshot_dir não existe:", snapdir)
+            print(SNAPSHOT_NOT_EXISTS, snapdir)
             return 1
 
         if args.zepp_dir:
@@ -653,11 +664,11 @@ def main():
             snapdir = Path(args.snapshot_dir)
         else:
             if not args.participant or not args.snapshot:
-                print("Use --snapshot_dir OU (--participant e --snapshot).")
+                print(USAGE_SNAPSHOT_OR_PARTICIPANT)
                 return 2
             snapdir = _resolve_snapshot_dir(args.participant, args.snapshot)
         if not snapdir.exists():
-            print("⚠️ snapshot_dir não existe:", snapdir)
+            print(SNAPSHOT_NOT_EXISTS, snapdir)
             return 1
 
         if not args.synthetic:
@@ -683,11 +694,11 @@ def main():
             snapdir = Path(args.snapshot_dir)
         else:
             if not args.participant or not args.snapshot:
-                print("Use --snapshot_dir OU (--participant e --snapshot).")
+                print(USAGE_SNAPSHOT_OR_PARTICIPANT)
                 return 2
             snapdir = AI_ROOT / args.participant / 'snapshots' / args.snapshot
         if not snapdir.exists():
-            print("⚠️ snapshot_dir não existe:", snapdir)
+            print(SNAPSHOT_NOT_EXISTS, snapdir)
             return 1
         # Call the aggregator via its public API. Import error or runtime will be shown to the user.
         try:
