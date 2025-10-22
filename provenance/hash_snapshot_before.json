@@ -1,0 +1,15 @@
+{
+  "data\\etl\\P000001\\normalized\\apple_heart_rate.csv": "8bfdeb8b7fc5c50b08e71b65b4890b57c36cc5ea640c2e2a298e6f85613c5157",
+  "data\\etl\\P000001\\normalized\\apple_heart_rate.csv.manifest.json": "29310f83d24e5a05bab1b429445937ad08094e3a9554bd7fefe29c7a8cf78f42",
+  "data\\etl\\P000001\\normalized\\apple_sleep_intervals.csv": "08b4e280819e9b13cb22389675bc0a40bc42bc4a8cac8a2a93eb82eac5f400d7",
+  "data\\etl\\P000001\\normalized\\apple_sleep_intervals.csv.manifest.json": "f4be3e00c6e309ac91f282ce2a46df2696907bd3d4df978eb92ea81ed4eb67f3",
+  "data\\etl\\P000001\\normalized\\apple_state_of_mind.csv": "97d260c995d8d197198cc0343053b0d9129b0c213a7b5e7da452ab10eb0a3561",
+  "data\\etl\\P000001\\normalized\\apple_state_of_mind.csv.manifest.json": "6462b0775d29ca4d80762d55295d55608367c300d848a1b6d139a6bb440bfa8d",
+  "data\\etl\\P000001\\normalized\\parse.ok": "09479284898bbfdb23a9b47a947d8520f2800057b9b6bc20301c47da31827feb",
+  "data\\etl\\P000001\\processed\\apple\\health_hr_daily.csv": "466b051906b6e15060c7244490acf26f0cdce751a43655bcb8578eacbc4a39da",
+  "data\\etl\\P000001\\processed\\apple\\health_hr_daily.csv.manifest.json": "2423abe39197dd4dbf44053bc306b66c6de561cad445ba9b1d2e9349567b535f",
+  "data\\etl\\P000001\\processed\\apple\\health_hrv_sdnn_daily.csv": "d2d088e8f26cfa5f421fb81d311cef969d53098233d6ef0edd0310cb438fde46",
+  "data\\etl\\P000001\\processed\\apple\\health_hrv_sdnn_daily.csv.manifest.json": "8b10bf328dd76d8e01ea06f5b2a30a2f552e89d1236f0db0bd4c8b754ace981f",
+  "data\\etl\\P000001\\processed\\apple\\health_sleep_daily.csv": "f69e820ddd561393b8ca543f93d6c52aad044f7afdf9293594030e6bf2417e4b",
+  "data\\etl\\P000001\\processed\\apple\\health_sleep_daily.csv.manifest.json": "f0002a4787dd86207ad375393babaff3ed0422de769bc267be950e00bc6320a2"
+}

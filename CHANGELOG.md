@@ -13,6 +13,58 @@ Export best_model.tflite and latency measurements.
 
 Finalise LaTeX main.tex with updated figures + Appendices C–D.
 
+## 🔧 Summary
+
+Release 2.1.7
+
+This release strengthens the end-to-end reproducibility and auditability of the N-of-1 ETL → Modeling pipeline.  
+All new scripts follow the **atomic write**, **manifest-based provenance**, and **idempotent rerun** guarantees.
+
+---
+
+## 🧩 Highlights
+
+### 🧱 ETL & QC
+
+- Implemented new deterministic Apple In-App ETL stages:
+  - `apple_inapp_parse.py` (normalized CSVs)
+  - `apple_inapp_qc.py` (QC metrics & markdown report)
+  - `apple_inapp_daily.py` (daily aggregates)
+  - Orchestrator target `etl-apple` (parse → qc → daily)
+- Added atomic manifest writing, per-run logging, and progress visualization.
+- Introduced robust dry-run and idempotence testing via:
+  - `make idempotence-check`
+  - `make atomicity-sim`
+
+### ⚙️ Build & Provenance
+
+- Added new `io_utils.py` primitives for atomic writes and schema hashing.
+- Extended `migrate_layout.py` and `intake_zip.py` to standardize raw → extracted structure.
+- Integrated provenance audit (`make provenance`) for run-level data integrity.
+
+### 🧠 CI / Dev Improvements
+
+- Added Makefile lint and structure checks (`lint-layout`, `lint-deprecated-exports`).
+- Improved cross-platform compatibility (Windows / Git Bash / Linux).
+- Simplified developer UX with `make help-layout` and `make venv-shell`.
+
+---
+
+## 🧪 Testing & Validation
+
+- Dry-run and idempotence checks verified on Apple In-App sample exports.
+- All ETL stages validated for atomicity and deterministic manifests.
+- Provenance reports correctly summarize normalized → processed data transitions.
+
+---
+
+## 🧠 Next Steps
+
+- Extend idempotence to Zepp and iOS ETL stages (B1–B3, Z1–Z3).
+- Add integration tests and GitHub Actions CI for `etl-apple` smoke runs.
+- Automate release generation via `make release-draft` and `make release-publish`.
+- Begin model retraining using multi-snapshot data (Phase M1).
+
 ## [v2.1.4] – 2025-10-21
 
 ### 🚀 Modeling Exporter, Baseline & Makefile Refactor
@@ -308,6 +360,79 @@ All iOS extraction scripts are now fully consolidated under `ios_extract/`, whil
 
 # 🔗 Version Comparison Links
 
+# 📜 Changelog — N-of-1 Study (Practicum Part 2)
+
+All notable changes to this project will be documented in this file.  
+This project adheres to **Semantic Versioning (SemVer)** and each entry corresponds to a GitHub tag.
+
+---
+
+## [2.1.7] – 2025-10-22T21:07:24.667194+00:00
+
+### 🚀 Data Provenance Sprint â€“ 2.1.7
+
+## **Summary:**
+
+### Added
+
+--
+
+### Changed
+
+--
+
+### Fixed
+
+--
+
+### Tests
+
+--
+
+### Notes
+
+--
+
+---
+
+[2.1.7]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/{{PREVIOUS_TAG}}...2.1.7
+
+# 📜 Changelog — N-of-1 Study (Practicum Part 2)
+
+All notable changes to this project will be documented in this file.  
+This project adheres to **Semantic Versioning (SemVer)** and each entry corresponds to a GitHub tag.
+
+---
+
+## [2.1.5] – 2025-10-22T21:01:53.454456+00:00
+
+### 🚀 Data Provenance Sprint â€“ 2.1.5
+
+## **Summary:**
+
+### Added
+
+--
+
+### Changed
+
+--
+
+### Fixed
+
+--
+
+### Tests
+
+--
+
+### Notes
+
+--
+
+---
+
+[2.1.5]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/{{PREVIOUS_TAG}}...2.1.5
 [v2.1.4]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.1.3...v2.1.4
 [v2.1.3]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.1.1...v2.1.3
 [v2.1.1]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.1.0...v2.1.1
@@ -315,3 +440,5 @@ All iOS extraction scripts are now fully consolidated under `ios_extract/`, whil
 [v2.0.3]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.0.2...v2.0.3
 [v2.0.2]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/v2.0-pre-ethics...v2.0.2
 [v2.0-pre-ethics]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/releases/tag/v2.0-pre-ethics
+[2.1.5]: https://github.com/<owner>/<repo>/compare/v2.1.4...2.1.5
+[2.1.7]: https://github.com/<owner>/<repo>/compare/v2.1.4...2.1.7

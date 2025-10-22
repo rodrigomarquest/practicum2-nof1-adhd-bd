@@ -25,18 +25,27 @@
 # ============================================================
 
 # --- Config --------------------------------------------------
-.RECIPEPREFIX := >
+.RECIPEPREFIX := > 
 SHELL := /usr/bin/env bash
 PY    ?= python
 # Absolute path to the Python interpreter used to run Make/PY
 PY_ABS := $(shell $(PY) -c "import sys,os;print(os.path.abspath(sys.executable))")
 DRY_RUN ?= 0
+DRY_RUN ?= 0
 NON_INTERACTIVE ?= 0
+RELEASE_DRY_RUN ?= 0
 PIP   ?= $(PY) -m pip
 # Resolve venv python interpreter path (prefer Windows Scripts, then POSIX bin). Falls back to $(PY)
 VENV_PY ?= $(shell if [ -x .venv/Scripts/python.exe ]; then echo $(abspath .venv/Scripts/python.exe); elif [ -x .venv/Scripts/python ]; then echo $(abspath .venv/Scripts/python); elif [ -x .venv/bin/python ]; then echo $(abspath .venv/bin/python); else echo $(PY_ABS); fi)
 PID ?= P000001
 TZ  ?= Europe/Dublin
+
+# Release / version metadata (overridable)
+VERSION       ?= 2.1.7
+TAG_PREFIX    ?= v
+# Compute TAG: if VERSION already starts with 'v' then use it as-is, otherwise prefix with TAG_PREFIX
+TAG := v$(VERSION)
+RELEASE_TITLE ?= Data Provenance Sprint – $(VERSION)
 
 
 # Paths
@@ -178,6 +187,73 @@ etl-one:
 > @echo "Delegating export.xml check to make_scripts/etl_one_wrapper.sh"
 > @make_scripts/etl_one_wrapper.sh "$(PID)" "$(SNAP)" "$(VENV_PY)" "$(if $(ETL_PIPELINE),$(ETL_PIPELINE),etl_pipeline.py)"
 
+# Parse Apple Health export.xml into normalized per-metric CSVs
+.PHONY: etl-apple-parse
+etl-apple-parse:
+> @test -n "$(PID)" || (echo "Set PID=Pxxxxxx" && exit 2)
+> @echo "etl-apple-parse: participant=$(PID)" \
+> && echo "Running: PYTHONPATH=\"$$PWD\" \"$(VENV_PY)\" etl/apple_inapp_parse.py --participant \"$(PID)\" --extracted-dir \"$(EXTRACTED_DIR)\" --normalized-dir \"$(NORMALIZED_DIR)\" $$( [ \"$(DRY_RUN)\" = \"1\" ] && echo --dry-run || true )" \
+> && PYTHONPATH="$$PWD" "$(VENV_PY)" etl/apple_inapp_parse.py --participant "$(PID)" --extracted-dir "$(EXTRACTED_DIR)" --normalized-dir "$(NORMALIZED_DIR)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
+
+.PHONY: etl-apple-qc
+etl-apple-qc:
+> @test -n "$(PID)" || (echo "Set PID=Pxxxxxx" && exit 2)
+> @echo "etl-apple-qc: participant=$(PID)"
+> @echo "Ensuring parse stage is up-to-date..."
+> @$(MAKE) etl-apple-parse
+> @echo "Running: PYTHONPATH=\"$$PWD\" \"$(VENV_PY)\" etl/apple_inapp_qc.py --participant \"$(PID)\" --normalized-dir \"$(NORMALIZED_DIR)\" --processed-dir \"$(PROCESSED_DIR)\" $$( [ \"$(DRY_RUN)\" = \"1\" ] && echo --dry-run || true )"
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" etl/apple_inapp_qc.py --participant "$(PID)" --normalized-dir "$(NORMALIZED_DIR)" --processed-dir "$(PROCESSED_DIR)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
+
+.PHONY: etl-apple-daily
+etl-apple-daily:
+> @test -n "$(PID)" || (echo "Set PID=Pxxxxxx" && exit 2)
+> @echo "etl-apple-daily: participant=$(PID)"
+> @echo "Ensuring QC stage is up-to-date..."
+> @$(MAKE) etl-apple-qc
+> @echo "Running: PYTHONPATH=\"$$PWD\" \"$(VENV_PY)\" etl/apple_inapp_daily.py --participant \"$(PID)\" --normalized-dir \"$(NORMALIZED_DIR)\" --processed-dir \"$(PROCESSED_DIR)\" $$( [ \"$(DRY_RUN)\" = \"1\" ] && echo --dry-run || true )"
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" etl/apple_inapp_daily.py --participant "$(PID)" --normalized-dir "$(NORMALIZED_DIR)" --processed-dir "$(PROCESSED_DIR)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
+
+.PHONY: etl-apple
+etl-apple:
+> @test -n "$(PID)" || (echo "Set PID=Pxxxxxx" && exit 2)
+> @test -n "$(RUN_ID)" || (echo "Set RUN_ID (e.g. $(shell date -u +%Y%m%dT%H%M%SZ))" && exit 2)
+> @echo "etl-apple: participant=$(PID) run=$(RUN_ID)"
+> @echo "Running PII guard (non-blocking)..."
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/pii_guard.py --participant "$(PID)" || true
+> @mkdir -p "$(ETL_DIR)/runs/$(RUN_ID)/logs"
+> @echo "Running parse..."
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" etl/apple_inapp_parse.py --participant "$(PID)" --extracted-dir "$(EXTRACTED_DIR)" --normalized-dir "$(NORMALIZED_DIR)" --run-id "$(RUN_ID)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true ) 2>&1 | tee "$(ETL_DIR)/runs/$(RUN_ID)/logs/parse.log"
+> @echo "Running qc..."
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" etl/apple_inapp_qc.py --participant "$(PID)" --normalized-dir "$(NORMALIZED_DIR)" --processed-dir "$(PROCESSED_DIR)" --run-id "$(RUN_ID)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true ) 2>&1 | tee "$(ETL_DIR)/runs/$(RUN_ID)/logs/qc.log"
+> @echo "Running daily aggregation..."
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" etl/apple_inapp_daily.py --participant "$(PID)" --normalized-dir "$(NORMALIZED_DIR)" --processed-dir "$(PROCESSED_DIR)" --run-id "$(RUN_ID)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true ) 2>&1 | tee "$(ETL_DIR)/runs/$(RUN_ID)/logs/daily.log"
+> @echo "Collecting run outputs and writing summary..."
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/apple_etl_summary.py --participant "$(PID)" --run-id "$(RUN_ID)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
+> @echo "Running provenance..."
+> @$(MAKE) provenance PARTICIPANT=$(PID) RUN_ID=$(RUN_ID) || true
+> @echo "ETL Apple In-App completed successfully for $(PID)."
+
+.PHONY: idempotence-check
+idempotence-check:
+> @echo "Running idempotence-check for PID=$(PID) (full etl-apple chain)"
+> @mkdir -p provenance
+> @echo "Recording snapshot before..."
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/hash_snapshot.py --pid "$(PID)" --out provenance/hash_snapshot_before.json
+> @echo "Running full etl-apple chain (parse->qc->daily)"
+> @$(MAKE) etl-apple PID=$(PID) RUN_ID=checkrun DRY_RUN=0 || true
+> @echo "Recording snapshot after..."
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/hash_snapshot.py --pid "$(PID)" --out provenance/hash_snapshot_after.json
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/compare_snapshots.py --before provenance/hash_snapshot_before.json --after provenance/hash_snapshot_after.json
+
+.PHONY: atomicity-sim
+atomicity-sim:
+> @echo "Simulating partial write under $(NORMALIZED_DIR)/apple"
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/simulate_partial_write.py --dir "$(NORMALIZED_DIR)/apple"
+> @echo "Now running etl-apple-parse to exercise cleanup/atomicity"
+> @$(MAKE) etl-apple-parse
+> @echo "Checking for leftover temp files..."
+> @bash -c 'ls -1 "$(NORMALIZED_DIR)/apple" 2>/dev/null | grep "^\.tmp\." && echo "TEMP FILES LEFT" && exit 2 || echo "No leftover tmp files"'
+
 # --- Comparação Zepp vs Apple + plots de uma vez --------------
 # Ex.: make plots-all PID=P000001 SNAP=2025-09-29 POLICY=best_of_day
 plots-all:
@@ -187,15 +263,15 @@ plots-all:
 > @echo "plots-all: compare+plot for PID=$(PID) SNAP=$(SNAP) POLICY=$(POLICY)"
 > @echo "Running: PYTHONPATH=\"$$PWD\" \"$(VENV_PY)\" etl_tools/compare_zepp_apple.py --pid \"$(PID)\" --zepp-root \"data_etl/$(PID)/zepp_processed\" --apple-dir \"data_ai/$(PID)/snapshots/$(SNAP)\" --out-dir \"data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)\" --sleep-policy \"$(POLICY)\""
 > @PYTHONPATH="$$PWD" "$(VENV_PY)" etl_tools/compare_zepp_apple.py \
-	--pid "$(PID)" \
-	--zepp-root "data_etl/$(PID)/zepp_processed" \
-	--apple-dir "data_ai/$(PID)/snapshots/$(SNAP)" \
-	--out-dir "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)" \
-	--sleep-policy "$(POLICY)"
+> 	--pid "$(PID)" \
+> 	--zepp-root "data_etl/$(PID)/zepp_processed" \
+> 	--apple-dir "data_ai/$(PID)/snapshots/$(SNAP)" \
+> 	--out-dir "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)" \
+> 	--sleep-policy "$(POLICY)"
 > @echo "Running: PYTHONPATH=\"$$PWD\" \"$(VENV_PY)\" etl_tools/plot_sleep_compare.py --join \"data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/join_hybrid_daily.csv\" --outdir \"data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/plots\""
 > @PYTHONPATH="$$PWD" "$(VENV_PY)" etl_tools/plot_sleep_compare.py \
-	--join "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/join_hybrid_daily.csv" \
-	--outdir "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/plots"
+> 	--join "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/join_hybrid_daily.csv" \
+> 	--outdir "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/plots"
 
 # --- Comparação + plots (modo "lite"): escreve/usa JOIN genérico sem subpasta da policy
 # Uso:
@@ -398,8 +474,90 @@ help-venv:
 >	@echo "make venv KAGGLE=1       (base + Kaggle constraints)"
 >	@echo "make venv WIN=1          (base + Windows constraints)"
 >	@echo "make pip-freeze          (write provenance/pip_freeze_<UTC>.txt)"
->	@echo "make check-reqs          (verify numpy, pandas, matplotlib inside .venv)"
->	@echo "Layout: make help-layout  (intake/migrate/clean/provenance targets)"
+
+.PHONY: print-version version-guard
+print-version:
+> 	@echo "VERSION=$(VERSION)"
+> 	@echo "TAG=$(TAG)"
+> 	@echo "LATEST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo '(none)')"
+
+version-guard:
+> 	@echo "Running version guard for TAG=$(TAG) (allow dirty: $${ALLOW_DIRTY:-false})"
+> 	@$(VENV_PY) make_scripts/version_guard.py --tag "$(TAG)" $$( [ "$${ALLOW_DIRTY:-0}" = "1" ] && echo --allow-dirty || true )
+
+.PHONY: help-release
+help-release:
+> 	@echo "make release-notes       # build dist/release_notes_$(TAG).md using $(VENV_PY)"
+> 	@echo "make version-guard       # run pre-release checks (clean tree, no existing tag)"
+> 	@echo "make changelog           # update CHANGELOG.md from dist/release_notes_$(TAG).md"
+> 	@echo "make release-draft RELEASE_DRY_RUN=1  # dry-run the release flow (no side effects)"
+
+.PHONY: release-draft release-publish release-assets
+
+release-draft: version-guard release-notes changelog-update release-assets
+> 	@echo "Preparing release draft for $(TAG)"
+> 	@# run version guard (do not swallow failures). Allow dirty only when ALLOW_DIRTY=1
+> 	@$(VENV_PY) make_scripts/version_guard.py --tag "$(TAG)" $$( [ "$${ALLOW_DIRTY:-0}" = "1" ] && echo --allow-dirty || true ) --remote-check --remote origin
+> 	@# After changelog, stage CHANGELOG and release notes and commit if changed
+> 	@git add CHANGELOG.md dist/release_notes_$(TAG).md 2>/dev/null || true
+> 	@if ! git diff --cached --quiet --exit-code; then \
+> 	  git commit -m "docs(release): update CHANGELOG for $(TAG)" || true; \
+> 	else \
+> 	  echo "No changelog changes to commit"; \
+> 	fi
+> 	@# create tag locally and create release (dry-run branch prints manifest)
+> 	@if [ "x$(RELEASE_DRY_RUN)" = "x1" ]; then \
+> 	  echo "[DRY-RUN] Would create tag $(TAG) and run gh release create (draft) with assets from manifest"; \
+> 	  echo "[DRY-RUN] Manifest (dist/assets/$(TAG)/manifest.json):"; \
+> 	  "$(VENV_PY)" make_scripts/print_manifest.py --manifest "dist/assets/$(TAG)/manifest.json"; \
+> 	else \
+> 	  # create and push tag then attach assets listed in manifest.json \
+> 	  if git rev-parse --verify "$(TAG)" >/dev/null 2>&1; then \
+> 	    echo "Tag $(TAG) already exists locally"; \
+> 	  else \
+> 	    git tag -a "$(TAG)" -m "$(RELEASE_TITLE)"; git push origin "$(TAG)"; \
+> 	  fi; \
+> 		ASSETS=$$($(VENV_PY) make_scripts/list_manifest_assets.py --manifest "dist/assets/$(TAG)/manifest.json"); \
+> 	  echo "Creating GH release draft for $(TAG) with assets: $$ASSETS"; \
+> 	  gh release create "$(TAG)" $$ASSETS --title "$(RELEASE_TITLE)" --notes-file "dist/release_notes_$(TAG).md" --draft; \
+> 	fi
+
+release-assets:
+> 	@echo "Collecting release assets into dist/assets/$(TAG)/"
+> 	@mkdir -p "dist/assets/$(TAG)"
+> 	@COPIED=0; \
+> 	# copy explicit provenance artifacts if present
+> 	if [ -e "provenance/etl_provenance_report.csv" ]; then cp "provenance/etl_provenance_report.csv" "dist/assets/$(TAG)/"; COPIED=1; fi; \
+> 	if [ -e "provenance/data_audit_summary.md" ]; then cp "provenance/data_audit_summary.md" "dist/assets/$(TAG)/"; COPIED=1; fi; \
+> 	LF=$$(ls -1t provenance/pip_freeze_*.txt 2>/dev/null | head -n1 || true); if [ -n "$$LF" ]; then cp "$$LF" "dist/assets/$(TAG)/"; COPIED=1; fi; \
+> 	# copy any intake logs for participant
+> 	for f in $$(ls -1 data/etl/$(PARTICIPANT)/runs/*/logs/*.json 2>/dev/null || true); do cp "$$f" "dist/assets/$(TAG)/"; COPIED=1; done; \
+> 	if [ $$COPIED -eq 0 ]; then \
+> 	  echo "No assets found to collect; dist/assets/$(TAG) will be empty."; \
+> 	else \
+> 	  echo "Building manifest for dist/assets/$(TAG)"; \
+> 	  "$(VENV_PY)" make_scripts/build_asset_manifest.py "dist/assets/$(TAG)" --out "dist/assets/$(TAG)/manifest.json"; \
+> 	fi; \
+> 	echo "Assets in dist/assets/$(TAG):"; ls -la "dist/assets/$(TAG)" || true
+
+
+.PHONY: clean-assets
+clean-assets:
+> 	@echo "🧹 Cleaning old release-assets..."
+> 	@if [ "x$${CLEAN_ASSETS_DRY_RUN:-0}" = "x1" ]; then \
+> 	  echo "DRY RUN: directories that would be removed:"; \
+> 	  find dist/assets -maxdepth 1 -type d ! -name 'v$(VERSION)' -print || true; \
+> 	  echo "(no deletion performed)"; \
+ 	else \
+> 	  find dist/assets -maxdepth 1 -type d ! -name 'v$(VERSION)' -exec rm -rf {} +; \
+> 	  find dist/assets -type d -empty -delete 2>/dev/null || true; \
+> 	  ls -la dist/assets || true; \
+ 	fi
+
+suggest-version:
+> 	@$(VENV_PY) make_scripts/suggested_version.py --tag "$(TAG)"
+> 	@echo "make check-reqs          (verify numpy, pandas, matplotlib inside .venv)"
+> 	@echo "Layout: make help-layout  (intake/migrate/clean/provenance targets)"
 
 .PHONY: help-data
 help-data:
@@ -461,10 +619,18 @@ intake-zip:
 
 .PHONY: provenance
 provenance:
->	@echo "Running provenance audit for participant=$(PARTICIPANT)"
->	@NORMALIZED_DIR="$(NORMALIZED_DIR)" PROCESSED_DIR="$(PROCESSED_DIR)" JOINED_DIR="$(JOINED_DIR)" AI_SNAPSHOT_DIR="$(AI_SNAPSHOT_DIR)" $(VENV_PY) make_scripts/provenance_audit.py $(if $(DRY_RUN),--dry-run,)
->	@echo "Summary:"
->	@cat provenance/etl_provenance_checks.csv || true
+> @echo "Running provenance audit for participant=$(PARTICIPANT)"
+> @NORMALIZED_DIR="$(NORMALIZED_DIR)" PROCESSED_DIR="$(PROCESSED_DIR)" JOINED_DIR="$(JOINED_DIR)" AI_SNAPSHOT_DIR="$(AI_SNAPSHOT_DIR)" \ 
+> $(VENV_PY) make_scripts/provenance_audit.py $(if $(PARTICIPANT),--participant $(PARTICIPANT),) $(if $(SNAPSHOT),--snapshot $(SNAPSHOT),) $(if $(DRY_RUN),--dry-run,)
+> @echo "Summary:"
+> @ls -1 provenance || true
+
+.PHONY: provenance-snap
+provenance-snap:
+> @test -n "$(PID)" || (echo "Set PID=Pxxxxxx" && exit 2)
+> @test -n "$(SNAPSHOT)" || (echo "Set SNAPSHOT=YYYY-MM-DD" && exit 2)
+> @echo "Running participant-scoped provenance for PID=$(PID) snapshot=$(SNAPSHOT)"
+> @PARTICIPANT="$(PID)" SNAPSHOT="$(SNAPSHOT)" $(MAKE) provenance
 
 .PHONY: lint-args
 lint-args:
@@ -500,11 +666,11 @@ zepp-apple-compare:
 > @echo "zepp-apple-compare: PID=$(PID) SNAP=$(SNAP) POLICY=$(POLICY)"
 > @echo "Running: PYTHONPATH=\"$$PWD\" \"$(VENV_PY)\" etl_tools/compare_zepp_apple.py --pid \"$(PID)\" --zepp-root \"data_etl/$(PID)/zepp_processed\" --apple-dir \"data_ai/$(PID)/snapshots/$(SNAP)\" --out-dir \"data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join\" --sleep-policy \"$(POLICY)\""
 > @PYTHONPATH="$$PWD" "$(VENV_PY)" etl_tools/compare_zepp_apple.py \
-	--pid "$(PID)" \
-	--zepp-root "data_etl/$(PID)/zepp_processed" \
-	--apple-dir "data_ai/$(PID)/snapshots/$(SNAP)" \
-	--out-dir "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join" \
-	--sleep-policy "$(POLICY)"
+> 	--pid "$(PID)" \
+> 	--zepp-root "data_etl/$(PID)/zepp_processed" \
+> 	--apple-dir "data_ai/$(PID)/snapshots/$(SNAP)" \
+> 	--out-dir "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join" \
+> 	--sleep-policy "$(POLICY)"
 
 # Ex.: make freeze-model-input PID=P000001 SNAP=2024-06-30 POLICY=best_of_day
 freeze-model-input:
@@ -519,9 +685,21 @@ plot-sleep:
 > @echo "plot-sleep: PID=$(PID) SNAP=$(SNAP) POLICY=$(POLICY)"
 > @echo "Running: PYTHONPATH=\"$$PWD\" \"$(VENV_PY)\" etl_tools/plot_sleep_compare.py --join \"data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/join_hybrid_daily.csv\" --outdir \"data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/plots\""
 > @PYTHONPATH="$$PWD" "$(VENV_PY)" etl_tools/plot_sleep_compare.py \
-	--join "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/join_hybrid_daily.csv" \
-	--outdir "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/plots"
+> 	--join "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/join_hybrid_daily.csv" \
+> 	--outdir "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/plots"
 
+# Release automation targets
+.PHONY: release-notes
+release-notes:
+> @test -n "$(TAG)" || (echo "Set TAG=..." && exit 2)
+> @echo "Rendering release notes for TAG=$(TAG) VERSION=$(VERSION)"
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" tools/render_release_from_templates.py --version "$(VERSION)" --tag "$(TAG)" --title "$(RELEASE_TITLE)" $$( [ "$(RELEASE_DRY_RUN)" = "1" ] && echo --dry-run || true )
+
+.PHONY: changelog-update
+changelog-update:
+> @test -n "$(TAG)" || (echo "Set TAG=..." && exit 2)
+> @echo "Updating CHANGELOG.md for VERSION=$(VERSION)"
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" tools/update_changelog.py --version "$(VERSION)" --tag "$(TAG)" --title "$(RELEASE_TITLE)" $$( [ "$(RELEASE_DRY_RUN)" = "1" ] && echo --dry-run || true )
 # ---------------- Release & Reports ----------------
 SNAP     ?= 2025-09-29
 PID      ?= P000001

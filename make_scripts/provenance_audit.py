@@ -69,6 +69,8 @@ def summarize_items(items: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 def main(argv: Optional[list[str]] = None):
     p = argparse.ArgumentParser(description='Provenance audit for ETL outputs')
+    p.add_argument('--participant', help='Participant id to scope the audit, e.g. P000001')
+    p.add_argument('--snapshot', help='Optional snapshot date YYYY-MM-DD to include ai snapshot folder')
     p.add_argument('--normalized-dir')
     p.add_argument('--processed-dir')
     p.add_argument('--joined-dir')
@@ -77,13 +79,25 @@ def main(argv: Optional[list[str]] = None):
     args = p.parse_args(argv)
 
     # ENV fallback
-    norm = Path(args.normalized_dir or os.environ.get('NORMALIZED_DIR') or 'data/etl/P000001/normalized')
-    proc = Path(args.processed_dir or os.environ.get('PROCESSED_DIR') or 'data/etl/P000001/processed')
-    join = Path(args.joined_dir or os.environ.get('JOINED_DIR') or 'data/etl/P000001/joined')
-    ai = Path(args.ai_snapshot_dir or os.environ.get('AI_SNAPSHOT_DIR') or 'data/ai/P000001/snapshots/2025-09-29')
+    # Participant-scoped defaults
+    participant = args.participant or os.environ.get('PARTICIPANT') or 'P000001'
+    # allow explicit dirs to override; otherwise derive from participant (and optional snapshot)
+    norm = Path(args.normalized_dir or os.environ.get('NORMALIZED_DIR') or f'data/etl/{participant}/normalized')
+    proc = Path(args.processed_dir or os.environ.get('PROCESSED_DIR') or f'data/etl/{participant}/processed')
+    join = Path(args.joined_dir or os.environ.get('JOINED_DIR') or f'data/etl/{participant}/joined')
+    if args.snapshot:
+        ai = Path(args.ai_snapshot_dir or os.environ.get('AI_SNAPSHOT_DIR') or f'data/ai/{participant}/snapshots/{args.snapshot}')
+    else:
+        ai = Path(args.ai_snapshot_dir or os.environ.get('AI_SNAPSHOT_DIR') or f'data/ai/{participant}/snapshots')
 
     out_dir = Path('provenance')
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # participant-scoped output filenames (suffix snapshot if provided)
+    snap_suffix = f'_{args.snapshot}' if args.snapshot else ''
+    report_csv = out_dir / f'etl_provenance_report_{participant}{snap_suffix}.csv'
+    checks_csv = out_dir / f'etl_provenance_checks_{participant}{snap_suffix}.csv'
+    summary_md = out_dir / f'data_audit_summary_{participant}{snap_suffix}.md'
 
     report_rows: List[Dict[str, Any]] = []
     checks_rows: List[Dict[str, Any]] = []
@@ -91,9 +105,15 @@ def main(argv: Optional[list[str]] = None):
     # If dry-run, still create empty placeholder outputs
     if args.dry_run:
         # create empty CSVs with headers
-        write_csv(out_dir / 'etl_provenance_report.csv', [], ['stage','path','relpath','size_bytes','modified'])
-        write_csv(out_dir / 'etl_provenance_checks.csv', [], ['stage','count','size_bytes','min_modified','max_modified'])
-        (out_dir / 'data_audit_summary.md').write_text('# Data audit summary\n\nDry-run executed at ' + now_iso() + '\n')
+        # participant-scoped output filenames (suffix snapshot if provided)
+        snap_suffix = f'_{args.snapshot}' if args.snapshot else ''
+        report_csv = out_dir / f'etl_provenance_report_{participant}{snap_suffix}.csv'
+        checks_csv = out_dir / f'etl_provenance_checks_{participant}{snap_suffix}.csv'
+        summary_md = out_dir / f'data_audit_summary_{participant}{snap_suffix}.md'
+
+        write_csv(report_csv, [], ['stage','path','relpath','size_bytes','modified'])
+        write_csv(checks_csv, [], ['stage','count','size_bytes','min_modified','max_modified'])
+        summary_md.write_text(f'# Data audit summary for {participant}{snap_suffix}\n\nDry-run executed at ' + now_iso() + '\n')
         print('Dry-run: wrote placeholder provenance files to', out_dir)
         return
 
@@ -123,14 +143,14 @@ def main(argv: Optional[list[str]] = None):
         })
 
     # write outputs
-    write_csv(out_dir / 'etl_provenance_report.csv', report_rows, ['stage','path','relpath','size_bytes','modified'])
-    write_csv(out_dir / 'etl_provenance_checks.csv', checks_rows, ['stage','count','size_bytes','min_modified','max_modified'])
+    write_csv(report_csv, report_rows, ['stage','path','relpath','size_bytes','modified'])
+    write_csv(checks_csv, checks_rows, ['stage','count','size_bytes','min_modified','max_modified'])
 
     # write a small markdown summary
-    md = [f'# Data audit summary\n\nGenerated: {now_iso()}\n\n']
+    md = [f'# Data audit summary for {participant}{snap_suffix}\n\nGenerated: {now_iso()}\n\n']
     for ck in checks_rows:
         md.append(f"## Stage: {ck['stage']}\n- Files: {ck['count']}\n- Total size bytes: {ck['size_bytes']}\n- Range: {ck['min_modified']} → {ck['max_modified']}\n\n")
-    (out_dir / 'data_audit_summary.md').write_text('\n'.join(md))
+    summary_md.write_text('\n'.join(md))
 
     print('Wrote provenance reports to', out_dir)
 

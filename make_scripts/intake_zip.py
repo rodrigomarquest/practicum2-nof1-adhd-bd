@@ -79,10 +79,18 @@ def copy_to_raw(src: Path, raw_dir: Path, source_label: str, dry_run: bool) -> P
     ensure_dir(dest_dir)
     dest = dest_dir / canonical
     if dry_run:
-        print(f"DRY RUN: would copy {src.name} -> {dest}")
+        print(f"DRY RUN: would copy {src.name} -> {dest} (canonical)")
+        print(f"DRY RUN: would copy {src.name} -> {dest_dir / src.name} (original)")
         # return expected dest so caller can compute metadata fields
         return dest
+    # copy both canonical and original-preserving name (export.zip)
     shutil.copy2(src, dest)
+    # also keep original filename in the same folder for traceability
+    try:
+        shutil.copy2(src, dest_dir / src.name)
+    except Exception:
+        # non-fatal if original copy fails
+        pass
     return dest
 
 
@@ -90,7 +98,7 @@ def write_run_logs(participant: str, run_id: str, log_json: Dict[str, Any], log_
     base = Path('data') / 'etl' / participant / 'runs' / run_id / 'logs'
     ensure_dir(base)
     # Use explicit filenames for better IDE discoverability
-    json_path = base / 'intake_log.json'
+    json_path = base / f'intake_{run_id}.json'
     csv_path = base / 'intake_log.csv'
     with json_path.open('w', encoding='utf8') as fh:
         json.dump(log_json, fh, indent=2, ensure_ascii=False)
@@ -163,6 +171,14 @@ def main(argv: Optional[list[str]] = None):
     env_extracted = os.environ.get('EXTRACTED_DIR')
     extracted_dir = Path(args.extracted_dir or env_extracted or f'data/etl/{participant}/extracted')
     dry_run = args.dry_run or os.environ.get('DRY_RUN', '') in ('1', 'true', 'True')
+
+    # run PII guard (non-blocking)
+    try:
+        from make_scripts.pii_guard import validate_participant_ready
+        validate_participant_ready(participant)
+    except Exception:
+        # do not block intake if guard fails
+        print('WARNING: PII guard unavailable or errored; proceeding')
 
     src = Path(args.zip_path)
     if not src.exists():
