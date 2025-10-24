@@ -54,7 +54,7 @@ VERSION       ?= 2.1.7
 TAG_PREFIX    ?= v
 # Compute TAG: if VERSION already starts with 'v' then use it as-is, otherwise prefix with TAG_PREFIX
 TAG := v$(VERSION)
-RELEASE_TITLE ?= Data Provenance Sprint
+RELEASE_TITLE ?= Tooling & Provenance Refactor
 
 
 # Paths
@@ -444,12 +444,10 @@ move-raw:
 > 	if [ "x$(BACKUP)" = "x1" ]; then echo "Backup kept: $(RAW_SRC)"; else rm -f "$(RAW_SRC)"; fi; \
 > 	echo "Moved $(RAW_SRC) -> $(RAW_DIR)/"
 
-# Clean only the raw stage (dangerous: requires explicit confirmation via CLEAN_RAW_CONFIRM=1)
-clean-raw:
-> 	@echo "Cleaning RAW_DIR: $(RAW_DIR) (requires CLEAN_RAW_CONFIRM=1)"
-> 	@if [ "x$${CLEAN_RAW_CONFIRM:-0}" != "x1" ]; then echo "Aborting: set CLEAN_RAW_CONFIRM=1 to allow deletion" && exit 2; fi; \
-> 	rm -rf "$(RAW_DIR)/*" || true; \
-> 	echo "Deleted contents of $(RAW_DIR)"
+# NOTE: raw cleaning is implemented via the canonical Python helper below
+# (keeps a single authoritative implementation to avoid duplicate Make
+# recipes and ensure consistent safety checks). See the `clean_data_make.py`
+# helper for flags/confirmation behavior.
 
 
 .PHONY: print-paths init-data init-data-layout test-clean-layout
