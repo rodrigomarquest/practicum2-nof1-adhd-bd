@@ -267,7 +267,7 @@ def main(argv=None):
     tag = args.tag
     version = args.version or (tag[1:] if tag.startswith('v') else tag)
     since_tag = args.since_tag
-    rn = Path(args.release_notes) if args.release_notes else Path(f'dist/release_notes_{tag}.md')
+    rn = Path(args.release_notes) if args.release_notes else Path(f'docs/release_notes/release_notes_{tag}.md')
     out = Path(args.outfile)
     date_iso = args.date_utc or utc_now_iso()
 

@@ -2,7 +2,7 @@
 """Generate release notes markdown for a given version/tag.
 
 Usage:
-  make_scripts/release_notes.py --version X --tag vX --outfile dist/release_notes_vX.md [--since-tag vY]
+    make_scripts/release_notes.py --version X --tag vX [--outfile docs/release_notes/release_notes_vX.md] [--since-tag vY]
 
 The script will:
   - Read docs/HIGHLIGHTS.md for a Highlights section if present
@@ -163,14 +163,18 @@ def main(argv=None):
     p.add_argument('--version', required=True)
     p.add_argument('--tag', required=True)
     p.add_argument('--since-tag', default=None)
-    p.add_argument('--outfile', required=True)
+    # --outfile is optional; if not provided we write into docs/release_notes/
+    p.add_argument('--outfile', default=None)
     p.add_argument('--participant', default='P000001')
     args = p.parse_args(argv)
 
     version = args.version
     tag = args.tag
     since_tag = args.since_tag
-    outfile = Path(args.outfile)
+    if args.outfile:
+        outfile = Path(args.outfile)
+    else:
+        outfile = Path('docs') / 'release_notes' / f'release_notes_{tag}.md'
     participant = args.participant
 
     # Ensure outfile dir exists

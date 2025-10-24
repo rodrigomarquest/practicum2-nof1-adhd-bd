@@ -633,9 +633,9 @@ version-guard:
 
 .PHONY: help-release
 help-release:
-> 	@echo "make release-notes       # build dist/release_notes_$(TAG).md using $(VENV_PY)"
+> 	@echo "make release-notes       # build docs/release_notes/release_notes_$(TAG).md using $(VENV_PY)"
 > 	@echo "make version-guard       # run pre-release checks (clean tree, no existing tag)"
-> 	@echo "make changelog           # update CHANGELOG.md from dist/release_notes_$(TAG).md"
+> 	@echo "make changelog           # update CHANGELOG.md from docs/release_notes/release_notes_$(TAG).md"
 > 	@echo "make release-draft RELEASE_DRY_RUN=1  # dry-run the release flow (no side effects)"
 
 .PHONY: release-draft release-publish release-assets
@@ -645,7 +645,7 @@ release-draft: version-guard release-notes changelog-update release-assets
 > 	@# run version guard (do not swallow failures). Allow dirty only when ALLOW_DIRTY=1
 > 	@$(VENV_PY) make_scripts/version_guard.py --tag "$(TAG)" $$( [ "$${ALLOW_DIRTY:-0}" = "1" ] && echo --allow-dirty || true ) --remote-check --remote origin
 > 	@# After changelog, stage CHANGELOG and release notes and commit if changed
-> 	@git add CHANGELOG.md dist/release_notes_$(TAG).md 2>/dev/null || true
+> 	@git add CHANGELOG.md docs/release_notes/release_notes_$(TAG).md 2>/dev/null || true
 > 	@if ! git diff --cached --quiet --exit-code; then \
 > 	  git commit -m "docs(release): update CHANGELOG for $(TAG)" || true; \
 > 	else \
@@ -665,7 +665,7 @@ release-draft: version-guard release-notes changelog-update release-assets
 > 	  fi; \
 > 		ASSETS=$$($(VENV_PY) make_scripts/utils/list_manifest_assets.py --manifest "dist/assets/$(TAG)/manifest.json"); \
 > 	  echo "Creating GH release draft for $(TAG) with assets: $$ASSETS"; \
-> 	  gh release create "$(TAG)" $$ASSETS --title "$(RELEASE_TITLE)" --notes-file "dist/release_notes_$(TAG).md" --draft; \
+> 	  gh release create "$(TAG)" $$ASSETS --title "$(RELEASE_TITLE)" --notes-file "docs/release_notes/release_notes_$(TAG).md" --draft; \
 > 	fi
 
 release-assets:
@@ -714,7 +714,7 @@ release-publish: version-guard release-notes changelog-update release-assets
 > 	@# sanitize title and release notes to avoid mojibake (e.g. â€” -> —)
 > 	@mkdir -p "dist/assets/$(TAG)"
 > 	@SANITIZED_NOTES="dist/assets/$(TAG)/release_notes_sanitized.md"; \
-> 	$(VENV_PY) make_scripts/sanitize_release_text.py --infile "dist/release_notes_$(TAG).md" --outfile "$$SANITIZED_NOTES"
+> 	$(VENV_PY) make_scripts/sanitize_release_text.py --infile "docs/release_notes/release_notes_$(TAG).md" --outfile "$$SANITIZED_NOTES"
 > 	@CLEAN_TITLE=$$($(VENV_PY) make_scripts/sanitize_release_text.py --text "$(RELEASE_TITLE)"); \
 > 	ASSETS=$$($(VENV_PY) make_scripts/utils/list_manifest_assets.py --manifest "dist/assets/$(TAG)/manifest.json") || true; \
 > 	@echo "Creating GitHub release for $(TAG) with assets: $$ASSETS"; \

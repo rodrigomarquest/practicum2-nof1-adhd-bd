@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Render release notes from templates/docs into dist/release_notes_<TAG>.md
+"""Render release notes from templates/docs into docs/release_notes/release_notes_<TAG>.md
 
 Usage: render_release_from_templates.py --version VERSION --tag TAG [--title TITLE] [--summary SUMMARY] [--branch BRANCH] [--dry-run]
+
+By default the renderer writes into `docs/release_notes/` (not `dist/`). When --dry-run is passed
+the script will NOT write files to disk; it will print a short preview instead.
 """
 from __future__ import annotations
 
@@ -53,28 +56,22 @@ def main(argv=None) -> int:
     }
 
     rendered = render_template(tpl, mapping)
-    out_path = Path('dist') / f'release_notes_{args.tag}.md'
+    out_path = Path('docs') / 'release_notes' / f'release_notes_{args.tag}.md'
 
-    # atomic deterministic write
+    # Dry-run should not modify the working tree — print a short preview and exit
     if args.dry_run:
         print(f'DRY RUN: would write {out_path}')
-        # print a short header
         header = '\n'.join(rendered.splitlines()[:6])
         print(header)
-        # still write the file to dist as per requirements
-        try:
-            atomic_write(out_path, rendered)
-        except Exception as e:
-            print('ERROR writing file in dry-run:', e, file=sys.stderr)
-            return 3
         return 0
 
+    # atomic deterministic write into docs/release_notes
     try:
         atomic_write(out_path, rendered)
     except Exception as e:
         print('ERROR writing release notes:', e, file=sys.stderr)
         return 4
-    print('Wrote', out_path)
+    print('Wrote', out_path.as_posix())
     return 0
 
 
