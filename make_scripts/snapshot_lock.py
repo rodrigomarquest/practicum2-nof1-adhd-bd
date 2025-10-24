@@ -21,3 +21,4 @@ if __name__ == '__main__':
     if hasattr(_mod, 'main'):
         raise SystemExit(_mod.main())
     raise SystemExit(f"No main() in make_scripts.utils.snapshot_lock")
+#!/usr/bin/env python3
