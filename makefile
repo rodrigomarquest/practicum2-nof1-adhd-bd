@@ -40,6 +40,15 @@ VENV_PY ?= $(shell if [ -x .venv/Scripts/python.exe ]; then echo $(abspath .venv
 PID ?= P000001
 TZ  ?= Europe/Dublin
 
+# Participant alias (some older scripts use PARTICIPANT)
+PARTICIPANT ?= $(PID)
+
+# Consolidated directory layout (defaults)
+# RAW_DIR, ETL_DIR and AI_DIR include the participant subfolder
+RAW_DIR := data/raw/$(PARTICIPANT)
+ETL_DIR := data/etl/$(PARTICIPANT)
+AI_DIR  := data/ai/$(PARTICIPANT)
+
 # Release / version metadata (overridable)
 VERSION       ?= 2.1.7
 TAG_PREFIX    ?= v
@@ -53,25 +62,69 @@ BACKUP_DIR ?= C:\Users\Administrador\Apple\MobileSync\Backup\00008120-000E18E211
 OUT_DIR    ?= decrypted_output
 
 IOS_DIR    := ios_extract
-ETL_DIR    := etl
 
-# Canonical data path variables (user-overridable where appropriate)
-# New taxonomy: raw -> extracted -> normalized -> processed -> joined -> ai_input
-DATA_BASE       := ./data
-PARTICIPANT    ?= P000001
-RAW_DIR         := $(DATA_BASE)/raw/$(PARTICIPANT)
-ETL_DIR         := $(DATA_BASE)/etl/$(PARTICIPANT)
-EXTRACTED_DIR   := $(ETL_DIR)/extracted
-NORMALIZED_DIR  := $(ETL_DIR)/normalized
-PROCESSED_DIR   := $(ETL_DIR)/processed
-JOINED_DIR      := $(ETL_DIR)/joined
-AI_DIR          := $(DATA_BASE)/ai/$(PARTICIPANT)
-SNAPSHOT_DATE  ?= 2025-09-29
-AI_SNAPSHOT_DIR := $(AI_DIR)/snapshots/$(SNAPSHOT_DATE)
 
-# Backwards-compatible aliases (kept for older targets/settings)
-DATA_ETL_BASE := $(DATA_BASE)/etl
-DATA_AI_BASE  := $(DATA_BASE)/ai
+# =========================
+# Canonical path variables
+# =========================
+
+# Required runtime parameters (user-overridable)
+PARTICIPANT   ?= P000001
+SNAPSHOT_DATE ?= 2025-10-22
+
+# Base roots (never include snapshot here)
+DATA_BASE := ./data
+RAW_DIR   := $(DATA_BASE)/raw/$(PARTICIPANT)
+ETL_DIR   := $(DATA_BASE)/etl/$(PARTICIPANT)
+AI_DIR    := $(DATA_BASE)/ai/$(PARTICIPANT)
+
+# Snapshot-scoped roots (all ETL/AI writes happen under these)
+ETL_SNAP_DIR := $(ETL_DIR)/snapshots/$(SNAPSHOT_DATE)
+AI_SNAP_DIR  := $(AI_DIR)/snapshots/$(SNAPSHOT_DATE)
+
+# ETL snapshot stages (write-only for stages)
+EXTRACTED_DIR  := $(ETL_SNAP_DIR)/extracted
+NORMALIZED_DIR := $(ETL_SNAP_DIR)/normalized
+PROCESSED_DIR  := $(ETL_SNAP_DIR)/processed
+JOINED_DIR     := $(ETL_SNAP_DIR)/joined
+
+# AI snapshot outputs (model-ready, safe to publish subsets from here)
+AI_INPUT_DIR := $(AI_SNAP_DIR)
+
+# Provenance / reports (lightweight)
+PROVENANCE_DIR := notebooks/eda_outputs/provenance
+
+# =========================
+# iOS / iTunes backup inputs (read-only)
+# =========================
+# Absolute or relative path to the *decrypted* iTunes backup root (never copied).
+# Example external: C:/Users/Administrador/Apple/MobileSync/Backup/00008120-.../_decrypted
+IOS_BACKUP_DIR ?= $(RAW_DIR)/ios/itunes_backup_$(SNAPSHOT_DATE)/_decrypted
+
+# Commonly referenced files/locations inside the backup (resolved by scripts)
+IOS_MANIFEST_DB     ?= $(IOS_BACKUP_DIR)/Manifest.db
+IOS_DEVICEACTIVITY_GLOB ?= Library/DeviceActivity/**    # discovered via Manifest.db
+IOS_KNOWLEDGEC_GLOB    ?= **/KnowledgeC*.db             # discovered via Manifest.db
+
+# =========================
+# Cross-stage defaults / flags
+# =========================
+DRY_RUN            ?= 0
+QC_MODE            ?= flag            # flag|fail
+NAN_THRESHOLD_PCT  ?= 5
+HRV_METHOD         ?= both            # sdnn|rmssd|both
+LOCK_TIMEOUT_SECS  ?= 900
+FORCE_LOCK         ?= 0
+
+# =========================
+# Temporary back-compat aliases (deprecated)
+# =========================
+# NOTE: do not use these in new code; they resolve to the snapshot-scoped dirs above.
+DATA_ETL_BASE  := $(ETL_DIR)         # legacy, alias to participant ETL root
+DATA_AI_BASE   := $(AI_DIR)          # legacy, alias to participant AI root
+
+# Legacy names mapped to snapshot-aware ones (soft-deprecated)
+AI_SNAPSHOT_DIR := $(AI_SNAP_DIR)
 
 # Per-target passthrough args (allow flag-style invocation)
 CLEAN_ARGS ?=
@@ -89,30 +142,26 @@ install-all:
 
 # --- iOS Extraction ------------------------------------------
 decrypt:
-> @BACKUP_DIR="$(BACKUP_DIR)" OUT_DIR="$(OUT_DIR)" \
+> @IOS_BACKUP_DIR="$(IOS_BACKUP_DIR)" BACKUP_DIR="$(IOS_BACKUP_DIR)" EXTRACTED_DIR="$(EXTRACTED_DIR)" \
 >  BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" \
 >  $(PY) $(DEC_MANIFEST)
 
 probe:
-> @BACKUP_DIR="$(BACKUP_DIR)" OUT_DIR="$(OUT_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
+> @IOS_BACKUP_DIR="$(IOS_BACKUP_DIR)" BACKUP_DIR="$(IOS_BACKUP_DIR)" EXTRACTED_DIR="$(EXTRACTED_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
 > $(PY) "$(PROBE)"
 
 extract-plists:
-> @BACKUP_DIR="$(BACKUP_DIR)" OUT_DIR="$(OUT_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
+> @IOS_BACKUP_DIR="$(IOS_BACKUP_DIR)" BACKUP_DIR="$(IOS_BACKUP_DIR)" EXTRACTED_DIR="$(EXTRACTED_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
 > $(PY) "$(EXTRACT_PLISTS)"
 
 plist-csv:
-> @BACKUP_DIR="$(BACKUP_DIR)" OUT_DIR="$(OUT_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
+> @IOS_BACKUP_DIR="$(IOS_BACKUP_DIR)" BACKUP_DIR="$(IOS_BACKUP_DIR)" EXTRACTED_DIR="$(EXTRACTED_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
 > $(PY) "$(PLISTS_TO_CSV)"
 
 extract-knowledgec:
-> @BACKUP_DIR="$(BACKUP_DIR)" OUT_DIR="$(OUT_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
+> @IOS_BACKUP_DIR="$(IOS_BACKUP_DIR)" BACKUP_DIR="$(IOS_BACKUP_DIR)" EXTRACTED_DIR="$(EXTRACTED_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
 > $(PY) "$(EXTRACT_KNOWLEDGEC)"
 
-parse-knowledgec:
-.PHONY: help-layout
-help-layout:
->	@echo "Layout workflow targets and usage"
 >	@echo "  make init-data-layout       # create raw/extracted/normalized/processed/joined and ai/snapshots"
 >	@echo "  make migrate-layout         # move legacy etl/.../exports -> data/raw/<pid>"
 >	@echo "  make intake-zip ...         # ingest device/app zips into raw/<source> (optional minimal extract)"
@@ -121,24 +170,56 @@ help-layout:
 >	@echo "  make provenance             # run inventory & audit over normalized/processed/joined/ai snapshot"
 >	@echo "  make lint-deprecated-exports"
 >	@echo "  make lint-layout"
-> @BACKUP_DIR="$(BACKUP_DIR)" OUT_DIR="$(OUT_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
+	@echo "  IOS_BACKUP_DIR: path to decrypted iTunes backup root (read-only)"
+parse-knowledgec:
+> @IOS_BACKUP_DIR="$(IOS_BACKUP_DIR)" BACKUP_DIR="$(IOS_BACKUP_DIR)" EXTRACTED_DIR="$(EXTRACTED_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
 > if [ -f "$(PARSE_KNOWLEDGEC)" ]; then \
 >   $(PY) "$(PARSE_KNOWLEDGEC)"; \
 > else \
 >   echo "parse_knowledgec_usage.py not present yet (will be added when schema is detected)."; \
 > fi
 
+.PHONY: help-layout
+help-layout:
+> 	@echo "Layout workflow targets and usage"
+
+>	@echo "Makefile ETL runners:"
+>	@echo "  make run-a6-apple PARTICIPANT=<PID> SNAPSHOT_DATE=<YYYY-MM-DD> [DRY_RUN=1]  # run A6 normalization"
+>	@echo "  make run-a7-apple PARTICIPANT=<PID> SNAPSHOT_DATE=<YYYY-MM-DD> [DRY_RUN=1]  # run A7 daily aggregate & join"
+>	@echo "  make run-a8-labels PARTICIPANT=<PID> SNAPSHOT_DATE=<YYYY-MM-DD> [DRY_RUN=1] # run A8 label integration"
+
 probe-sqlite:
-> @BACKUP_DIR="$(BACKUP_DIR)" OUT_DIR="$(OUT_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
+> @IOS_BACKUP_DIR="$(IOS_BACKUP_DIR)" BACKUP_DIR="$(IOS_BACKUP_DIR)" EXTRACTED_DIR="$(EXTRACTED_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
 > $(PY) ios_extract/probe_sqlite_targets.py
 
 extract-screentime-sqlite:
-> @BACKUP_DIR="$(BACKUP_DIR)" OUT_DIR="$(OUT_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
+> @IOS_BACKUP_DIR="$(IOS_BACKUP_DIR)" BACKUP_DIR="$(IOS_BACKUP_DIR)" EXTRACTED_DIR="$(EXTRACTED_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" ; \
 > $(PY) ios_extract/extract_screentime_sqlite.py
 
+.PHONY: ios-backup-probe
+ios-backup-probe:
+> @echo "Probe iOS backup and write metadata to $(EXTRACTED_DIR)/ios/backup_paths.json"
+> @IOS_BACKUP_DIR="$(IOS_BACKUP_DIR)" BACKUP_DIR="$(IOS_BACKUP_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" EXTRACTED_DIR="$(EXTRACTED_DIR)" PARTICIPANT="$(PARTICIPANT)" SNAPSHOT_DATE="$(SNAPSHOT_DATE)" \
+> @$(VENV_PY) make_scripts/ios/ios_backup_probe.py --backup-root "$(IOS_BACKUP_DIR)" --manifest-db "$(IOS_MANIFEST_DB)" --out-dir "$(EXTRACTED_DIR)"
+
+.PHONY: ios-manifest-probe
+ios-manifest-probe:
+> @echo "Probe Manifest.db and write manifest_probe outputs to $(EXTRACTED_DIR)/ios/"
+> @IOS_MANIFEST_DB="$(IOS_MANIFEST_DB)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" EXTRACTED_DIR="$(EXTRACTED_DIR)" PARTICIPANT="$(PARTICIPANT)" SNAPSHOT_DATE="$(SNAPSHOT_DATE)" \
+> $(VENV_PY) make_scripts/ios/manifest_probe.py --manifest-db "$(IOS_MANIFEST_DB)" --out-dir "$(EXTRACTED_DIR)"
+
+.PHONY: ios-normalize-usage
+ios-normalize-usage:
+> @echo "Normalize iOS usage events into $(NORMALIZED_DIR)/ios/"
+> @EXTRACTED_DIR="$(EXTRACTED_DIR)" NORMALIZED_DIR="$(NORMALIZED_DIR)" $(VENV_PY) make_scripts/ios/normalize_ios_usage.py --extracted-dir "$(EXTRACTED_DIR)" --normalized-dir "$(NORMALIZED_DIR)"
+
+.PHONY: ios-daily-join
+ios-daily-join:
+> @echo "Aggregate iOS usage daily and join with AI features"
+> @NORMALIZED_DIR="$(NORMALIZED_DIR)" PROCESSED_DIR="$(PROCESSED_DIR)" AI_INPUT_DIR="$(AI_INPUT_DIR)" JOINED_DIR="$(JOINED_DIR)" $(VENV_PY) make_scripts/ios/aggregate_join_ios_daily.py --normalized-dir "$(NORMALIZED_DIR)/ios" --ai-input "$(AI_INPUT_DIR)/features_daily.csv" --processed-dir "$(PROCESSED_DIR)" --joined-dir "$(JOINED_DIR)" --participant "$(PARTICIPANT)" --snapshot "$(SNAPSHOT_DATE)"
+
 etl:
-> @BACKUP_DIR="$(BACKUP_DIR)" OUT_DIR="$(OUT_DIR)" \
->  BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" \
+> @IOS_BACKUP_DIR="$(IOS_BACKUP_DIR)" BACKUP_DIR="$(IOS_BACKUP_DIR)" EXTRACTED_DIR="$(EXTRACTED_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" \
 >  $(PY) $(ETL_PIPELINE) --cutover $(CUTOVER) --tz_before $(TZ_BEFORE) --tz_after $(TZ_AFTER)
 
 
@@ -157,8 +238,8 @@ list-zepp:
 # Ex.: make parse-zepp ZIP=data_etl/P000001/zepp_export/X.zip OUT=data_etl/P000001/zepp_processed PASS='senha'
 parse-zepp:
 > @echo "parse-zepp: parse Zepp ZIP/dir"
-> @echo "Running: PYTHONPATH=\"$$PWD\" $(PY) make_scripts/parse_zepp_make.py --input \"$(ZIP)\" --outdir-root \"$(OUT)\" --tz \"Europe/Dublin\" $$( [ -n "$(PASS)" ] && echo --password \"$(PASS)\" || true ) $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )"
-> @PYTHONPATH="$$PWD" $(PY) make_scripts/parse_zepp_make.py --input "$(ZIP)" --outdir-root "$(OUT)" --tz "Europe/Dublin" $$( [ -n "$(PASS)" ] && echo --password "$(PASS)" || true ) $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
+> @echo "Running: PYTHONPATH=\"$$PWD\" $(PY) make_scripts/zepp/parse_zepp_make.py --input \"$(ZIP)\" --outdir-root \"$(OUT)\" --tz \"Europe/Dublin\" $$( [ -n "$(PASS)" ] && echo --password \"$(PASS)\" || true ) $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )"
+> @PYTHONPATH="$$PWD" $(PY) make_scripts/zepp/parse_zepp_make.py --input "$(ZIP)" --outdir-root "$(OUT)" --tz "Europe/Dublin" $$( [ -n "$(PASS)" ] && echo --password "$(PASS)" || true ) $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
 
 # Uso:
 # make unpack-zepp ZIP="data_etl/P000001/zepp_export/3088....zip" OUT="data_etl/P000001/zepp_raw_unpacked" PASS="sYhspDax"
@@ -168,8 +249,23 @@ parse-zepp:
 .PHONY: zepp-parse-dir
 zepp-parse-dir:
 > @echo "zepp-parse-dir: parse zepp from dir"
-> @echo "Running: PYTHONPATH=\"$$PWD\" $(PY) make_scripts/parse_zepp_make.py --input \"$(DIR)\" --outdir-root \"data_etl/$(PID)/zepp_processed\" --participant \"$(PID)\" --cutover \"$(CUTOVER)\" --tz_before \"$(TZ_BEFORE)\" --tz_after \"$(TZ_AFTER)\" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )"
-> @PYTHONPATH="$$PWD" $(PY) make_scripts/parse_zepp_make.py --input "$(DIR)" --outdir-root "data_etl/$(PID)/zepp_processed" --participant "$(PID)" --cutover "$(CUTOVER)" --tz_before "$(TZ_BEFORE)" --tz_after "$(TZ_AFTER)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
+> @echo "Running: PYTHONPATH=\"$$PWD\" $(PY) make_scripts/zepp/parse_zepp_make.py --input \"$(DIR)\" --outdir-root \"data_etl/$(PID)/zepp_processed\" --participant \"$(PID)\" --cutover \"$(CUTOVER)\" --tz_before \"$(TZ_BEFORE)\" --tz_after \"$(TZ_AFTER)\" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )"
+> @PYTHONPATH="$$PWD" $(PY) make_scripts/zepp/parse_zepp_make.py --input "$(DIR)" --outdir-root "data_etl/$(PID)/zepp_processed" --participant "$(PID)" --cutover "$(CUTOVER)" --tz_before "$(TZ_BEFORE)" --tz_after "$(TZ_AFTER)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
+
+.PHONY: zepp-zip-inventory
+zepp-zip-inventory:
+> @echo "Inventory Zepp ZIP and write deterministic metadata to $(EXTRACTED_DIR)/zepp"
+> @ZIP="$(ZEPP_ZIP)" $(VENV_PY) make_scripts/zepp/zepp_zip_inventory.py --zip-path "$(ZIP)" --out-dir "$(EXTRACTED_DIR)/zepp" --participant "$(PARTICIPANT)"
+
+.PHONY: zepp-normalize
+zepp-normalize:
+> @echo "Normalize Zepp archive into $(NORMALIZED_DIR)/zepp/ (DRY_RUN honors env DRY_RUN)"
+> @$(VENV_PY) make_scripts/zepp/zepp_normalize.py --zip-path "$(ZEPP_ZIP)" --filelist-tsv "$(EXTRACTED_DIR)/zepp/zepp_zip_filelist.tsv" --normalized-dir "$(NORMALIZED_DIR)/zepp" --participant "$(PARTICIPANT)" --snapshot "$(SNAPSHOT_DATE)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
+
+.PHONY: zepp-daily-join
+zepp-daily-join:
+> @echo "Aggregate Zepp daily metrics and join with AI features"
+> @NORMALIZED_DIR="$(NORMALIZED_DIR)" PROCESSED_DIR="$(PROCESSED_DIR)" AI_INPUT_DIR="$(AI_INPUT_DIR)" JOINED_DIR="$(JOINED_DIR)" $(VENV_PY) make_scripts/zepp/zepp_daily_aggregate.py --normalized-dir "$(NORMALIZED_DIR)/zepp" --ai-input "$(AI_INPUT_DIR)/features_daily.csv" --processed-dir "$(PROCESSED_DIR)" --joined-dir "$(JOINED_DIR)" --participant "$(PARTICIPANT)" --snapshot "$(SNAPSHOT_DATE)"
 
 # Rebuild _latest a partir de todos os subdirs versionados (append-only)
 # Ex.: make zepp-aggregate PID=P000001
@@ -228,7 +324,7 @@ etl-apple:
 > @echo "Running daily aggregation..."
 > @PYTHONPATH="$$PWD" "$(VENV_PY)" etl/apple_inapp_daily.py --participant "$(PID)" --normalized-dir "$(NORMALIZED_DIR)" --processed-dir "$(PROCESSED_DIR)" --run-id "$(RUN_ID)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true ) 2>&1 | tee "$(ETL_DIR)/runs/$(RUN_ID)/logs/daily.log"
 > @echo "Collecting run outputs and writing summary..."
-> @PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/apple_etl_summary.py --participant "$(PID)" --run-id "$(RUN_ID)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/apple/apple_etl_summary.py --participant "$(PID)" --run-id "$(RUN_ID)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
 > @echo "Running provenance..."
 > @$(MAKE) provenance PARTICIPANT=$(PID) RUN_ID=$(RUN_ID) || true
 > @echo "ETL Apple In-App completed successfully for $(PID)."
@@ -308,19 +404,71 @@ prune-decrypts:
 > @echo "Pruned older decrypt folders (kept 3 newest)."
 
 
+# ----------------------------------------------------------------------
+# Makefile runners for A6/A7/A8 (M1)
+# ----------------------------------------------------------------------
+.PHONY: run-a6-apple
+run-a6-apple:
+> @test -n "$(PARTICIPANT)" || (echo "Set PARTICIPANT=<PID>" && exit 2)
+> @test -n "$(SNAPSHOT_DATE)" || (echo "Set SNAPSHOT_DATE=YYYY-MM-DD" && exit 2)
+> @echo "run-a6-apple: participant=$(PARTICIPANT) snapshot=$(SNAPSHOT_DATE) dry_run=$(DRY_RUN)"
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/apple/run_a6_apple.py --participant "$(PARTICIPANT)" --snapshot "$(SNAPSHOT_DATE)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
+
+.PHONY: run-a7-apple
+run-a7-apple:
+> @test -n "$(PARTICIPANT)" || (echo "Set PARTICIPANT=<PID>" && exit 2)
+> @test -n "$(SNAPSHOT_DATE)" || (echo "Set SNAPSHOT_DATE=YYYY-MM-DD" && exit 2)
+> @echo "run-a7-apple: participant=$(PARTICIPANT) snapshot=$(SNAPSHOT_DATE) dry_run=$(DRY_RUN)"
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/apple/run_a7_apple.py --participant "$(PARTICIPANT)" --snapshot "$(SNAPSHOT_DATE)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
+
+.PHONY: run-a8-labels
+run-a8-labels:
+> @test -n "$(PARTICIPANT)" || (echo "Set PARTICIPANT=<PID>" && exit 2)
+> @test -n "$(SNAPSHOT_DATE)" || (echo "Set SNAPSHOT_DATE=YYYY-MM-DD" && exit 2)
+> @echo "run-a8-labels: participant=$(PARTICIPANT) snapshot=$(SNAPSHOT_DATE) dry_run=$(DRY_RUN)"
+> @PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/apple/run_a8_labels.py --participant "$(PARTICIPANT)" --snapshot "$(SNAPSHOT_DATE)" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
+
+# --- Raw data helpers (consolidated layout) -----------------
+.PHONY: init-raw move-raw clean-raw
+
+init-raw:
+> 	@echo "Initializing RAW_DIR: $(RAW_DIR)"
+> 	@mkdir -p "$(RAW_DIR)/apple" "$(RAW_DIR)/zepp" || true
+> 	@echo "Created $(RAW_DIR)/apple and $(RAW_DIR)/zepp"
+
+# Move a raw ZIP into the RAW_DIR. Usage: make move-raw RAW_SRC=/path/to/apple_health_export_YYYY-MM-DD.zip
+move-raw:
+> 	@if [ -z "$(RAW_SRC)" ]; then echo "Usage: make move-raw RAW_SRC=/path/to/file.zip" && exit 2; fi; \
+> 	mkdir -p "$(RAW_DIR)"; \
+> 	cp "$(RAW_SRC)" "$(RAW_DIR)/"; \
+> 	if [ "x$(BACKUP)" = "x1" ]; then echo "Backup kept: $(RAW_SRC)"; else rm -f "$(RAW_SRC)"; fi; \
+> 	echo "Moved $(RAW_SRC) -> $(RAW_DIR)/"
+
+# Clean only the raw stage (dangerous: requires explicit confirmation via CLEAN_RAW_CONFIRM=1)
+clean-raw:
+> 	@echo "Cleaning RAW_DIR: $(RAW_DIR) (requires CLEAN_RAW_CONFIRM=1)"
+> 	@if [ "x$${CLEAN_RAW_CONFIRM:-0}" != "x1" ]; then echo "Aborting: set CLEAN_RAW_CONFIRM=1 to allow deletion" && exit 2; fi; \
+> 	rm -rf "$(RAW_DIR)/*" || true; \
+> 	echo "Deleted contents of $(RAW_DIR)"
+
+
 .PHONY: print-paths init-data init-data-layout test-clean-layout
 print-paths:
 >	@echo DATA_BASE=$(DATA_BASE)
 >	@echo PARTICIPANT=$(PARTICIPANT)
 >	@echo RAW_DIR=$(RAW_DIR)
 >	@echo ETL_DIR=$(ETL_DIR)
+>	@echo ETL_SNAP_DIR=$(ETL_SNAP_DIR)
 >	@echo EXTRACTED_DIR=$(EXTRACTED_DIR)
 >	@echo NORMALIZED_DIR=$(NORMALIZED_DIR)
 >	@echo PROCESSED_DIR=$(PROCESSED_DIR)
 >	@echo JOINED_DIR=$(JOINED_DIR)
 >	@echo AI_DIR=$(AI_DIR)
->	@echo AI_SNAPSHOT_DIR=$(AI_SNAPSHOT_DIR)
+>	@echo AI_SNAP_DIR=$(AI_SNAP_DIR)
+>	@echo AI_INPUT_DIR=$(AI_INPUT_DIR)
 >	@echo SNAPSHOT_DATE=$(SNAPSHOT_DATE)
+>	@echo IOS_BACKUP_DIR=$(IOS_BACKUP_DIR)
+>	@echo IOS_MANIFEST_DB=$(IOS_MANIFEST_DB)
 >	@echo PY=$(PY)
 
 # Existing init-data retained for compatibility with older workflows
@@ -509,7 +657,7 @@ release-draft: version-guard release-notes changelog-update release-assets
 > 	@if [ "x$(RELEASE_DRY_RUN)" = "x1" ]; then \
 > 	  echo "[DRY-RUN] Would create tag $(TAG) and run gh release create (draft) with assets from manifest"; \
 > 	  echo "[DRY-RUN] Manifest (dist/assets/$(TAG)/manifest.json):"; \
-> 	  "$(VENV_PY)" make_scripts/print_manifest.py --manifest "dist/assets/$(TAG)/manifest.json"; \
+> 	  "$(VENV_PY)" make_scripts/utils/print_manifest.py --manifest "dist/assets/$(TAG)/manifest.json"; \
 > 	else \
 > 	  # create and push tag then attach assets listed in manifest.json \
 > 	  if git rev-parse --verify "$(TAG)" >/dev/null 2>&1; then \
@@ -517,7 +665,7 @@ release-draft: version-guard release-notes changelog-update release-assets
 > 	  else \
 > 	    git tag -a "$(TAG)" -m "$(RELEASE_TITLE)"; git push origin "$(TAG)"; \
 > 	  fi; \
-> 		ASSETS=$$($(VENV_PY) make_scripts/list_manifest_assets.py --manifest "dist/assets/$(TAG)/manifest.json"); \
+> 		ASSETS=$$($(VENV_PY) make_scripts/utils/list_manifest_assets.py --manifest "dist/assets/$(TAG)/manifest.json"); \
 > 	  echo "Creating GH release draft for $(TAG) with assets: $$ASSETS"; \
 > 	  gh release create "$(TAG)" $$ASSETS --title "$(RELEASE_TITLE)" --notes-file "dist/release_notes_$(TAG).md" --draft; \
 > 	fi
@@ -536,7 +684,7 @@ release-assets:
 > 	  echo "No assets found to collect; dist/assets/$(TAG) will be empty."; \
 > 	else \
 > 	  echo "Building manifest for dist/assets/$(TAG)"; \
-> 	  "$(VENV_PY)" make_scripts/build_asset_manifest.py "dist/assets/$(TAG)" --out "dist/assets/$(TAG)/manifest.json"; \
+> 	  "$(VENV_PY)" make_scripts/utils/build_asset_manifest.py "dist/assets/$(TAG)" --out "dist/assets/$(TAG)/manifest.json"; \
 > 	fi; \
 > 	echo "Assets in dist/assets/$(TAG):"; ls -la "dist/assets/$(TAG)" || true
 
@@ -545,14 +693,37 @@ release-assets:
 clean-assets:
 > 	@echo "🧹 Cleaning old release-assets..."
 > 	@if [ "x$${CLEAN_ASSETS_DRY_RUN:-0}" = "x1" ]; then \
-> 	  echo "DRY RUN: directories that would be removed:"; \
-> 	  find dist/assets -maxdepth 1 -type d ! -name 'v$(VERSION)' -print || true; \
-> 	  echo "(no deletion performed)"; \
- 	else \
-> 	  find dist/assets -maxdepth 1 -type d ! -name 'v$(VERSION)' -exec rm -rf {} +; \
-> 	  find dist/assets -type d -empty -delete 2>/dev/null || true; \
-> 	  ls -la dist/assets || true; \
- 	fi
+> 		echo "DRY RUN: directories that would be removed:"; \
+> 		find dist/assets -maxdepth 1 -type d ! -name 'v$(VERSION)' -print || true; \
+> 		echo "(no deletion performed)"; \
+> 	else \
+> 		find dist/assets -maxdepth 1 -type d ! -name 'v$(VERSION)' -exec rm -rf {} +; \
+> 		find dist/assets -type d -empty -delete 2>/dev/null || true; \
+> 		ls -la dist/assets || true; \
+> 	fi
+
+release-publish: version-guard release-notes changelog-update release-assets
+> 	@echo "Publishing release $(TAG) to origin/GitHub"
+> 	@# run version guard (no allow-dirty for real publish)
+> 	@$(VENV_PY) make_scripts/version_guard.py --tag "$(TAG)" --remote-check --remote origin
+> 	@# ensure annotated tag exists locally and push it
+> 	@if git rev-parse --verify "$(TAG)" >/dev/null 2>&1; then \
+> 	  echo "Tag $(TAG) already exists locally"; \
+> 	else \
+> 	  git tag -a "$(TAG)" -m "$(RELEASE_TITLE)"; \
+> 	fi; \
+> 	git push origin "$(TAG)"
+> 	@# sanitize title and release notes to avoid mojibake (e.g. â€” -> —)
+> 	@mkdir -p "dist/assets/$(TAG)"
+> 	@SANITIZED_NOTES="dist/assets/$(TAG)/release_notes_sanitized.md"; \
+> 	$(VENV_PY) make_scripts/sanitize_release_text.py --infile "dist/release_notes_$(TAG).md" --outfile "$$SANITIZED_NOTES"
+> 	@CLEAN_TITLE=$$($(VENV_PY) make_scripts/sanitize_release_text.py --text "$(RELEASE_TITLE)"); \
+> 	ASSETS=$$($(VENV_PY) make_scripts/utils/list_manifest_assets.py --manifest "dist/assets/$(TAG)/manifest.json") || true; \
+> 	@echo "Creating GitHub release for $(TAG) with assets: $$ASSETS"; \
+> 	gh release create "$(TAG)" $$ASSETS --title "$$CLEAN_TITLE" --notes-file "$$SANITIZED_NOTES"; \
+> 	# create or update a 'latest' tag pointing at this tag and push it (force update)
+> 	git tag -f latest "$(TAG)"; git push -f origin latest
+> 	@echo "Published $(TAG) and updated 'latest' tag on origin"
 
 suggest-version:
 > 	@$(VENV_PY) make_scripts/suggested_version.py --tag "$(TAG)"
@@ -578,6 +749,12 @@ help-data:
 >    @echo ""
 >    @echo "Note: 'make etl-one PID=... SNAP=...' will skip (exit 0) if no export.xml exists for the given PID/SNAPSHOT."
 >    @echo "Run 'make test-etl-one-skip' to verify this behavior (creates temporary data_etl; cleans up afterwards)."
+>    @echo ""
+>    @echo "Canonical path vars: PARTICIPANT=<PID> SNAPSHOT_DATE=<YYYY-MM-DD>"
+>    @echo "  ETL_SNAP_DIR=./data/etl/<PID>/snapshots/<SNAPSHOT_DATE>"
+>    @echo "  EXTRACTED_DIR=$(EXTRACTED_DIR)  (writes under snapshot)"
+>    @echo "  AI_INPUT_DIR=$(AI_INPUT_DIR)"
+>    @echo "IOS_BACKUP_DIR: path to decrypted iTunes backup root (read-only)"
 >    @echo ""
 >    @echo "Intake helper example:"
 >    @echo "  make intake-zip INTAKE_ARGS='--source apple --zip-path data/raw/P000001/apple/apple_health_export_2025-10-22.zip --stage'"

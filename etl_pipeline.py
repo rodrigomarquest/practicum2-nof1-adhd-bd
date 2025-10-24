@@ -22,7 +22,7 @@ import pandas as pd
 import subprocess
 
 # local
-from etl_modules.common.progress import Timer, progress_open
+from etl_modules.common.progress import Timer, progress_open, progress_bar
 
 # ----------------------------------------------------------------------
 # Atomic write helpers
@@ -293,10 +293,78 @@ def extract_apple_per_metric(xml_file: Path, outdir: Path, cutover_str: str, tz_
     HRV_ID  = "HKQuantityTypeIdentifierHeartRateVariabilitySDNN"
     SLEEP_ID= "HKCategoryTypeIdentifierSleepAnalysis"
 
+    def _estimate_record_count(p: Path) -> int:
+        # fast binary scan counting occurrences of '<Record' as an estimate
+        try:
+            cnt = 0
+            with p.open('rb') as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b''):
+                    cnt += chunk.count(b'<Record')
+            return cnt or 0
+        except Exception:
+            return 0
+
     with Timer("extract: parse export.xml"):
-        with progress_open(xml_file, desc="Parsing export.xml") as pf:
-            records = iter_health_records(pf, tz_selector)
-            for (type_id, value, s_local, e_local, unit, device, tz_name, src_ver, src_name) in records:
+        total_records = _estimate_record_count(xml_file)
+        # stream-parse the XML and update the bar per Record event
+    with progress_bar(total=total_records or None, desc='Parsing Records', unit='items') as _bar:
+            src = str(xml_file)
+            context = ET.iterparse(src, events=("end",))
+            for _, elem in context:
+                if elem.tag != 'Record':
+                    elem.clear();
+                    continue
+                type_id = elem.attrib.get('type')
+                if type_id not in TYPE_MAP:
+                    elem.clear();
+                    try:
+                        _bar.update(1)
+                    except Exception:
+                        pass
+                    continue
+
+                s = elem.attrib.get('startDate')
+                e = elem.attrib.get('endDate')
+                if not s:
+                    try:
+                        _bar.update(1)
+                    except Exception:
+                        pass
+                    elem.clear();
+                    continue
+
+                try:
+                    sdt = parse_dt(s)
+                except Exception:
+                    try:
+                        _bar.update(1)
+                    except Exception:
+                        pass
+                    elem.clear();
+                    continue
+
+                edt = parse_dt(e) if e else None
+                tz = tz_selector(sdt)
+                s_local = sdt.astimezone(tz)
+                e_local = edt.astimezone(tz) if edt else None
+
+                unit = elem.attrib.get('unit')
+                val_raw = elem.attrib.get('value')
+
+                if type_id == "HKCategoryTypeIdentifierSleepAnalysis":
+                    value = val_raw
+                else:
+                    try:
+                        value = float(val_raw) if val_raw is not None else None
+                    except Exception:
+                        value = None
+
+                device = parse_device_string(elem.attrib.get('device', ""))
+                tz_name = getattr(tz, 'key', getattr(tz, 'zone', str(tz)))
+                src_ver = elem.attrib.get('sourceVersion', "")
+                src_name = elem.attrib.get('sourceName', "")
+
+                # now map into outputs (same logic as earlier)
                 day = s_local.date()
                 ios_ver = device.get("ios_version", "") or src_ver
                 if ios_ver or device:

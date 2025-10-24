@@ -79,18 +79,15 @@ def copy_to_raw(src: Path, raw_dir: Path, source_label: str, dry_run: bool) -> P
     ensure_dir(dest_dir)
     dest = dest_dir / canonical
     if dry_run:
-        print(f"DRY RUN: would copy {src.name} -> {dest} (canonical)")
-        print(f"DRY RUN: would copy {src.name} -> {dest_dir / src.name} (original)")
+        print(f"DRY RUN: would move {src.name} -> {dest} (canonical)")
         # return expected dest so caller can compute metadata fields
         return dest
-    # copy both canonical and original-preserving name (export.zip)
-    shutil.copy2(src, dest)
-    # also keep original filename in the same folder for traceability
+    # Move (rename) the source into the canonical path to avoid duplicate copies.
     try:
-        shutil.copy2(src, dest_dir / src.name)
+        shutil.move(str(src), str(dest))
     except Exception:
-        # non-fatal if original copy fails
-        pass
+        # fallback to copy if move fails for any reason
+        shutil.copy2(src, dest)
     return dest
 
 
@@ -112,7 +109,7 @@ def write_run_logs(participant: str, run_id: str, log_json: Dict[str, Any], log_
     return json_path
 
 
-def extract_minimal(zpath: Path, dest_root: Path, kind: str, dry_run: bool) -> None:
+def extract_minimal(zpath: Path, dest_root: Path, kind: str, dry_run: bool, set_mtime: float | None = None) -> None:
     ensure_dir(dest_root)
     if dry_run:
         print(f"DRY RUN: would extract minimal files from {zpath} into {dest_root} for kind={kind}")
@@ -130,6 +127,12 @@ def extract_minimal(zpath: Path, dest_root: Path, kind: str, dry_run: bool) -> N
                 target = dest_root / Path(n).name
                 with z.open(n) as src, open(target, 'wb') as out:
                     shutil.copyfileobj(src, out)
+                # set file mtime if requested (use UTC timestamp seconds)
+                if set_mtime is not None:
+                    try:
+                        os.utime(target, (set_mtime, set_mtime))
+                    except Exception:
+                        pass
         elif kind == 'ios_backup':
             # extract Manifest.db and AppDomain-* entries (best-effort)
             candidates = [n for n in names if n.endswith('Manifest.db') or n.startswith('AppDomain-')]
@@ -147,6 +150,11 @@ def extract_minimal(zpath: Path, dest_root: Path, kind: str, dry_run: bool) -> N
                 target = dest_root / Path(n).name
                 with z.open(n) as src, open(target, 'wb') as out:
                     shutil.copyfileobj(src, out)
+                if set_mtime is not None:
+                    try:
+                        os.utime(target, (set_mtime, set_mtime))
+                    except Exception:
+                        pass
         else:
             print('Unknown kind; nothing extracted')
 
@@ -231,11 +239,81 @@ def main(argv: Optional[list[str]] = None):
     else:
         kind = args.source if args.source in ('apple', 'zepp', 'ios_backup') else 'unknown'
 
+    # --- write latest snapshot pointer for apple raw ZIPs ---
+    try:
+        if args.source == 'apple':
+            # try to parse canonical filename timestamp
+            snap = None
+            import re
+            m = re.search(r'apple_health_export_(\d{8}T\d{6}Z)', canonical_name)
+            if m:
+                ts = m.group(1)
+                snap = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}"
+            else:
+                # fallback to mtime
+                try:
+                    from datetime import datetime, timezone
+                    snap = datetime.fromtimestamp(dest.stat().st_mtime, tz=timezone.utc).strftime('%Y-%m-%d')
+                except Exception:
+                    snap = None
+            if snap:
+                latest_file = Path('data') / 'etl' / participant / 'latest.txt'
+                latest_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(latest_file, 'w', encoding='utf-8') as f:
+                    f.write(snap + '\n')
+    except Exception:
+        # non-fatal; intake should not fail for pointer write issues
+        pass
+
     # If staging requested, extract minimal files
     if args.stage:
         if args.source == 'apple':
-            stage_dest = Path(extracted_dir) / 'apple'
-            extract_minimal(dest, stage_dest, 'apple_inapp' if kind == 'apple_inapp' else kind, dry_run)
+            # compute snapshot id from canonical name if possible
+            snap = None
+            m = None
+            try:
+                # canonical name like apple_health_export_YYYYMMDDTHHMMSSZ.zip
+                import re
+                m = re.search(r'apple_health_export_(\d{8}T\d{6}Z)', dest.name)
+                if m:
+                    ts = m.group(1)  # e.g. 20251022T061854Z
+                    snap = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}"
+            except Exception:
+                snap = None
+            set_mtime_secs = None
+            if not snap:
+                # fallback to file mtime
+                try:
+                    mtime = dest.stat().st_mtime
+                    from datetime import datetime, timezone
+                    snap = datetime.fromtimestamp(mtime, tz=timezone.utc).strftime('%Y-%m-%d')
+                    set_mtime_secs = mtime
+                except Exception:
+                    snap = 'unknown'
+            else:
+                # parse canonical timestamp into seconds
+                try:
+                    from datetime import datetime, timezone
+                    import re as _re
+                    m2 = _re.search(r'apple_health_export_(\d{8}T\d{6}Z)', canonical_name)
+                    if m2:
+                        dt = datetime.strptime(m2.group(1), '%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc)
+                        set_mtime_secs = dt.timestamp()
+                    else:
+                        set_mtime_secs = None
+                except Exception:
+                    set_mtime_secs = None
+
+            stage_dest = Path('data') / 'etl' / participant / 'snapshots' / snap / 'extracted' / 'apple'
+            extract_minimal(dest, stage_dest, 'apple_inapp' if kind == 'apple_inapp' else kind, dry_run, set_mtime=set_mtime_secs)
+            # write latest pointer
+            try:
+                latest_file = Path('data') / 'etl' / participant / 'latest.txt'
+                latest_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(latest_file, 'w', encoding='utf-8') as f:
+                    f.write(snap + '\n')
+            except Exception:
+                pass
         elif args.source == 'ios_backup':
             stage_dest = Path(extracted_dir) / 'ios_backup'
             extract_minimal(dest, stage_dest, kind, dry_run)

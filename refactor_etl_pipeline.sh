@@ -8,7 +8,7 @@ if [ -f "etl_pipeline.py" ] && [ ! -f "etl_pipeline_legacy.py" ]; then
 fi
 
 mkdir -p etl_modules
-python make_scripts/create_apple_raw_to_per_metric.py
+python make_scripts/apple/create_apple_raw_to_per_metric.py
 
 python make_scripts/install_etl_pipeline.py
 

@@ -7,15 +7,30 @@ SNAP="$2"
 VENV_PY="${3:-python}"
 ETL_PIPELINE="${4:-etl_pipeline.py}"
 
+# Allow environment overrides for consolidated layout
+RAW_DIR_ENV="${RAW_DIR:-data/raw}"
+ETL_DIR_ENV="${ETL_DIR:-data/etl}"
+
+# normalize snap forms
+
 # normalize snap forms
 snap_hyphen="$SNAP"
 snap_nodash="${snap_hyphen//-/}"
 
 def_candidates=(
-  "data_etl/${PID}/snapshots/${snap_hyphen}/export.xml"
-  "data_etl/${PID}/snapshots/${snap_nodash}/export.xml"
-  "data_etl/${PID}/${snap_hyphen}/export.xml"
-  "data_etl/${PID}/${snap_nodash}/export.xml"
+  "${ETL_DIR_ENV}/${PID}/snapshots/${snap_hyphen}/export.xml"
+  "${ETL_DIR_ENV}/${PID}/snapshots/${snap_nodash}/export.xml"
+  "${ETL_DIR_ENV}/${PID}/${snap_hyphen}/export.xml"
+  "${ETL_DIR_ENV}/${PID}/${snap_nodash}/export.xml"
+  # refactored/extracted layout under ETL_DIR with participant subfolder
+  "${ETL_DIR_ENV}/${PID}/extracted/apple/export.xml"
+  "${ETL_DIR_ENV}/${PID}/extracted/export.xml"
+  # consolidated layout under RAW_DIR
+  "${RAW_DIR_ENV}/${PID}/apple/export.zip"
+  "${RAW_DIR_ENV}/${PID}/apple/export.xml"
+  # legacy fallback
+  "data/etl/${PID}/extracted/apple/export.xml"
+  "data/etl/${PID}/extracted/export.xml"
 )
 
 found=""

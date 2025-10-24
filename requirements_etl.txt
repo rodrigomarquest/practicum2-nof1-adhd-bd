@@ -17,3 +17,7 @@ matplotlib>=3.9.0
 	# Crypto primitives used by iOS backup helpers and AES operations
 	# pycryptodome provides the `Crypto` top-level package used in etl_modules.iphone_backup
 pycryptodome>=3.20.0
+
+# Support AES-encrypted zip archives (Zepp exports may use AES encryption)
+# Installed/pinned in this environment
+pyzipper==0.3.6

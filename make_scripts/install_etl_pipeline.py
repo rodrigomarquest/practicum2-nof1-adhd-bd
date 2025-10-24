@@ -46,11 +46,23 @@ def _canon_snap_id(name: str) -> str:
     raise ValueError(f"Invalid snapshot '{name}'. Expected YYYY-MM-DD or YYYYMMDD.")
 
 def _find_export_xml(pid: str, snap_iso: str) -> Optional[Path]:
+    # allow environment override for RAW root (data/raw) and ETL root (data/etl)
+    raw_root_env = Path(os.environ.get('RAW_DIR', 'data/raw'))
+    etl_root_env = RAW_ROOT
     candidates = [
-        RAW_ROOT / pid / "snapshots" / snap_iso / "export.xml",
-        RAW_ROOT / pid / "snapshots" / snap_iso.replace("-", "") / "export.xml",
-        RAW_ROOT / pid / snap_iso / "export.xml",
-        RAW_ROOT / pid / snap_iso.replace("-", "") / "export.xml",
+        etl_root_env / pid / "snapshots" / snap_iso / "export.xml",
+        etl_root_env / pid / "snapshots" / snap_iso.replace("-", "") / "export.xml",
+        etl_root_env / pid / snap_iso / "export.xml",
+        etl_root_env / pid / snap_iso.replace("-", "") / "export.xml",
+        # refactored/extracted layout under ETL_DIR
+        etl_root_env / pid / "extracted" / "apple" / "export.xml",
+        etl_root_env / pid / "extracted" / "export.xml",
+        # consolidated RAW layout (zip or extracted)
+        raw_root_env / pid / "apple" / "apple_health_export_*.zip",
+        raw_root_env / pid / "apple" / "export.xml",
+        # legacy fallback
+        Path("data/etl") / pid / "extracted" / "apple" / "export.xml",
+        Path("data/etl") / pid / "extracted" / "export.xml",
     ]
     return next((p for p in candidates if p.exists()), None)
 

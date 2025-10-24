@@ -26,20 +26,38 @@ class Timer:
 class _NoOpBar:
     def __init__(self, total: Optional[int], desc: str):
         self.total = total; self.desc = desc
-    def update(self, n: int): pass
-    def close(self): pass
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
+    def update(self, _n: int):
+        # intentionally a no-op when tqdm is not available
+        return None
+    def close(self):
+        # intentionally a no-op when tqdm is not available
+        return None
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        # no cleanup required for the no-op bar
+        return None
 
 @contextmanager
-def progress_bar(total: Optional[int], desc: str = ""):
-    """Context manager que retorna uma barra (tqdm ou no-op)."""
+def progress_bar(total: Optional[int], desc: str = "", unit: str = "B"):
+    """Context manager that returns a progress bar.
+
+    unit: unit string for tqdm. Default is 'B' (bytes) to preserve
+    backward compatibility. If unit == 'B' then unit_scale is True.
+    Callers that update by item count should pass unit='items'.
+    """
     if tqdm is None:
         bar = _NoOpBar(total, desc)
         yield bar
     else:
-        with tqdm(total=total, unit="B", unit_scale=True, desc=desc) as bar:
-            yield bar
+        # Explicitly call tqdm with the parameters we need to avoid mypy
+        # confusion from dynamic kwargs. For bytes mode enable scaling.
+        if unit == "B":
+            with tqdm(total=total, desc=desc, unit="B", unit_scale=True) as bar:
+                yield bar
+        else:
+            with tqdm(total=total, desc=desc, unit=unit, unit_scale=False) as bar:
+                yield bar
 
 class ProgressFile(io.BufferedReader):
     """File-like que atualiza a barra a cada leitura."""
@@ -70,7 +88,8 @@ def progress_open(path: str | os.PathLike[str], desc: str = "Reading file"):
         total = os.path.getsize(path)
     except Exception:
         total = None
-    with progress_bar(total=total, desc=desc) as bar:
+    # progress_open is explicitly byte-oriented
+    with progress_bar(total=total, desc=desc, unit="B") as bar:
         with open(path, "rb") as f:
             pf = ProgressFile(f, bar)
             yield pf

@@ -1,0 +1,101 @@
+{
+  "archive_name": "3088235680_1761192590962.zip",
+  "candidate_paths": [
+    "HEARTRATE/",
+    "HEARTRATE/HEARTRATE_1761192585022.csv",
+    "HEARTRATE_AUTO/",
+    "HEARTRATE_AUTO/HEARTRATE_AUTO_1761192586031.csv",
+    "SLEEP/",
+    "SLEEP/SLEEP_1761192584931.csv"
+  ],
+  "encrypted": true,
+  "files": [
+    {
+      "path": "HEARTRATE_AUTO/HEARTRATE_AUTO_1761192586031.csv",
+      "size": 8658428
+    },
+    {
+      "path": "HEARTRATE_AUTO/",
+      "size": 0
+    },
+    {
+      "path": "HEALTH_DATA/HEALTH_DATA_1761192582835.csv",
+      "size": 44
+    },
+    {
+      "path": "HEALTH_DATA/",
+      "size": 0
+    },
+    {
+      "path": "ACTIVITY/ACTIVITY_1761192583396.csv",
+      "size": 14812
+    },
+    {
+      "path": "ACTIVITY/",
+      "size": 0
+    },
+    {
+      "path": "BODY/BODY_1761192586391.csv",
+      "size": 56245
+    },
+    {
+      "path": "BODY/",
+      "size": 0
+    },
+    {
+      "path": "ACTIVITY_STAGE/ACTIVITY_STAGE_1761192583704.csv",
+      "size": 148200
+    },
+    {
+      "path": "ACTIVITY_STAGE/",
+      "size": 0
+    },
+    {
+      "path": "ACTIVITY_MINUTE/ACTIVITY_MINUTE_1761192584286.csv",
+      "size": 1708240
+    },
+    {
+      "path": "ACTIVITY_MINUTE/",
+      "size": 0
+    },
+    {
+      "path": "HEARTRATE/HEARTRATE_1761192585022.csv",
+      "size": 7366
+    },
+    {
+      "path": "HEARTRATE/",
+      "size": 0
+    },
+    {
+      "path": "SLEEP/SLEEP_1761192584931.csv",
+      "size": 87670
+    },
+    {
+      "path": "SLEEP/",
+      "size": 0
+    },
+    {
+      "path": "USER/USER_1761192582856.csv",
+      "size": 235
+    },
+    {
+      "path": "USER/",
+      "size": 0
+    },
+    {
+      "path": "SPORT/SPORT_1761192590436.csv",
+      "size": 204742
+    },
+    {
+      "path": "SPORT/",
+      "size": 0
+    }
+  ],
+  "n_files": 20,
+  "password_provided": true,
+  "password_validated": null,
+  "password_validation_method": "skipped_pyzipper_missing",
+  "sha256": "1746f161855bd918c19893b0b47eb33bbfe4c0c769dd8d3bc3998872f0a2342e",
+  "size_bytes": 1976197,
+  "timestamp_utc": "2025-10-23T04:12:20Z"
+}

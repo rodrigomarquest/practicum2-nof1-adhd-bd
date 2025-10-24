@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Print a manifest.json in a human-readable form.
+
+Used by make_scripts utilities.
 """
 from __future__ import annotations
 import argparse

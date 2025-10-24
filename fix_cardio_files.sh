@@ -9,9 +9,9 @@ backup() { [ -f "$1" ] && cp -f "$1" "$1.bak.$ts" && echo "BACKUP: $1 -> $1.bak.
 
 python make_scripts/create_cardio_join.py
 
-python make_scripts/create_cardio_apple_loader.py
+python make_scripts/apple/create_cardio_apple_loader.py
 
-python make_scripts/create_cardio_zepp_loader.py
+python make_scripts/zepp/create_cardio_zepp_loader.py
 
 python make_scripts/create_cardio_features.py
 

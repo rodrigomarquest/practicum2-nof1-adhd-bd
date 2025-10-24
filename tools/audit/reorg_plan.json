@@ -1,0 +1,2404 @@
+{
+  "plan": [
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": ".bashrc"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": ".env.local"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": ".gitattributes"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": ".gitignore"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": ".pytest_cache/.gitignore"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": ".pytest_cache/CACHEDIR.TAG"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": ".pytest_cache/README.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": ".pytest_cache/v/cache/nodeids"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": ".vscode/extensions.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": ".vscode/tasks.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "CHANGELOG.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "LICENSE"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "Makefile"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "README.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "RELEASE_NOTES_v2.1.3.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "apply_idempotence_upgrades.sh"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "cleanup_repo.sh"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "code221002025.zip"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "constraints-kaggle.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "constraints-windows.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "create_etl_structure.sh"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/ai/P000001/snapshots/2025-09-29/features_daily.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/ai/P000001/snapshots/2025-10-22/features_daily.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/ai/P000001/snapshots/2025-10-22/public_subset/LICENSE.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/ai/P000001/snapshots/2025-10-22/public_subset/README.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/ai/P000001/snapshots/2025-10-22/public_subset/features_daily_labeled_public.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/ai/P000001/snapshots/2025-10-22/public_subset/features_daily_public.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/ai/P000001/snapshots/2025-10-22/public_subset/manifest_public.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/latest.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/4b07e67fd6a94bcfa98e23878d8c365a/logs/intake_log.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/4b07e67fd6a94bcfa98e23878d8c365a/logs/intake_log_20251022T061153Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/7d334a49a612415ca9fc635f3be65230/logs/intake_7d334a49a612415ca9fc635f3be65230.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/7d334a49a612415ca9fc635f3be65230/logs/intake_log.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/a7774d03e3e7442f83426db2c665840b/logs/intake_a7774d03e3e7442f83426db2c665840b.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/a7774d03e3e7442f83426db2c665840b/logs/intake_log.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/ad5170a428a44a62a1ab86151c77b9d5/logs/intake_log.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/ad5170a428a44a62a1ab86151c77b9d5/logs/intake_log_20251022T061903Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/checkrun/apple_etl_summary.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/checkrun/logs/daily.log"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/checkrun/logs/parse.log"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/checkrun/logs/qc.log"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/d2ecb5e87ba04b23b8ebcc37fea4dd53/logs/intake_log.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/d2ecb5e87ba04b23b8ebcc37fea4dd53/logs/intake_log.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/d3b2a0be80204c769853e05cebf3f7ff/logs/intake_log.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/d3b2a0be80204c769853e05cebf3f7ff/logs/intake_log_20251022T061821Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/testrun/logs/daily.log"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/testrun/logs/parse.log"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/runs/testrun/logs/qc.log"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/extracted/apple/export.xml"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/extracted/ios/backup_paths.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/extracted/ios/manifest_deviceactivity.tsv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/extracted/ios/manifest_probe.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/extracted/ios/manifest_top_domains.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/extracted/zepp/zepp_zip_filelist.tsv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/extracted/zepp/zepp_zip_inventory.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/joined/features_joined_ios_manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/joined/features_joined_zepp_manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/apple_heart_rate.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/apple_heart_rate.csv.manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/apple_sleep_intervals.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/apple_sleep_intervals.csv.manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/apple_state_of_mind.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/apple_state_of_mind.csv.manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/ios/ios_usage_events.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/ios/ios_usage_events_manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/ios/knowledgec_events_manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/parse.ok"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/zepp/zepp_emotion.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/zepp/zepp_emotion_manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/zepp/zepp_hr.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/zepp/zepp_hr_manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/zepp/zepp_hrv.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/zepp/zepp_hrv_manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/zepp/zepp_sleep.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/zepp/zepp_sleep_manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/zepp/zepp_temperature.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/normalized/zepp/zepp_temperature_manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/apple/etl_qc_summary.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/apple/etl_qc_summary.csv.manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/apple/etl_qc_summary_manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/apple/etl_report.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/apple/health_hr_daily.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/apple/health_hr_daily.csv.manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/apple/health_hrv_sdnn_daily.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/apple/health_hrv_sdnn_daily.csv.manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/apple/health_sleep_daily.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/apple/health_sleep_daily.csv.manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/ios/ios_usage_daily.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/zepp/zepp_emotion_daily.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/zepp/zepp_hr_daily.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/zepp/zepp_hrv_daily.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/zepp/zepp_sleep_daily.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000001/snapshots/2025-10-22/processed/zepp/zepp_temperature_daily.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000002/runs/2fddac4a4a594d088ab6374acc168512/logs/intake_2fddac4a4a594d088ab6374acc168512.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000002/runs/2fddac4a4a594d088ab6374acc168512/logs/intake_log.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000002/runs/dc7efd83092647cd9fc433b1173165bf/logs/intake_dc7efd83092647cd9fc433b1173165bf.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "data/etl/P000002/runs/dc7efd83092647cd9fc433b1173165bf/logs/intake_log.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.5/data_audit_summary.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.5/etl_provenance_report.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.5/intake_log.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.5/intake_log_20251022T061153Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.5/intake_log_20251022T061821Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.5/intake_log_20251022T061903Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.5/manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.5/pip_freeze_20251022T020743Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.6/data_audit_summary.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.6/etl_provenance_report.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.6/intake_log.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.6/intake_log_20251022T061153Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.6/intake_log_20251022T061821Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.6/intake_log_20251022T061903Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.6/manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.6/pip_freeze_20251022T020743Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.7/data_audit_summary.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.7/etl_provenance_report.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.7/intake_log.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.7/intake_log_20251022T061153Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.7/intake_log_20251022T061821Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.7/intake_log_20251022T061903Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.7/manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/assets/v2.1.7/pip_freeze_20251022T020743Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/release_notes_2.1.6.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/release_notes_v0.2.0-provenance-alpha.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/release_notes_v2.1.5.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "dist/release_notes_v2.1.7.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "docs/FAQ_labels.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "docs/MAKEFILE_GUIDE.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "docs/changelog_template.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "docs/configuration_manual_full.tex"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "docs/figures/etl-pipeline-paper.png"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "docs/figures/system-architecture-paper-v3.png"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "docs/release_template.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "docs_build/CHANGELOG.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "docs_build/weekly_report_P000001_2025-09-29.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl/apple_inapp_daily.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl/apple_inapp_parse.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl/apple_inapp_qc.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules.zip"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/__init__.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/__pycache__/__init__.cpython-313.pyc"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/apple_raw_to_per_metric.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/__init__.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/_join/__init__.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/_join/join.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/_join/join.py.bak.20251019062907"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/_join/join.py.bak.20251019063753"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/apple/__init__.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/apple/loader copy.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/apple/loader.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/apple/loader.py.bak.20251019062907"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/apple/loader.py.bak.20251019063753"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/cardio_etl.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/cardio_etl.py.bak.20251019064105"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/cardio_features.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/cardio_features.py.bak.20251019062907"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/cardio_features.py.bak.20251019063753"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/cardio_features.py.bak.20251019075452"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/cardio_features.py.bak.20251019082441"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/cardio_features.py.bak.20251021121212"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/cardio_features.py.bak.fixcsv.20251019082004"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/cardio_features.py.bak.place.20251019082845"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/zepp/__init__.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/zepp/loader.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/zepp/loader.py.bak.20251019062907"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/zepp/loader.py.bak.20251019063753"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/zepp/loader.py.bak.20251019075452"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/cardiovascular/zepp/loader.py.bak.20251021121212"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/common/__init__.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/common/__pycache__/__init__.cpython-313.pyc"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/common/__pycache__/progress.cpython-313.pyc"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/common/adapters.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/common/io.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/common/progress.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/common/segments.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/config.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/extract_screen_time.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/io_utils.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/iphone_backup/__init__.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/iphone_backup/__pycache__/__init__.cpython-313.pyc"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/iphone_backup/__pycache__/iphone_backup.cpython-313.pyc"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/iphone_backup/__pycache__/utils.cpython-313.pyc"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/iphone_backup/google_iphone_dataprotection.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/iphone_backup/iphone_backup.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/iphone_backup/utils.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/parse_zepp_export.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_modules/zepp_join.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_pipeline.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "archive\\etl_pipeline_legacy.py",
+      "reason": "root legacy file",
+      "src_path": "etl_pipeline_legacy.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_tools/aggregate_features_daily.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_tools/compare_zepp_apple.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "archive\\etl_tools\\compare_zepp_apple.py.bak",
+      "reason": "root legacy file",
+      "src_path": "etl_tools/compare_zepp_apple.py.bak"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_tools/generate_heuristic_labels.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_tools/inspect_csv_dir.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_tools/plot_sleep_compare.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_tools/run_features_qc.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_tools/unpack_encrypted_zip.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "etl_tools/zepp_rebuild_latest.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "extract_usage_data.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "fix_03_eda_cardio_plus.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "archive\\fix_cardio_files.sh",
+      "reason": "root legacy file",
+      "src_path": "fix_cardio_files.sh"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "hotfix_csv_writes.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "install_cardio_min.sh"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "ios_extract/README.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "make_03_eda_cardio.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "make_03_eda_cardio_plus.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\README.md",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/README.md"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\common.cpython-313.pyc",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/__pycache__/common.cpython-313.pyc"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\io_utils.cpython-313.pyc",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/__pycache__/io_utils.cpython-313.pyc"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\nb3_train_fused.cpython-313.pyc",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/__pycache__/nb3_train_fused.cpython-313.pyc"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\nb4_shap_drift.cpython-313.pyc",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/__pycache__/nb4_shap_drift.cpython-313.pyc"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\pii_guard.cpython-313.pyc",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/__pycache__/pii_guard.cpython-313.pyc"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\px_drift.cpython-313.pyc",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/__pycache__/px_drift.cpython-313.pyc"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\utils\\px_manifest.cpython-313.pyc",
+      "reason": "utils domain",
+      "src_path": "make_scripts/__pycache__/px_manifest.cpython-313.pyc"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\px_provenance.cpython-313.pyc",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/__pycache__/px_provenance.cpython-313.pyc"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\apple\\run_a6_apple.cpython-313.pyc",
+      "reason": "apple domain",
+      "src_path": "make_scripts/__pycache__/run_a6_apple.cpython-313.pyc"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\apple\\run_a7_apple.cpython-313.pyc",
+      "reason": "apple domain",
+      "src_path": "make_scripts/__pycache__/run_a7_apple.cpython-313.pyc"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\apple\\run_a8_labels.cpython-313.pyc",
+      "reason": "apple domain",
+      "src_path": "make_scripts/__pycache__/run_a8_labels.cpython-313.pyc"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\utils\\snapshot_lock.cpython-313.pyc",
+      "reason": "utils domain",
+      "src_path": "make_scripts/__pycache__/snapshot_lock.cpython-313.pyc"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\test_etl_one_skip.cpython-313-pytest-8.4.2.pyc",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/__pycache__/test_etl_one_skip.cpython-313-pytest-8.4.2.pyc"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\xsource_consistency.cpython-313.pyc",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/__pycache__/xsource_consistency.cpython-313.pyc"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\xsource_fuse.cpython-313.pyc",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/__pycache__/xsource_fuse.cpython-313.pyc"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\xsource_metric_map.cpython-313.pyc",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/__pycache__/xsource_metric_map.cpython-313.pyc"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\zepp\\zepp_normalize.cpython-313.pyc",
+      "reason": "zepp domain",
+      "src_path": "make_scripts/__pycache__/zepp_normalize.cpython-313.pyc"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\activate_venv.sh",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/activate_venv.sh"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\ios\\aggregate_join_ios_daily.py",
+      "reason": "ios domain",
+      "src_path": "make_scripts/aggregate_join_ios_daily.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\align_snapshot_with_raw.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/align_snapshot_with_raw.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\apple\\apple_etl_summary.py",
+      "reason": "apple domain",
+      "src_path": "make_scripts/apple_etl_summary.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\utils\\build_asset_manifest.py",
+      "reason": "utils domain",
+      "src_path": "make_scripts/build_asset_manifest.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\check_layout.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/check_layout.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\clean_data.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/clean_data.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\clean_data_make.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/clean_data_make.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\common.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/common.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\compare_snapshots.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/compare_snapshots.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\apple\\create_apple_raw_to_per_metric.py",
+      "reason": "apple domain",
+      "src_path": "make_scripts/create_apple_raw_to_per_metric.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\apple\\create_cardio_apple_loader.py",
+      "reason": "apple domain",
+      "src_path": "make_scripts/create_cardio_apple_loader.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\create_cardio_features.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/create_cardio_features.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\create_cardio_join.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/create_cardio_join.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\zepp\\create_cardio_zepp_loader.py",
+      "reason": "zepp domain",
+      "src_path": "make_scripts/create_cardio_zepp_loader.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\env_versions.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/env_versions.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\etl_one_wrapper.sh",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/etl_one_wrapper.sh"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\freeze_model_input.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/freeze_model_input.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\utils\\hash_snapshot.py",
+      "reason": "utils domain",
+      "src_path": "make_scripts/hash_snapshot.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\install_etl_pipeline.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/install_etl_pipeline.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\intake_zip.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/intake_zip.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\io_utils.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/io_utils.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\ios\\ios_backup_probe.py",
+      "reason": "ios domain",
+      "src_path": "make_scripts/ios_backup_probe.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\lint_deprecated_exports.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/lint_deprecated_exports.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\lint_layout.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/lint_layout.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\lint_make.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/lint_make.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\utils\\list_manifest_assets.py",
+      "reason": "utils domain",
+      "src_path": "make_scripts/list_manifest_assets.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\ios\\manifest_probe.py",
+      "reason": "ios domain",
+      "src_path": "make_scripts/manifest_probe.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\migrate_layout.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/migrate_layout.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\migrate_to_snapshot_layout.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/migrate_to_snapshot_layout.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\nb3_train_fused.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/nb3_train_fused.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\nb4_shap_drift.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/nb4_shap_drift.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\ios\\normalize_ios_usage.py",
+      "reason": "ios domain",
+      "src_path": "make_scripts/normalize_ios_usage.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\zepp\\parse_zepp_make.py",
+      "reason": "zepp domain",
+      "src_path": "make_scripts/parse_zepp_make.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\patch_cardio_features.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/patch_cardio_features.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\patch_cardio_segments.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/patch_cardio_segments.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\patch_etl_pipeline_helpers.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/patch_etl_pipeline_helpers.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\zepp\\patch_zepp_loader.py",
+      "reason": "zepp domain",
+      "src_path": "make_scripts/patch_zepp_loader.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\pii_guard.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/pii_guard.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\plots_all_lite.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/plots_all_lite.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\prepare_release.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/prepare_release.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\utils\\print_manifest.py",
+      "reason": "utils domain",
+      "src_path": "make_scripts/print_manifest.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\provenance_audit.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/provenance_audit.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\px_drift.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/px_drift.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\utils\\px_manifest.py",
+      "reason": "utils domain",
+      "src_path": "make_scripts/px_manifest.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\px_provenance.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/px_provenance.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\release_notes.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/release_notes.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\apple\\run_a6_apple.py",
+      "reason": "apple domain",
+      "src_path": "make_scripts/run_a6_apple.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\apple\\run_a7_apple.py",
+      "reason": "apple domain",
+      "src_path": "make_scripts/run_a7_apple.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\apple\\run_a8_labels.py",
+      "reason": "apple domain",
+      "src_path": "make_scripts/run_a8_labels.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\sanitize_release_text.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/sanitize_release_text.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\set_extracted_mtime.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/set_extracted_mtime.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\simulate_partial_write.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/simulate_partial_write.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\utils\\snapshot_lock.py",
+      "reason": "utils domain",
+      "src_path": "make_scripts/snapshot_lock.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\suggested_version.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/suggested_version.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\test_etl_one_skip.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/test_etl_one_skip.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\utils\\test_progress_parse.py",
+      "reason": "utils domain",
+      "src_path": "make_scripts/test_progress_parse.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\update_changelog.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/update_changelog.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\update_latest_snapshot.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/update_latest_snapshot.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\venv_create.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/venv_create.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\version_guard.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/version_guard.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\weekly_report.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/weekly_report.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\xsource_consistency.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/xsource_consistency.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\xsource_fuse.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/xsource_fuse.py"
+    },
+    {
+      "action": "archive",
+      "dst_path": "make_scripts\\legacy\\xsource_metric_map.py",
+      "reason": "legacy/one-off candidate",
+      "src_path": "make_scripts/xsource_metric_map.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\zepp\\zepp_daily_aggregate.py",
+      "reason": "zepp domain",
+      "src_path": "make_scripts/zepp_daily_aggregate.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\zepp\\zepp_normalize.py",
+      "reason": "zepp domain",
+      "src_path": "make_scripts/zepp_normalize.py"
+    },
+    {
+      "action": "move",
+      "dst_path": "make_scripts\\zepp\\zepp_zip_inventory.py",
+      "reason": "zepp domain",
+      "src_path": "make_scripts/zepp_zip_inventory.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "modeling/baseline_train.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/03_eda_cardio.ipynb"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/03_eda_cardio_plus.ipynb"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/04_modeling_baseline.ipynb"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/NB-01_EDA-ANY-DAILY-overview.ipynb"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/NB-03_ML-ANY-LAB-baselines-6fold.ipynb"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/eda_outputs/.keep"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/eda_outputs/provenance/cleanup_log_20251022T001352Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/kaggle_02_model_training.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/legacy_CA1/kaggle_ai backup.ipynb"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/legacy_CA1/kaggle_ai.ipynb"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/legacy_CA1/kaggle_notebook_README.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/notebooks.zip"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/outputs/figures/correlations_heatmap.png"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/outputs/figures/hr_mean_hist.png"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/outputs/figures/sleep_total_minutes_hist.png"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/outputs/manifests/metrics.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/outputs/manifests/run_manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/outputs/tables/correlations.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/outputs/tables/head.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/outputs/tables/missingness_pct.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/outputs/tables/results_table.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/outputs/tables/summary_stats.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/run_nb01_eda_any_daily.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "notebooks/run_nb03_ml_any_lab_baselines.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "openchat.ps1"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "participants.yaml"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "patch_cardio_segments.sh"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "processed/apple/etl_report.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T002951Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T003726Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T004332Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T004703Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T004731Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T005116Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T005130Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T005208Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T005308Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T005713Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T005744Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T010331Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T022317Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T033354Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T054143Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T054154Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T054158Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T054202Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T060330Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T060344Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T060347Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/cleanup_log_20251022T060348Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/data_audit_summary.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/data_audit_summary_P000002_2025-10-22.md"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/etl_provenance_checks.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/etl_provenance_checks_P000002_2025-10-22.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/etl_provenance_report.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/etl_provenance_report_P000002_2025-10-22.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/hash_snapshot_after.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/hash_snapshot_before.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/migrate_layout_20251022T052558Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/migrate_layout_20251022T052818Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/migrate_layout_20251022T053009Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/migrate_layout_20251022T060004Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/migrate_layout_20251022T060042Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/migrate_layout_20251022T060132Z.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/pip_freeze_20251022T013609Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/pip_freeze_20251022T014806Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "provenance/pip_freeze_20251022T020743Z.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "refactor_etl_pipeline.sh"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "repo_tree.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "requirements-dev.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "requirements.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "requirements_ai_kaggle.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "requirements_dev.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "requirements_etl.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "requirements_ios.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "requirements_lock.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "run_apple_per_metric.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "run_cardio.sh"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "run_extract.sh"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "scripts/package_public_subset.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "structure.txt"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/__pycache__/conftest.cpython-313-pytest-8.4.2.pyc"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/__pycache__/idempotence_a6_a7_a8.cpython-313.pyc"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/__pycache__/test_migrate_layout.cpython-313-pytest-8.4.2.pyc"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/__pycache__/test_zepp_inventory_aes.cpython-313-pytest-8.4.2.pyc"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/conftest.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/fixtures/a6_a7_small/features_daily_updated.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/fixtures/a6_a7_small/state_of_mind_synthetic.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/fixtures/snapshot_demo/features_daily_updated.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/fixtures/snapshot_demo/state_of_mind_synthetic.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/idempotence_a6_a7_a8.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/out/extract_manifest.json"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/out/per-metric/apple_heart_rate.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/out/per-metric/apple_hrv_sdnn.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/out/version_log_enriched.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/out/version_raw.csv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/small_export.xml"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/test_aggregate_features_daily.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/test_io_utils.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/test_migrate_layout.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tests/test_zepp_inventory_aes.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tools/audit/__init__.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tools/audit/generate_reorg_plan.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tools/generate_provenance_report.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tools/render_release_from_templates.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "tools/update_changelog.py"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "zepp_zip_filelist.tsv"
+    },
+    {
+      "action": "keep",
+      "dst_path": null,
+      "reason": "default: keep",
+      "src_path": "zepp_zip_inventory.json"
+    }
+  ]
+}

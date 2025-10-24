@@ -3,7 +3,7 @@
 """Safe cleanup of snapshot outputs and provenance outputs within the repository.
 
 Usage (from repo root):
-    python make_scripts/clean_data.py --snapshot data_ai/P000001/snapshots --provenance notebooks/eda_outputs/provenance
+    python make_scripts/utils/clean_data.py --snapshot data_ai/P000001/snapshots --provenance notebooks/eda_outputs/provenance
 
 This script is conservative by default. It only removes files inside the repository and keeps parent
 directories. Use --dry-run to preview deletions, and the data_etl PID deletion requires typing 'YES'.

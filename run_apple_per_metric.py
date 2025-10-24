@@ -2,8 +2,11 @@ import sys
 from pathlib import Path
 from etl_modules.apple_raw_to_per_metric import export_per_metric
 
-RAW = Path("data_etl")
-AI  = Path("data_ai")
+import os
+
+RAW = Path(os.environ.get('ETL_DIR', 'data_etl'))
+AI  = Path(os.environ.get('AI_DIR', 'data_ai'))
+RAW_RAW = Path(os.environ.get('RAW_DIR', 'data/raw'))
 
 def canon_snap(s: str) -> str:
     s=s.strip()
@@ -15,6 +18,15 @@ def find_xml(pid: str, snap_iso: str):
         RAW/pid/"snapshots"/snap_iso.replace("-","")/"export.xml",
         RAW/pid/snap_iso/"export.xml",
         RAW/pid/snap_iso.replace("-","")/"export.xml",
+        # refactored/extracted layout under ETL_DIR
+        RAW/pid/"extracted"/"apple"/"export.xml",
+        RAW/pid/"extracted"/"export.xml",
+        # consolidated RAW layout (zip or extracted)
+        RAW_RAW/pid/"apple"/"export.zip",
+        RAW_RAW/pid/"apple"/"export.xml",
+        # legacy fallback
+        Path("data/etl")/pid/"extracted"/"apple"/"export.xml",
+        Path("data/etl")/pid/"extracted"/"export.xml",
     ]
     for p in cands:
         if p.exists(): return p

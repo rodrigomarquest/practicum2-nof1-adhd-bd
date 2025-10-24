@@ -226,7 +226,7 @@ def process_export(extracted_dir: Path, normalized_dir: Path, dry_run: bool = Fa
     }
 
     records = list(root.findall('Record'))
-    with progress_bar(total=len(records), desc='Parsing Records') as _bar:
+    with progress_bar(total=len(records), desc='Parsing Records', unit='items') as _bar:
         for rec in records:
             rtype = rec.get('type')
             start = rec.get('startDate')
