@@ -1,24 +1,23 @@
-"""Compatibility shim: import implementation from make_scripts.utils.io_utils
+#!/usr/bin/env python3
+"""Compatibility shim: delegate to make_scripts.utils.io_utils
 
-This module preserves the historical top-level import path `make_scripts.io_utils`.
-It dynamically imports the authoritative implementation at
-`make_scripts.utils.io_utils` and re-exports its public names.
+Preserves the historical import path and delegates implementation to `make_scripts.utils.io_utils`.
 """
+from __future__ import annotations
 from importlib import import_module
+from types import ModuleType
 
-_m = import_module("make_scripts.utils.io_utils")
-__all__ = [k for k in dir(_m) if not k.startswith("_")]
 
-"""Compatibility shim: import implementation from make_scripts.utils.io_utils
+_mod: ModuleType = import_module('make_scripts.utils.io_utils')
 
-This module preserves the historical top-level import path `make_scripts.io_utils`.
-It dynamically imports the authoritative implementation at
-`make_scripts.utils.io_utils` and re-exports its public names.
-"""
-from importlib import import_module
+# Re-export public names
+for _n, _v in vars(_mod).items():
+    if not _n.startswith("_"):
+        globals()[_n] = _v  # type: ignore
 
-_m = import_module("make_scripts.utils.io_utils")
-__all__ = [k for k in dir(_m) if not k.startswith("_")]
+__all__ = [n for n in dir(_mod) if not n.startswith("_")]
 
-for _k in __all__:
-    globals()[_k] = getattr(_m, _k)
+if __name__ == '__main__':
+    if hasattr(_mod, 'main'):
+        raise SystemExit(_mod.main())
+    raise SystemExit(f"No main() in make_scripts.utils.io_utils")

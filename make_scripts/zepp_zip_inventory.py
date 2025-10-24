@@ -1,10 +1,23 @@
 #!/usr/bin/env python3
 """Compatibility shim: delegate to make_scripts.zepp.zepp_zip_inventory
 
-Preserves the historical import path `make_scripts.zepp_zip_inventory` and
-delegates implementation to `make_scripts.zepp.zepp_zip_inventory`.
+Preserves the historical import path and delegates implementation to `make_scripts.zepp.zepp_zip_inventory`.
 """
+from __future__ import annotations
 from importlib import import_module
-_m = import_module('make_scripts.zepp.zepp_zip_inventory')
-for _k in [k for k in dir(_m) if not k.startswith('_')]:
-    globals()[_k] = getattr(_m, _k)
+from types import ModuleType
+
+
+_mod: ModuleType = import_module('make_scripts.zepp.zepp_zip_inventory')
+
+# Re-export public names
+for _n, _v in vars(_mod).items():
+    if not _n.startswith("_"):
+        globals()[_n] = _v  # type: ignore
+
+__all__ = [n for n in dir(_mod) if not n.startswith("_")]
+
+if __name__ == '__main__':
+    if hasattr(_mod, 'main'):
+        raise SystemExit(_mod.main())
+    raise SystemExit(f"No main() in make_scripts.zepp.zepp_zip_inventory")
