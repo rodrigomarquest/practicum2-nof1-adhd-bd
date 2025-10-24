@@ -1,6 +1,6 @@
 # 🚀 3.0.1 – Tooling & Provenance Refactor
 
-**Release date:** 2025-10-24T03:36:14.840117+00:00  
+**Release date:** 2025-10-24T03:51:14.424317+00:00  
 **Branch:** `main`  
 **Author:** Rodrigo Marques Teixeira  
 **Project:** MSc AI for Business – Practicum Part 2 (N-of-1 ADHD + BD)
@@ -9,19 +9,10 @@
 
 ## 🔧 Summary
 
-Release 3.0.1 — Tooling & Provenance Refactor
+Release 3.0.1
 
-This release focuses on reproducibility, provenance, and repo hygiene. Highlights include a small but impactful refactor of developer tooling and release engineering, stronger provenance artifacts for ETL runs, and several bugfixes that improve cross-platform behavior.
-
-Key points:
-
-- Modularized operational scripts: `make_scripts/` was reorganized into domain packages (`make_scripts/apple`, `make_scripts/ios`, `make_scripts/zepp`, `make_scripts/utils`) to improve discoverability and maintainability. Top-level shims and backups were kept during staged migration.
-- Deterministic migration plans: Added `tools/audit/reorg_import_plan.json` and `tools/audit/reorg_plan.json` to make reorganization deterministic and reviewable.
-- Provenance & manifest tooling: Added and canonicalized manifest helpers under `make_scripts/utils/` (snapshot locking, manifest building and printing). Release asset manifests are produced for every release.
-- Cleanups & safety: Executed an audited `clean_data` run with backups; repaired installer scripts and several shell shims; improved Makefile canonicalization and lint checks.
-- Tests & verification: Ran focused import smoke tests and Makefile linting after changes to validate behavior before publishing.
-
-All new or refactored scripts adhere to the project's guarantees: **atomic write**, **manifest-based provenance**, and **idempotent rerun**.
+This release strengthens the end-to-end reproducibility and auditability of the N-of-1 ETL → Modeling pipeline.  
+All new scripts follow the **atomic write**, **manifest-based provenance**, and **idempotent rerun** guarantees.
 
 ---
 
