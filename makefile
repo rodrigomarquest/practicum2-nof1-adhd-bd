@@ -54,7 +54,7 @@ VERSION       ?= 2.1.7
 TAG_PREFIX    ?= v
 # Compute TAG: if VERSION already starts with 'v' then use it as-is, otherwise prefix with TAG_PREFIX
 TAG := v$(VERSION)
-RELEASE_TITLE ?= Data Provenance Sprint – $(VERSION)
+RELEASE_TITLE ?= Data Provenance Sprint
 
 
 # Paths
