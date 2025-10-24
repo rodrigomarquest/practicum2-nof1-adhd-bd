@@ -367,6 +367,45 @@ This project adheres to **Semantic Versioning (SemVer)** and each entry correspo
 
 ---
 
+## [3.0.1] – 2025-10-24T03:59:24.900781+00:00
+
+### 🚀 Tooling & Provenance Refactor
+
+**Summary:**  
+--
+
+### Added
+
+--
+
+### Changed
+
+--
+
+### Fixed
+
+--
+
+### Tests
+
+--
+
+### Notes
+
+--
+
+---
+
+[3.0.1]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/{{PREVIOUS_TAG}}...3.0.1
+
+
+# 📜 Changelog — N-of-1 Study (Practicum Part 2)
+
+All notable changes to this project will be documented in this file.  
+This project adheres to **Semantic Versioning (SemVer)** and each entry corresponds to a GitHub tag.
+
+---
+
 ## [2.1.7] – 2025-10-22T21:07:24.667194+00:00
 
 ### 🚀 Data Provenance Sprint â€“ 2.1.7
@@ -442,3 +481,6 @@ This project adheres to **Semantic Versioning (SemVer)** and each entry correspo
 [v2.0-pre-ethics]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/releases/tag/v2.0-pre-ethics
 [2.1.5]: https://github.com/<owner>/<repo>/compare/v2.1.4...2.1.5
 [2.1.7]: https://github.com/<owner>/<repo>/compare/v2.1.4...2.1.7
+
+[3.0.1]: https://github.com/<owner>/<repo>/compare/v2.1.7...3.0.1
+
