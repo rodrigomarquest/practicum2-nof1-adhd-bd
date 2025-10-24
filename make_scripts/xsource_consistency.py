@@ -33,7 +33,8 @@ def read_daily_csv(path: Path, key: str) -> Dict[str, float]:
         col = None
         for c in cols:
             if key.lower() in c.lower():
-                col = c; break
+                col = c
+                break
         if col is None and cols:
             col = cols[0]
         for r in rdr:
@@ -58,7 +59,9 @@ def paired_stats(a_map: Dict[str, float], b_map: Dict[str, float]) -> Tuple[List
             continue
         if math.isnan(av) or math.isnan(bv):
             continue
-        aseries.append(av); bseries.append(bv); dates.append(d)
+        aseries.append(av)
+        bseries.append(bv)
+        dates.append(d)
     return aseries, bseries, dates
 
 
