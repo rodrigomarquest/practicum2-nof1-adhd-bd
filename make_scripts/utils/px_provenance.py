@@ -7,11 +7,8 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
-import json
 from pathlib import Path
 from typing import Optional, Tuple
-import os
-import math
 
 
 def sha256_file(p: Path) -> str:

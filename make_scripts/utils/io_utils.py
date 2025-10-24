@@ -8,7 +8,6 @@ import csv
 import hashlib
 import json
 import os
-import sys
 import tempfile
 import time
 from contextlib import contextmanager

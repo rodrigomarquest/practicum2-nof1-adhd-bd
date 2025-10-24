@@ -20,4 +20,4 @@ __all__ = [n for n in dir(_mod) if not n.startswith("_")]
 if __name__ == '__main__':
     if hasattr(_mod, 'main'):
         raise SystemExit(_mod.main())
-    raise SystemExit(f"No main() in make_scripts.zepp.zepp_zip_inventory")
+    raise SystemExit("No main() in make_scripts.zepp.zepp_zip_inventory")

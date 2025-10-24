@@ -4,7 +4,6 @@
 This writes the canonical module text if it differs from what's on disk.
 """
 from pathlib import Path
-import sys
 
 CONTENT = r'''"""
 Extrai per-metric Apple (HR minuto-a-minuto, HRV SDNN) a partir do export.xml,

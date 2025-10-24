@@ -38,7 +38,7 @@ def main(argv: List[str] | None = None) -> int:
             if f.is_file() and (f.suffix in ('.csv',) or f.name.endswith('.manifest.json') or f.suffix in ('.ok',)):
                 try:
                     out[str(f)] = sha256_of_file(f)
-                except Exception as e:
+                except Exception:
                     out[str(f)] = None
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(out, indent=2), encoding='utf-8')

@@ -4,7 +4,6 @@
 This generator is intentionally minimal and side-effect free on import.
 """
 from pathlib import Path
-from typing import List, Optional
 
 
 CONTENT = r'''"""

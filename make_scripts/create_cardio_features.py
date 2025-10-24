@@ -204,17 +204,11 @@ CONTENT = r'''
 """
 Cardio feature derivation (functional minimal).
 """
-import math, os
-import numpy as np
-import pandas as pd
-from etl_modules.config import CardioCfg
-from etl_modules.common.io import read_csv_if_exists
 
 def _ensure_date_col(df: pd.DataFrame) -> pd.DataFrame:
     if "date" not in df.columns:
         #!/usr/bin/env python3
         """Write etl_modules/cardiovascular/cardio_features.py with canonical content."""
-        from pathlib import Path
 
         CONTENT = r'''
         """
@@ -285,13 +279,7 @@ from pathlib import Path
 CONTENT = r'''"""
 Cardio feature derivation (functional minimal).
 """
-import math
-import os
-from typing import Optional
-import numpy as np
 import pandas as pd
-from etl_modules.config import CardioCfg
-from etl_modules.common.io import read_csv_if_exists
 
 
 def _ensure_date_col(df: pd.DataFrame) -> pd.DataFrame:

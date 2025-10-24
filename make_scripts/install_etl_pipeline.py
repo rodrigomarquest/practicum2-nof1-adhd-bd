@@ -4,7 +4,6 @@
 Writes `etl_pipeline.py` with the orchestration CLI. Idempotent: only writes if changed.
 """
 from pathlib import Path
-import sys
 
 CONTENT = r'''
 from __future__ import annotations

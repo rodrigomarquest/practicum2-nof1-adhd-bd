@@ -8,7 +8,6 @@ Checks performed:
 This is a conservative, text-based check meant to catch obvious regressions.
 """
 from __future__ import annotations
-import sys
 from pathlib import Path
 import re
 from typing import List

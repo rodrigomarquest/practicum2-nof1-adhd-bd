@@ -2,7 +2,6 @@
 """Patch zepp/loader.py to respect ZEPPOVERRIDE_DIR env var (extracted from heredoc).
 """
 from pathlib import Path
-import os
 
 
 def main():

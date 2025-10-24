@@ -6,8 +6,6 @@ Usage: make_scripts/compare_snapshots.py --before provenance/hash_snapshot_befor
 from __future__ import annotations
 import argparse
 import json
-import sys
-from pathlib import Path
 
 
 def main(argv=None) -> int:

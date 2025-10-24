@@ -6,8 +6,6 @@ warnings if consent file or raw export is missing or oversized.
 """
 from __future__ import annotations
 
-import os
-import sys
 from pathlib import Path
 import yaml
 

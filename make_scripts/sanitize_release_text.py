@@ -9,8 +9,6 @@ This script replaces common mis-encoded sequences (like â€” -> —) and
 performs Unicode normalization.
 """
 import argparse
-import sys
-import io
 import unicodedata
 
 REPLACEMENTS = [

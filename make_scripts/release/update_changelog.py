@@ -7,7 +7,6 @@ top-level name can remain as a backward-compatible shim.
 from __future__ import annotations
 import argparse
 import datetime
-import os
 import re
 import subprocess
 import sys

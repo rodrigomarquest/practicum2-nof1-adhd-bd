@@ -12,7 +12,6 @@ from pathlib import Path
 from statistics import mean, pstdev
 from typing import Dict, Any, List, Tuple
 
-import math
 
 try:
     from scipy import stats

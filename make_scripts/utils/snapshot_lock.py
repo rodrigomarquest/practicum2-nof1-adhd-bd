@@ -12,7 +12,6 @@ import time
 import atexit
 import json
 from pathlib import Path
-from typing import Optional
 
 
 class SnapshotLockError(RuntimeError):

@@ -6,7 +6,6 @@ This is the extracted version of the Makefile heredoc used by the weekly-report 
 from __future__ import annotations
 import pathlib as P
 import pandas as pd
-import sys
 from make_scripts.common import parse_pid_snap
 
 

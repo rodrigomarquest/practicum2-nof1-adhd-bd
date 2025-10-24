@@ -20,5 +20,4 @@ __all__ = [n for n in dir(_mod) if not n.startswith("_")]
 if __name__ == '__main__':
     if hasattr(_mod, 'main'):
         raise SystemExit(_mod.main())
-    raise SystemExit(f"No main() in make_scripts.utils.build_asset_manifest")
-#!/usr/bin/env python3
+    raise SystemExit("No main() in make_scripts.utils.build_asset_manifest")

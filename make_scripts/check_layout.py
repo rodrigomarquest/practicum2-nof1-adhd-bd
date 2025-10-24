@@ -4,9 +4,7 @@ Exit non-zero if missing.
 """
 from __future__ import annotations
 import os
-import sys
 from pathlib import Path
-from typing import Tuple
 
 
 def main(argv=None) -> int:

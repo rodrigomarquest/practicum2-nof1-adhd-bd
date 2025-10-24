@@ -10,7 +10,6 @@ import argparse
 import csv
 import json
 import math
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List

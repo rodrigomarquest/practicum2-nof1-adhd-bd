@@ -7,7 +7,6 @@ from __future__ import annotations
 from pathlib import Path
 import json
 import pandas as pd
-import sys
 from make_scripts.common import parse_pid_snap
 
 

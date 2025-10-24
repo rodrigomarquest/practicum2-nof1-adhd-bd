@@ -6,9 +6,7 @@ Scaffold that computes SHAP (if available), ranks features, plots top-5 and summ
 from __future__ import annotations
 import argparse
 import csv
-import json
 import math
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List

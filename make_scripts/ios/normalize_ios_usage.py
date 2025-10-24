@@ -14,13 +14,10 @@ with zero usage_seconds but still records input SHAs and row counts. If no rows,
 All writes are atomic and deterministic.
 """
 import argparse
-import csv
 import hashlib
 import json
 import os
-import sys
 from pathlib import Path
-from datetime import datetime
 
 
 def sha256_of_file(path):
