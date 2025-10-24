@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Compatibility shim: delegate to make_scripts.utils.snapshot_lock
+"""Compatibility shim: delegate to make_scripts.utils.test_progress_parse
 
-Preserves the historical import path and delegates implementation to `make_scripts.utils.snapshot_lock`.
+Preserves the historical import path and delegates implementation to `make_scripts.utils.test_progress_parse`.
 """
 from __future__ import annotations
 from importlib import import_module
 from types import ModuleType
 
 
-_mod: ModuleType = import_module('make_scripts.utils.snapshot_lock')
+_mod: ModuleType = import_module('make_scripts.utils.test_progress_parse')
 
 # Re-export public names
 for _n, _v in vars(_mod).items():
@@ -20,4 +20,4 @@ __all__ = [n for n in dir(_mod) if not n.startswith("_")]
 if __name__ == '__main__':
     if hasattr(_mod, 'main'):
         raise SystemExit(_mod.main())
-    raise SystemExit(f"No main() in make_scripts.utils.snapshot_lock")
+    raise SystemExit(f"No main() in make_scripts.utils.test_progress_parse")

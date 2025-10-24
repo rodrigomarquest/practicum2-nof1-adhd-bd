@@ -21,4 +21,3 @@ if __name__ == '__main__':
     if hasattr(_mod, 'main'):
         raise SystemExit(_mod.main())
     raise SystemExit(f"No main() in make_scripts.utils.io_utils")
-#!/usr/bin/env python3

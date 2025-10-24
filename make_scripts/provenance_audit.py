@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-#!/usr/bin/env python3
 """Compatibility shim: delegate to make_scripts.provenance.provenance_audit
 
 Preserves historical import path and delegates implementation to
@@ -23,4 +22,3 @@ if __name__ == '__main__':
     if hasattr(_mod, 'main'):
         raise SystemExit(_mod.main())
     raise SystemExit('No main() in make_scripts.provenance.provenance_audit')
-
