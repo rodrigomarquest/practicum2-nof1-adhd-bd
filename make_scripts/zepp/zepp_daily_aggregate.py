@@ -13,6 +13,10 @@ import sys
 from collections import defaultdict, Counter
 from statistics import mean, median, pstdev
 from datetime import datetime, timezone
+try:
+    from dateutil import tz as _dt_tz
+except Exception:
+    _dt_tz = None
 
 
 def sha256_of_file(path):
@@ -57,9 +61,13 @@ def ts_to_date(ts):
     try:
         if not ts:
             return None
-        # handle timezone aware
+        # handle timezone aware and convert to Europe/Dublin local date
         dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
-        return dt.astimezone(timezone.utc).date().isoformat()
+        try:
+            local_tz = _dt_tz.gettz('Europe/Dublin') if _dt_tz is not None else timezone.utc
+            return dt.astimezone(local_tz).date().isoformat()
+        except Exception:
+            return dt.astimezone(timezone.utc).date().isoformat()
     except Exception:
         # fallback: split date
         try:
@@ -214,13 +222,19 @@ def main(argv=None):
                     out.append({'date_utc': date, 'label_mode': mode, 'label_entropy': '', 'coverage': len(by_date[date])})
                 aggs[k] = {'rows': out, 'cols': v['cols']}
             else:
-                # numeric aggregate using value column
+                # numeric aggregate using a tolerant value column
                 by_date = defaultdict(list)
+                # pick value column from headers if present
+                value_col = 'value'
+                if headers:
+                    for hc in headers:
+                        if hc.lower() in ('value', 'mean', 'hr'):
+                            value_col = hc; break
                 for r in rows:
                     d = ts_to_date(r.get('timestamp_utc',''))
                     if not d:
                         continue
-                    val = r.get('value','')
+                    val = r.get(value_col,'')
                     if val=='' or val is None:
                         continue
                     try:
@@ -230,7 +244,11 @@ def main(argv=None):
                 out = []
                 for date in sorted(by_date.keys()):
                     s = stats_from_values(by_date[date]) if len(by_date[date])>0 else {'count':0,'min':'','max':'','mean':'','median':'','std':''}
-                    out.append({'date_utc': date, 'min': s['min'], 'max': s['max'], 'mean': s['mean'], 'median': s['median'], 'std': s['std'], 'count': s['count']})
+                    # for hr metric, use local 'date' field name to match project convention
+                    if k == 'hr':
+                        out.append({'date': date, 'min': s['min'], 'max': s['max'], 'mean': s['mean'], 'median': s['median'], 'std': s['std'], 'count': s['count']})
+                    else:
+                        out.append({'date_utc': date, 'min': s['min'], 'max': s['max'], 'mean': s['mean'], 'median': s['median'], 'std': s['std'], 'count': s['count']})
                 aggs[k] = {'rows': out, 'cols': v['cols']}
         else:
             # write empty processed file
@@ -250,6 +268,8 @@ def main(argv=None):
                 headers = ['date_utc','label_mode','label_entropy','coverage']
             elif k == 'temperature':
                 headers = ['date_utc','min','max','mean','count']
+            elif k == 'hr':
+                headers = ['date','min','max','mean','median','std','count']
             else:
                 headers = ['date_utc','min','max','mean','median','std','count']
             write_csv_rows(outpath, rows, headers)

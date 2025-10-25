@@ -238,6 +238,13 @@ list-zepp:
 # Ex.: make parse-zepp ZIP=data_etl/P000001/zepp_export/X.zip OUT=data_etl/P000001/zepp_processed PASS='senha'
 parse-zepp:
 > @echo "parse-zepp: parse Zepp ZIP/dir"
+
+.PHONY: px8-lite
+px8-lite:
+>	@python make_scripts/etl_px8_lite.py \
+>		--snapshot "$(ETL_SNAP_DIR)" \
+>		--outdir "reports" \
+>		--version-log "$(ETL_SNAP_DIR)/joined/version_log_enriched.csv" || exit $$?
 > @echo "Running: PYTHONPATH=\"$$PWD\" $(PY) make_scripts/zepp/parse_zepp_make.py --input \"$(ZIP)\" --outdir-root \"$(OUT)\" --tz \"Europe/Dublin\" $$( [ -n "$(PASS)" ] && echo --password \"$(PASS)\" || true ) $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )"
 > @PYTHONPATH="$$PWD" $(PY) make_scripts/zepp/parse_zepp_make.py --input "$(ZIP)" --outdir-root "$(OUT)" --tz "Europe/Dublin" $$( [ -n "$(PASS)" ] && echo --password "$(PASS)" || true ) $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
 
@@ -390,6 +397,18 @@ clean:
 deepclean:
 > @rm -rf $(OUT_DIR) $(IOS_DIR)/decrypted_output || true
 > @echo "⚠ removed decrypted outputs (PII)."
+
+
+.PHONY: diag-a8
+diag-a8:
+> @echo "Running A8 processed-daily diagnostics"
+> @PYTHONPATH="$$PWD" $(PY) make_scripts/diag/a8_diag_processed.py --snapshot "$(ETL_SNAP_DIR)" --out "reports/diag/a8_diag_processed.md"
+
+
+# Fallback builder when processed/*_daily.csv are empty.
+.PHONY: fuse-from-normalized
+fuse-from-normalized:
+> @PYTHONPATH="$$PWD" $(PY) make_scripts/a8_fuse_from_normalized.py --snapshot "$(ETL_SNAP_DIR)" || exit $$?
 
 promote-current:
 > @rm -rf decrypted_output_old 2>/dev/null || true

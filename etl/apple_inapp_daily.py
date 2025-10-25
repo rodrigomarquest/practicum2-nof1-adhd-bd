@@ -18,6 +18,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
+import pandas as pd
 
 try:
     import dateutil.parser as _dp
@@ -31,16 +32,23 @@ from etl_modules.common.progress import progress_open
 
 
 def parse_dt(s: str) -> datetime:
+    # parse timestamp and convert to Europe/Dublin local time
     if _dp:
         dt = _dp.parse(s)
     else:
         dt = datetime.fromisoformat(s)
     if dt.tzinfo is None:
-        if tz is not None:
-            dt = dt.replace(tzinfo=tz.tzutc())
-        else:
+        # assume UTC if no tzinfo
+        try:
+            dt = dt.replace(tzinfo=tz.tzutc() if tz is not None else timezone.utc)
+        except Exception:
             dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+    # convert to Europe/Dublin for daily bucketing
+    try:
+        local_tz = tz.gettz('Europe/Dublin') if tz is not None else timezone.utc
+        return dt.astimezone(local_tz)
+    except Exception:
+        return dt.astimezone(timezone.utc)
 
 
 def bucket_day_utc(dt: datetime) -> str:
@@ -132,16 +140,59 @@ def main(argv=None):
     processed = Path(args.processed_dir)
 
     # HR
-    hr_rows = read_metric((normalized / 'apple' / 'apple_heart_rate.csv'))
-    hr_by_day = aggregate_hr(hr_rows)
+    # allow both normalized/apple/apple_heart_rate.csv and normalized/apple_heart_rate.csv
+    hr_path = normalized / 'apple' / 'apple_heart_rate.csv'
+    if not hr_path.exists():
+        hr_path = normalized / 'apple_heart_rate.csv'
     hr_out = []
-    for day in sorted(hr_by_day.keys()):
-        vals = hr_by_day[day]
-        hr_out.append([day, f"{statistics.mean(vals):.6f}", f"{statistics.pstdev(vals) if len(vals)>1 else 0.0:.6f}", str(len(vals))])
+    if not hr_path.exists():
+        print('WARNING: apple_heart_rate.csv missing, skipped')
+    else:
+        # if file large, use chunked pandas aggregation
+        try:
+            fsize = hr_path.stat().st_size
+        except Exception:
+            fsize = 0
+        by_day = defaultdict(list)
+        if fsize > 100_000_000:
+            # chunked read
+            usecols = None
+            for chunk in pd.read_csv(hr_path, chunksize=200_000):
+                # detect timestamp and value cols by name
+                ts_col = None
+                val_col = None
+                for c in chunk.columns:
+                    lc = c.lower()
+                    if lc in ('timestamp','ts','datetime','time') and ts_col is None:
+                        ts_col = c
+                    if lc in ('bpm','hr','value','mean') and val_col is None:
+                        val_col = c
+                if ts_col is None or val_col is None:
+                    continue
+                dates = chunk[ts_col].apply(lambda x: parse_dt(str(x)) if pd.notna(x) else None)
+                vals = pd.to_numeric(chunk[val_col], errors='coerce')
+                for d,v in zip(dates, vals):
+                    if d is None or pd.isna(v):
+                        continue
+                    day = bucket_day_utc(d)
+                    by_day[day].append(float(v))
+        else:
+            rows = read_metric(hr_path)
+            by_day = aggregate_hr(rows)
+
+        for day in sorted(by_day.keys()):
+            vals = by_day[day]
+            if not vals:
+                continue
+            hr_out.append([day, f"{statistics.mean(vals):.6f}", f"{statistics.pstdev(vals) if len(vals)>1 else 0.0:.6f}", str(len(vals))])
     write_aggregate(processed, 'health_hr_daily.csv', ['date', 'hr_mean', 'hr_std', 'n_hr'], hr_out, dry_run=args.dry_run, run_id=args.run_id, participant=args.participant)
 
     # HRV SDNN
-    hrv_rows = read_metric((normalized / 'apple' / 'apple_hrv_sdnn.csv'))
+    # HRV (sdnn) - accept either location
+    hrv_path = normalized / 'apple' / 'apple_hrv_sdnn.csv'
+    if not hrv_path.exists():
+        hrv_path = normalized / 'apple_hrv_sdnn.csv'
+    hrv_rows = read_metric(hrv_path)
     hrv_by_day = aggregate_hr(hrv_rows)
     hrv_out = []
     for day in sorted(hrv_by_day.keys()):
@@ -150,7 +201,11 @@ def main(argv=None):
     write_aggregate(processed, 'health_hrv_sdnn_daily.csv', ['date', 'hrv_sdnn_mean', 'hrv_sdnn_std', 'n_hrv_sdnn'], hrv_out, dry_run=args.dry_run, run_id=args.run_id, participant=args.participant)
 
     # Sleep
-    sleep_rows = read_metric((normalized / 'apple' / 'apple_sleep_intervals.csv'))
+    # Sleep intervals - accept both common names/locations
+    sleep_path = normalized / 'apple' / 'apple_sleep_intervals.csv'
+    if not sleep_path.exists():
+        sleep_path = normalized / 'apple_sleep_intervals.csv'
+    sleep_rows = read_metric(sleep_path)
     sleep_by_day = aggregate_sleep(sleep_rows)
     sleep_out = []
     for day in sorted(sleep_by_day.keys()):
