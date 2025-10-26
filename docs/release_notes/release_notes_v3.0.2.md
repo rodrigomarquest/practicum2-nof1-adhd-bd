@@ -1,6 +1,6 @@
-# 🚀  – Tooling & Provenance Refactor
+# 🚀 3.0.2 – Tooling & Provenance Refactor
 
-**Release date:** 2025-10-26T15:05:23.100044+00:00  
+**Release date:** 2025-10-26T15:20:22.794212+00:00  
 **Branch:** `main`  
 **Author:** Rodrigo Marques Teixeira  
 **Project:** MSc AI for Business – Practicum Part 2 (N-of-1 ADHD + BD)
@@ -9,7 +9,7 @@
 
 ## 🔧 Summary
 
-Release 
+Release 3.0.2
 
 This release strengthens the end-to-end reproducibility and auditability of the N-of-1 ETL → Modeling pipeline.  
 All new scripts follow the **atomic write**, **manifest-based provenance**, and **idempotent rerun** guarantees.
