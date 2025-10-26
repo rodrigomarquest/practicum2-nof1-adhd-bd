@@ -1,6 +1,6 @@
 # 🚀  – Tooling & Provenance Refactor
 
-**Release date:** 2025-10-26T15:01:29.805908+00:00  
+**Release date:** 2025-10-26T15:05:23.100044+00:00  
 **Branch:** `main`  
 **Author:** Rodrigo Marques Teixeira  
 **Project:** MSc AI for Business – Practicum Part 2 (N-of-1 ADHD + BD)
