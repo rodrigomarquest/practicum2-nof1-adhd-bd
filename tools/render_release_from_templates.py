@@ -67,6 +67,12 @@ def main(argv=None) -> int:
 
     # atomic deterministic write into docs/release_notes
     try:
+        # If the file already exists and content is identical, avoid rewriting
+        if out_path.exists():
+            existing = out_path.read_text(encoding='utf-8')
+            if existing == rendered:
+                print('No change in release notes for', out_path.name)
+                return 0
         atomic_write(out_path, rendered)
     except Exception as e:
         print('ERROR writing release notes:', e, file=sys.stderr)
