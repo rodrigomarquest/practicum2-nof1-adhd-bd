@@ -682,6 +682,18 @@ help-release:
 > 	@echo "make version-guard       # run pre-release checks (clean tree, no existing tag)"
 > 	@echo "make changelog           # update CHANGELOG.md from docs/release_notes/release_notes_$(TAG).md"
 > 	@echo "make release-draft RELEASE_DRY_RUN=1  # dry-run the release flow (no side effects)"
+> 	@echo "make release-draft        - Prepare draft: notes + changelog + assets (no tag push)"
+> 	@echo "make release-assets       - Collect provenance/assets and build manifest"
+> 	@echo "make provenance           - Generate provenance files (csv/md/pip_freeze)"
+> 	@echo "make print-version        - Show LATEST/NEXT tag/version info"
+> 	@echo "make publish-release      - (Final) Tag and create GitHub Release with assets"
+> 	@echo "  Flags: RELEASE_DRY_RUN=1 (no changes), RELEASE_PUSH=1 (push tag + GH), RELEASE_DRAFT=1 (GH draft)"
+
+# --- Publish config ---------------------------------------------------
+NOTES_FILE := docs/release_notes/release_notes_$(NEXT_TAG).md
+ASSET_DIR  := dist/assets/$(NEXT_TAG)
+RELEASE_DRAFT ?= 0
+RELEASE_PUSH  ?= 0
 
 .PHONY: release-draft release-publish release-assets
 
@@ -962,6 +974,44 @@ model:
 
 model-notebook:
 > @python -m webbrowser -t 'notebooks/04_modeling_baseline.ipynb'
+
+
+## Publish to GitHub: create annotated tag and GH release with assets
+.PHONY: publish-release
+publish-release: ## Create annotated tag and GitHub release with assets (guarded)
+> 	@echo "Publishing $(NEXT_TAG) (draft=$(RELEASE_DRAFT), push=$(RELEASE_PUSH), dry=$(RELEASE_DRY_RUN))"
+> 	@$(MAKE) print-version >/dev/null
+> 	@test -f "$(NOTES_FILE)" || { echo "ERROR: missing release notes: $(NOTES_FILE)"; exit 2; }
+> 	@test -d "$(ASSET_DIR)"  || { echo "ERROR: missing asset dir: $(ASSET_DIR)"; exit 2; }
+> 	@if [ "$(RELEASE_DRY_RUN)" = "1" ]; then \
+> 	   echo "[DRY-RUN] Would run version-guard for TAG=$(NEXT_TAG)"; \
+> 	 else \
+> 	   $(MAKE) version-guard TAG="$(NEXT_TAG)"; \
+> 	 fi
+> 	@if [ "$(RELEASE_DRY_RUN)" = "1" ]; then \
+> 	   echo "[DRY-RUN] Would create annotated tag $(NEXT_TAG)"; \
+> 	 else \
+> 	   git tag -a "$(NEXT_TAG)" -m "Release $(NEXT_TAG)" || true; \
+> 	 fi
+> 	@if [ "$(RELEASE_PUSH)" = "1" ]; then \
+> 	   if [ "$(RELEASE_DRY_RUN)" = "1" ]; then \
+> 	     echo "[DRY-RUN] Would push tag $(NEXT_TAG) to origin"; \
+> 	   else \
+> 	     git push origin "$(NEXT_TAG)" || true; \
+> 	   fi; \
+> 	 else \
+> 	   echo "Skipping tag push (RELEASE_PUSH=0)"; \
+> 	 fi
+> 	@if [ "$(RELEASE_DRY_RUN)" = "1" ]; then \
+> 	   echo "[DRY-RUN] Would create GitHub release $(NEXT_TAG) with assets from $(ASSET_DIR)"; \
+> 	 else \
+> 	   if [ "$(RELEASE_DRAFT)" = "1" ]; then \
+> 	     gh release create "$(NEXT_TAG)" "$(ASSET_DIR)"/* --draft --title "$(NEXT_TAG)" --notes-file "$(NOTES_FILE)" || true; \
+> 	   else \
+> 	     gh release create "$(NEXT_TAG)" "$(ASSET_DIR)"/* --title "$(NEXT_TAG)" --notes-file "$(NOTES_FILE)" || true; \
+> 	   fi; \
+> 	 fi
+> 	@echo "publish-release finished (tag=$(NEXT_TAG), draft=$(RELEASE_DRAFT), pushed=$(RELEASE_PUSH), dry=$(RELEASE_DRY_RUN))"
 
 
 
