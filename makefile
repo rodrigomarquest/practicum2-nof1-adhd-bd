@@ -50,11 +50,34 @@ ETL_DIR := data/etl/$(PARTICIPANT)
 AI_DIR  := data/ai/$(PARTICIPANT)
 
 # Release / version metadata (overridable)
-VERSION       ?= 2.1.7
+# Provide a stable LATEST / NEXT layer for automation. Logic:
+# - Prefer an explicit VERSION if set by the caller
+# - Otherwise infer LATEST_TAG from git tags (prefer semver-like vN.N.N by creatordate)
+# - LATEST_VERSION is the LATEST_TAG without the leading 'v'
+# - NEXT_VERSION is computed by bumping the patch number of LATEST_VERSION
+# - NEXT_TAG is the TAG_PREFIX + NEXT_VERSION
+VERSION       ?= 
 TAG_PREFIX    ?= v
-# Compute TAG: if VERSION already starts with 'v' then use it as-is, otherwise prefix with TAG_PREFIX
-TAG := v$(VERSION)
 RELEASE_TITLE ?= Tooling & Provenance Refactor
+
+# Discover latest tag (prefer semver-like tags). Fallback to git describe or v0.0.0
+LATEST_TAG_RAW  := $(shell git tag --list 'v[0-9]*' --sort=-creatordate 2>/dev/null | head -n1 || git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)
+# LATEST_TAG is identical to LATEST_TAG_RAW but kept for backwards readability
+LATEST_TAG := $(LATEST_TAG_RAW)
+# Strip leading 'v' for the version number and remove any git-describe suffixes
+LATEST_VERSION := $(shell $(PY) -c "import re,sys;v=sys.argv[1].lstrip('v');print(re.split(r'[-+]',v)[0])" "$(LATEST_TAG_RAW)")
+
+# COMMITS_SINCE_LATEST_TAG: number of commits since latest tag
+COMMITS_SINCE_LATEST_TAG := $(shell git rev-list --count $(LATEST_TAG_RAW)..HEAD 2>/dev/null || echo 0)
+# LATEST_COMMIT_ID: short sha of HEAD
+LATEST_COMMIT_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+
+# NEXT_VERSION: bump patch of LATEST_VERSION (X.Y.Z -> X.Y.(Z+1)). If VERSION provided, use that.
+NEXT_VERSION := $(if $(VERSION),$(VERSION),$(shell $(PY) -c "import sys;v=sys.argv[1];parts=v.split('.');parts+=['0']*(3-len(parts));p=parts[-1];parts[-1]=str(int(p)+1) if p.isdigit() else p+'1';print('.'.join(parts))" "$(LATEST_VERSION)"))
+
+NEXT_TAG := $(TAG_PREFIX)$(NEXT_VERSION)
+# If VERSION was provided explicitly, keep TAG consistent for backwards compat
+TAG := $(if $(VERSION),$(if $(filter v%,$(VERSION)),$(VERSION),$(TAG_PREFIX)$(VERSION)),$(NEXT_TAG))
 
 
 # Paths
@@ -642,9 +665,12 @@ help-venv:
 
 .PHONY: print-version version-guard
 print-version:
-> 	@echo "VERSION=$(VERSION)"
-> 	@echo "TAG=$(TAG)"
-> 	@echo "LATEST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo '(none)')"
+> 	@echo "LATEST_TAG=$(LATEST_TAG)"
+> 	@echo "LATEST_VERSION=$(LATEST_VERSION)"
+> 	@echo "COMMITS_SINCE_LATEST_TAG=$(COMMITS_SINCE_LATEST_TAG)"
+> 	@echo "LATEST_COMMIT_ID=$(LATEST_COMMIT_ID)"
+> 	@echo "NEXT_VERSION=$(NEXT_VERSION)"
+> 	@echo "NEXT_TAG=$(NEXT_TAG)"
 
 version-guard:
 > 	@echo "Running version guard for TAG=$(TAG) (allow dirty: $${ALLOW_DIRTY:-false})"
@@ -814,8 +840,7 @@ intake-zip:
 .PHONY: provenance
 provenance:
 > @echo "Running provenance audit for participant=$(PARTICIPANT)"
-> @NORMALIZED_DIR="$(NORMALIZED_DIR)" PROCESSED_DIR="$(PROCESSED_DIR)" JOINED_DIR="$(JOINED_DIR)" AI_SNAPSHOT_DIR="$(AI_SNAPSHOT_DIR)" \ 
-> $(VENV_PY) make_scripts/provenance_audit.py $(if $(PARTICIPANT),--participant $(PARTICIPANT),) $(if $(SNAPSHOT),--snapshot $(SNAPSHOT),) $(if $(DRY_RUN),--dry-run,)
+> @NORMALIZED_DIR="$(NORMALIZED_DIR)" PROCESSED_DIR="$(PROCESSED_DIR)" JOINED_DIR="$(JOINED_DIR)" AI_SNAPSHOT_DIR="$(AI_SNAPSHOT_DIR)" PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/provenance_audit.py $(if $(PARTICIPANT),--participant $(PARTICIPANT),) $(if $(SNAPSHOT),--snapshot $(SNAPSHOT),) $(if $(filter 1,$(DRY_RUN)),--dry-run,)
 > @echo "Summary:"
 > @ls -1 provenance || true
 

@@ -111,7 +111,8 @@ def main(argv: Optional[list[str]] = None):
 
         write_csv(report_csv, [], ['stage','path','relpath','size_bytes','modified'])
         write_csv(checks_csv, [], ['stage','count','size_bytes','min_modified','max_modified'])
-        summary_md.write_text(f'# Data audit summary for {participant}{snap_suffix}\n\nDry-run executed at ' + now_iso() + '\n')
+        # write a small markdown summary for dry-run
+        summary_md.write_text(f'# Data audit summary for {participant}{snap_suffix}\n\nDry-run executed at ' + now_iso() + '\n', encoding='utf-8')
         print('Dry-run: wrote placeholder provenance files to', out_dir)
         return
 
@@ -148,7 +149,7 @@ def main(argv: Optional[list[str]] = None):
     md = [f'# Data audit summary for {participant}{snap_suffix}\n\nGenerated: {now_iso()}\n\n']
     for ck in checks_rows:
         md.append(f"## Stage: {ck['stage']}\n- Files: {ck['count']}\n- Total size bytes: {ck['size_bytes']}\n- Range: {ck['min_modified']} → {ck['max_modified']}\n\n")
-    summary_md.write_text('\n'.join(md))
+    summary_md.write_text('\n'.join(md), encoding='utf-8')
 
     print('Wrote provenance reports to', out_dir)
 
