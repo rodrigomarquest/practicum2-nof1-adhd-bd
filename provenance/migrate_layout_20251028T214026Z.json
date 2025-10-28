@@ -1,0 +1,29 @@
+{
+  "participant": "PTEST",
+  "legacy_etl_dir": "C:\\Users\\Administrador\\AppData\\Local\\Temp\\pytest-of-Administrador\\pytest-22\\test_migrate_layout_dry_run0\\data\\etl\\PTEST",
+  "raw_dir": "C:\\Users\\Administrador\\AppData\\Local\\Temp\\pytest-of-Administrador\\pytest-22\\test_migrate_layout_dry_run0\\data\\raw\\PTEST",
+  "dry_run": true,
+  "timestamp": "20251028T214026Z",
+  "actions": [
+    {
+      "kind": "apple",
+      "result": {
+        "action": "would_move",
+        "src": "C:\\Users\\Administrador\\AppData\\Local\\Temp\\pytest-of-Administrador\\pytest-22\\test_migrate_layout_dry_run0\\data\\etl\\PTEST\\exports\\apple\\export.zip",
+        "dst": "C:\\Users\\Administrador\\AppData\\Local\\Temp\\pytest-of-Administrador\\pytest-22\\test_migrate_layout_dry_run0\\data\\raw\\PTEST\\apple\\export.zip",
+        "size": 11,
+        "sha256": "25bdf0605d22b7d39fe747a7210e63bc533992f7a23ff9b96e4056277911b346"
+      }
+    },
+    {
+      "kind": "zepp",
+      "result": {
+        "action": "would_move",
+        "src": "C:\\Users\\Administrador\\AppData\\Local\\Temp\\pytest-of-Administrador\\pytest-22\\test_migrate_layout_dry_run0\\data\\etl\\PTEST\\exports\\zepp\\payload.bin",
+        "dst": "C:\\Users\\Administrador\\AppData\\Local\\Temp\\pytest-of-Administrador\\pytest-22\\test_migrate_layout_dry_run0\\data\\raw\\PTEST\\zepp\\payload.bin",
+        "size": 8,
+        "sha256": "60709e7b41ebcf1dddb9cf09bf3527a9ec1787935b4de8a700a4acfb4383f6f6"
+      }
+    }
+  ]
+}

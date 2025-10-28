@@ -195,3 +195,7 @@ __pycache__/
 *.pyc
 .vscode/
 .DS_Store
+
+# Notebooks antigos e experimentais
+notebooks/legacy/
+notebooks/legacy_*/

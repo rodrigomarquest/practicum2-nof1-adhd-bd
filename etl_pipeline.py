@@ -15,6 +15,8 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Optional, Iterable, Tuple, Any, Dict, Union
 import xml.etree.ElementTree as ET
+import zipfile
+import shutil
 
 # third-party
 import numpy as np
@@ -73,7 +75,7 @@ HELP_SNAPSHOT_DIR = "Caminho data_ai/<PID>/snapshots/<YYYY-MM-DD>"
 HELP_PARTICIPANT = "PID (usar com --snapshot)"
 HELP_SNAPSHOT_ID = "Snapshot id (YYYY-MM-DD ou YYYYMMDD)"
 USAGE_SNAPSHOT_OR_PARTICIPANT = "Use --snapshot_dir OU (--participant e --snapshot)."
-SNAPSHOT_NOT_EXISTS = "⚠️ snapshot_dir não existe:"
+SNAPSHOT_NOT_EXISTS = "WARNING: snapshot_dir não existe:"
 
 _SNAP_ISO  = re.compile(r"^20\d{2}-[01]\d-[0-3]\d$")
 _SNAP_8DIG = re.compile(r"^20\d{6}$")  # YYYYMMDD
@@ -85,6 +87,26 @@ def canon_snap_id(name: str) -> str:
     if _SNAP_8DIG.match(name):
         return f"{name[:4]}-{name[4:6]}-{name[6:8]}"
     raise ValueError(f"Invalid snapshot '{name}'. Expected YYYY-MM-DD or YYYYMMDD.")
+
+
+def canon_pid(pid: str) -> str:
+    """Normalize participant ID to canonical form 'P' + zero-padded 6-digit number.
+
+    Examples:
+      P1 -> P000001
+      p0001 -> P000001
+      1 -> P000001
+    If pid does not contain any digits, return it upper-cased unchanged.
+    """
+    if not pid:
+        return pid
+    s = str(pid).strip()
+    # extract digits
+    m = re.search(r"(\d+)", s)
+    if not m:
+        return s.upper()
+    num = int(m.group(1))
+    return f"P{num:06d}"
 
 def ensure_ai_outdir(pid: str, snap: str) -> Path:
     snap_iso = canon_snap_id(snap)
@@ -111,6 +133,84 @@ def _sha256_file(path: str | os.PathLike[str]) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+# ----------------------------------------------------------------------
+# Helpers for auto-discovery, zip inspection and sha handling
+# ----------------------------------------------------------------------
+RAW_ARCHIVE = Path("data/raw")  # raw device zips per participant (discovery base)
+ETL_ROOT = Path("data/etl")     # target for extracted device content
+
+
+def find_latest_zip(root: Path) -> Optional[Path]:
+    """Find the latest ZIP file under `root` (root is a directory to search).
+    Sorting: mtime desc, size desc, name desc.
+    Returns Path or None.
+    """
+    if not root.exists():
+        return None
+    cands = list(root.rglob("*.zip"))
+    if not cands:
+        return None
+    def _key(p: Path):
+        try:
+            st = p.stat()
+            return (st.st_mtime, st.st_size, str(p))
+        except Exception:
+            return (0, 0, str(p))
+    cands.sort(key=_key, reverse=True)
+    return cands[0]
+
+
+def zip_contains(zip_path: Path, patterns: Iterable[str]) -> bool:
+    """Return True if any filename inside zip matches any substring in patterns (case-insensitive)."""
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            names = [n.lower() for n in zf.namelist()]
+            for pat in patterns:
+                p = pat.lower()
+                for n in names:
+                    if p in n:
+                        return True
+        return False
+    except zipfile.BadZipFile:
+        return False
+
+
+def sha256_path(path: Path) -> str:
+    return _sha256_file(str(path))
+
+
+def read_sha256(path: Path) -> Optional[str]:
+    try:
+        if not path.exists():
+            return None
+        return path.read_text(encoding='utf-8').strip()
+    except Exception:
+        return None
+
+
+def write_sha256(path: Path, hash_str: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(hash_str + "\n", encoding='utf-8')
+
+
+def _ensure_within_base(candidate: Path, base_dir: Path) -> None:
+    real = candidate.resolve(strict=False)
+    base = base_dir.resolve(strict=False)
+    try:
+        # Python 3.9+ has is_relative_to
+        if hasattr(real, 'is_relative_to'):
+            if not real.is_relative_to(base):
+                raise SystemExit(f"ERROR: ZIP outside participant scope is not allowed: {candidate}")
+        else:
+            if str(real)[:len(str(base))] != str(base):
+                raise SystemExit(f"ERROR: ZIP outside participant scope is not allowed: {candidate}")
+    except Exception as e:
+        if isinstance(e, SystemExit):
+            raise
+        raise SystemExit(f"ERROR: ZIP outside participant scope is not allowed: {candidate}")
+
 
 # ----------------------------------------------------------------------
 # Timezone (zoneinfo, fallback pytz)
@@ -611,6 +711,11 @@ def main():
     p_ext.add_argument("--cutover", required=True)
     p_ext.add_argument("--tz_before", required=True)
     p_ext.add_argument("--tz_after", required=True)
+    p_ext.add_argument("--auto-zip", action="store_true", help="Auto-discover latest Apple/Zepp ZIPs under data/raw/<participant>/")
+    p_ext.add_argument("--apple-zip", help="Optional override path to Apple ZIP (must be under data/raw/<participant>/)")
+    p_ext.add_argument("--zepp-zip", help="Optional override path to Zepp ZIP (must be under data/raw/<participant>/)")
+    p_ext.add_argument("--zepp-password", help="Password for encrypted Zepp ZIP (or set ZEPP_ZIP_PASSWORD env var)")
+    p_ext.add_argument("--dry-run", action="store_true", help="Discovery/validation only; do not extract")
 
     # cardio
     p_car = sub.add_parser("cardio", help="Executa estágio Cardiovascular no snapshot")
@@ -648,19 +753,213 @@ def main():
 
     args = ap.parse_args()
 
+    # Prefer the participant string as-provided if a matching raw folder exists.
+    # If not, try the canonical PID (P + zero-padded 6 digits) and use it only
+    # when that folder exists. This avoids silently changing the participant
+    # to an unexpected value while still supporting common shorthand inputs.
+    if hasattr(args, 'participant') and args.participant:
+        prov = args.participant
+        try:
+            if (RAW_ARCHIVE / prov).exists():
+                # keep as-provided
+                pass
+            else:
+                canon = canon_pid(prov)
+                if (RAW_ARCHIVE / canon).exists():
+                    args.participant = canon
+        except Exception:
+            # on any error, leave participant as-provided
+            pass
+
     if args.cmd == "extract":
+        pid, snap = args.participant, args.snapshot
+        # If auto-zip discovery enabled, search under data/raw/<participant> only
+        if args.auto_zip or args.apple_zip or args.zepp_zip:
+            base_dir = RAW_ARCHIVE / pid
+            if not base_dir.exists():
+                print(f"ERROR: No raw folder found for participant {pid} under data/raw/")
+                return 1
+
+            apple_candidate = None
+            zepp_candidate = None
+
+            # Resolve overrides first (validate scope)
+            if args.apple_zip:
+                ac = Path(args.apple_zip)
+                if not ac.exists():
+                    print(f"ERROR: Provided --apple-zip does not exist: {ac}")
+                    return 1
+                _ensure_within_base(ac, base_dir)
+                apple_candidate = ac
+
+            if args.zepp_zip:
+                zc = Path(args.zepp_zip)
+                if not zc.exists():
+                    print(f"ERROR: Provided --zepp-zip does not exist: {zc}")
+                    return 1
+                _ensure_within_base(zc, base_dir)
+                zepp_candidate = zc
+
+            # Log which participant folder is being used (helps debugging accidental PID normalization)
+            try:
+                print(f"INFO: using participant '{pid}' -> raw path: {RAW_ARCHIVE / pid}")
+            except Exception:
+                pass
+
+            # Auto-discover if not overridden
+            if not apple_candidate and args.auto_zip:
+                apple_search = base_dir / "apple"
+                apple_candidate = find_latest_zip(apple_search)
+
+            if not zepp_candidate and args.auto_zip:
+                zepp_search = base_dir / "zepp"
+                zepp_candidate = find_latest_zip(zepp_search)
+
+            if not apple_candidate and not zepp_candidate:
+                print(f"ERROR: No Apple or Zepp ZIPs found under {base_dir}")
+                return 1
+
+            # Validate contents
+            if apple_candidate:
+                print(f"INFO: Apple candidate: {apple_candidate} size={apple_candidate.stat().st_size} mtime={apple_candidate.stat().st_mtime}")
+                _ensure_within_base(apple_candidate, base_dir)
+                if not zip_contains(apple_candidate, ["export.xml", "apple_health_export"]):
+                    print(f"ERROR: export.xml not found inside {apple_candidate} (Apple Health export expected).")
+                    return 1
+
+            if zepp_candidate:
+                print(f"INFO: Zepp candidate: {zepp_candidate} size={zepp_candidate.stat().st_size} mtime={zepp_candidate.stat().st_mtime}")
+                _ensure_within_base(zepp_candidate, base_dir)
+                if not zip_contains(zepp_candidate, ["hr", "hrv", "sleep", "emotion", "temperature"]):
+                    print(f"ERROR: No known Zepp patterns found inside {zepp_candidate} (expected hr/hrv/sleep/emotion/temperature).")
+                    return 1
+
+            if args.dry_run:
+                print("DRY RUN: planned actions:")
+                if apple_candidate:
+                    print(f" - apple: would extract {apple_candidate} -> {ETL_ROOT/ pid / 'snapshots' / canon_snap_id(snap) / 'extracted' / 'apple'}")
+                if zepp_candidate:
+                    print(f" - zepp: would extract {zepp_candidate} -> {ETL_ROOT/ pid / 'snapshots' / canon_snap_id(snap) / 'extracted' / 'zepp'}")
+                return 0
+
+            # Proceed to extract with sha checks and atomic replace
+            results = {}
+            snap_iso = canon_snap_id(snap)
+            for device, cand in (('apple', apple_candidate), ('zepp', zepp_candidate)):
+                if not cand:
+                    continue
+                target_dir = ETL_ROOT / pid / 'snapshots' / snap_iso / 'extracted' / device
+                sha_file = target_dir / f"{device}_zip.sha256"
+                cur_hash = sha256_path(cand)
+                prev_hash = read_sha256(sha_file)
+                if prev_hash and prev_hash == cur_hash:
+                    print(f"[SKIP] skipped (hash match): {device} -> {target_dir}")
+                    results[device] = str(target_dir)
+                    continue
+
+                print(f"INFO: extracting {device} -> {target_dir}")
+                tmp_parent = target_dir.parent
+                tmpdir = tmp_parent / (".tmp_extract_" + device + "_" + datetime.now().strftime('%Y%m%d%H%M%S'))
+                try:
+                    if tmpdir.exists():
+                        shutil.rmtree(tmpdir)
+                    tmpdir.mkdir(parents=True, exist_ok=True)
+                    # detect encrypted members
+                    encrypted = False
+                    try:
+                        with zipfile.ZipFile(cand, 'r') as zf:
+                            infolist = zf.infolist()
+                            encrypted = any(info.flag_bits & 0x1 for info in infolist)
+                    except Exception:
+                        # Could not open with stdlib zip; attempt pyzipper later
+                        encrypted = True
+
+                    # If not encrypted, use stdlib extractall for speed
+                    if not encrypted:
+                        with zipfile.ZipFile(cand, 'r') as zf:
+                            zf.extractall(tmpdir)
+                    else:
+                        # Prefer pyzipper for AES-encrypted archives
+                        pwd = args.zepp_password or os.environ.get('ZEPP_ZIP_PASSWORD')
+                        if not pwd:
+                            print(f"ERROR: Archive {cand} contains encrypted entries; provide --zepp-password or set ZEPP_ZIP_PASSWORD to extract.")
+                            return 1
+                        # try stdlib first (may work for legacy encryption)
+                        tried = False
+                        try:
+                            with zipfile.ZipFile(cand, 'r') as zf:
+                                zf.extractall(tmpdir, pwd=pwd.encode('utf-8'))
+                                tried = True
+                        except RuntimeError:
+                            tried = False
+                        except Exception:
+                            tried = False
+
+                        if not tried:
+                            try:
+                                import pyzipper
+                                with pyzipper.AESZipFile(cand, 'r') as az:
+                                    az.pwd = pwd.encode('utf-8')
+                                    az.extractall(path=str(tmpdir))
+                            except ModuleNotFoundError:
+                                print('ERROR: AES-encrypted archive requires pyzipper (pip install pyzipper) or use a non-encrypted zip.', file=sys.stderr)
+                                return 1
+                            except RuntimeError as re:
+                                print(f"ERROR: provided password seems invalid for {cand}: {re}")
+                                return 1
+
+                    # atomic replace
+                    if target_dir.exists():
+                        shutil.rmtree(target_dir)
+                    shutil.move(str(tmpdir), str(target_dir))
+                    write_sha256(sha_file, cur_hash)
+                    print(f"[OK] extracted: {device} -> {target_dir}")
+                    results[device] = str(target_dir)
+                except Exception as e:
+                    # cleanup
+                    if tmpdir.exists():
+                        try:
+                            shutil.rmtree(tmpdir)
+                        except Exception:
+                            pass
+                    print(f"ERROR extracting {cand}: {e}")
+                    return 1
+
+            # If apple was extracted and contains export.xml, run existing XML parser to produce per-metric outputs
+            if 'apple' in results:
+                extracted_apple_dir = Path(results['apple'])
+                xmls = list(extracted_apple_dir.rglob('export.xml'))
+                if xmls:
+                    xml_path = xmls[0]
+                    outdir = ETL_ROOT / pid / 'snapshots' / snap_iso
+                    # ensure outdir exists
+                    outdir.mkdir(parents=True, exist_ok=True)
+                    with Timer(f"extract (parse export.xml) [{pid}/{snap}]"):
+                        try:
+                            written = extract_apple_per_metric(xml_file=xml_path, outdir=outdir,
+                                                               cutover_str=args.cutover,
+                                                               tz_before=args.tz_before, tz_after=args.tz_after)
+                        except Exception as e:
+                            print(f"ERROR parsing export.xml: {e}")
+                            return 1
+                    print("[OK] extract (apple parse) concluído")
+                    for k,v in written.items():
+                        print(f" - {k}: {v}")
+
+            return 0
+        # fallback: existing behavior (find export.xml via current RAW_ROOT locations)
         pid, snap = args.participant, args.snapshot
         xml = find_export_xml(pid, snap)
         if xml is None:
-            print("⚠️ export.xml não encontrado para:", pid, snap)
+            print("WARNING: export.xml não encontrado para:", pid, snap)
             return 1
         outdir = ensure_ai_outdir(pid, snap)
         with Timer(f"extract [{pid}/{snap}]"):
             written = extract_apple_per_metric(xml_file=xml, outdir=outdir,
                                                cutover_str=args.cutover,
                                                tz_before=args.tz_before, tz_after=args.tz_after)
-        print("✅ extract concluído")
-        for k,v in written.items():
+        print("[OK] extract concluído")
+        for k, v in written.items():
             print(f" - {k}: {v}")
         return 0
 
@@ -722,7 +1021,7 @@ def main():
         }
         _write_atomic_json(manifest, snapdir / "cardio_manifest.json")
 
-        print("✅ cardio concluído")
+        print("[OK] cardio concluído")
         print(res)
         return 0
 
@@ -747,13 +1046,13 @@ def main():
         try:
             res = run_stage_labels_synthetic(snapdir, labels_path)
         except FileNotFoundError as e:
-            print("⚠️", e)
+            print("WARNING:", e)
             return 1
         except Exception as e:
-            print("❌ Erro ao rodar labels:", e)
+            print("ERROR: failed to run labels:", e)
             return 1
 
-        print("✅ labels (synthetic) concluído:", res)
+        print("[OK] labels (synthetic) concluído:", res)
         return 0
 
     if args.cmd == "aggregate":
@@ -773,31 +1072,31 @@ def main():
             from etl_tools.aggregate_features_daily import run as run_aggregate
             run_aggregate(snapdir, labels=args.labels)
         except Exception as e:
-            print("❌ Erro ao rodar aggregate via module:", e)
+            print("ERROR: failed to run aggregate via module:", e)
             return 1
 
-        print("✅ aggregate concluído")
+        print("[OK] aggregate concluído")
         return 0
 
     if args.cmd == "full":
         pid, snap = args.participant, args.snapshot
         xml = find_export_xml(pid, snap)
         if xml is None:
-            print("⚠️ export.xml não encontrado para:", pid, snap)
+            print("WARNING: export.xml não encontrado para:", pid, snap)
             return 1
         outdir = ensure_ai_outdir(pid, snap)
         with Timer(f"extract [{pid}/{snap}]"):
             written = extract_apple_per_metric(xml_file=xml, outdir=outdir,
                                                cutover_str=args.cutover,
                                                tz_before=args.tz_before, tz_after=args.tz_after)
-        print("✅ extract concluído")
-        for k,v in written.items():
+        print("[OK] extract concluído")
+        for k, v in written.items():
             print(f" - {k}: {v}")
         if args.zepp_dir:
             os.environ["ZEPPOVERRIDE_DIR"] = args.zepp_dir
         with Timer(f"cardio [{outdir}]"):
             res = run_stage_cardio(outdir)
-        print("✅ cardio concluído")
+        print("[OK] cardio concluído")
         print(res)
         return 0
 

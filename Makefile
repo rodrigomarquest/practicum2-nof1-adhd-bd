@@ -243,13 +243,14 @@ ios-daily-join:
 
 etl:
 > @IOS_BACKUP_DIR="$(IOS_BACKUP_DIR)" BACKUP_DIR="$(IOS_BACKUP_DIR)" EXTRACTED_DIR="$(EXTRACTED_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" \
->  $(PY) $(ETL_PIPELINE) --cutover $(CUTOVER) --tz_before $(TZ_BEFORE) --tz_after $(TZ_AFTER)
+>  ZEPP_ZIP_PASSWORD="$(ZEPP_ZIP_PASSWORD)" $(PY) $(ETL_PIPELINE) --cutover $(CUTOVER) --tz_before $(TZ_BEFORE) --tz_after $(TZ_AFTER)
 
 
 # --- Zepp Export -------------------------------------------------
 ZEPP_DIR := data_etl/P000001/zepp_export
 ZEPP_ZIP ?= $(firstword $(wildcard $(ZEPP_DIR)/*.zip))
 ZEPP_OUT ?= decrypted_output/zepp
+ZEPP_ZIP_PASSWORD ?= $(ZEPP_ZIP_PASSWORD)
 
 .PHONY: list-zepp parse-zepp unpack-zepp inspect-zepp zepp-parse-one zepp-aggregate
 
@@ -285,7 +286,7 @@ zepp-parse-dir:
 .PHONY: zepp-zip-inventory
 zepp-zip-inventory:
 > @echo "Inventory Zepp ZIP and write deterministic metadata to $(EXTRACTED_DIR)/zepp"
-> @ZIP="$(ZEPP_ZIP)" $(VENV_PY) make_scripts/zepp/zepp_zip_inventory.py --zip-path "$(ZIP)" --out-dir "$(EXTRACTED_DIR)/zepp" --participant "$(PARTICIPANT)"
+> @ZIP="$(ZEPP_ZIP)" ZEPP_ZIP_PASSWORD="$(ZEPP_ZIP_PASSWORD)" $(VENV_PY) make_scripts/zepp/zepp_zip_inventory.py --zip-path "$(ZIP)" --out-dir "$(EXTRACTED_DIR)/zepp" --participant "$(PARTICIPANT)"
 
 .PHONY: zepp-normalize
 zepp-normalize:
@@ -962,7 +963,7 @@ release-all: weekly-report changelog release-pack
 > @echo "✔ release bundle pronto. Sugestão:"
 > @echo "  git add -A && git commit -m 'release $(REL_TAG)' && git tag $(REL_TAG)"
 
-tests:
+
 tests:
 > @echo "Running tests via $(VENV_PY)"
 > @PYTHONPATH="$$PWD" "$(VENV_PY)" -m pytest -q
@@ -970,7 +971,7 @@ tests:
 
 .PHONY: model model-notebook
 model:
-> @python modeling/baseline_train.py --participant $(PID) --snapshot $(SNAP) --use_agg auto
+> @python modeling/baseline_train.py --participant $(PID) --snapsho$(SNAP) --use_agg auto
 
 model-notebook:
 > @python -m webbrowser -t 'notebooks/04_modeling_baseline.ipynb'
@@ -1013,5 +1014,116 @@ publish-release: ## Create annotated tag and GitHub release with assets (guarded
 > 	 fi
 > 	@echo "publish-release finished (tag=$(NEXT_TAG), draft=$(RELEASE_DRAFT), pushed=$(RELEASE_PUSH), dry=$(RELEASE_DRY_RUN))"
 
+# ----------------------------------------------------------------------
+# Single-target: etl-extract
+# Behavior: run participant-scoped etl_pipeline.py extract with auto-zip discovery
+# Constraints: idempotent (handled by script), no access to other participants zips,
+#              print short header, exit non-zero if raw participant folder or zips missing.
+# Default variables (overridable by caller): PY, PARTICIPANT, SNAPSHOT, CUTOVER, TZ_BEFORE, TZ_AFTER
+# This target is intentionally appended and does not modify other targets.
 
+PY ?= python
+PARTICIPANT ?= P000001
+SNAPSHOT ?= 2025-09-29
+CUTOVER ?= 2023-07-15
+TZ_BEFORE ?= America/Sao_Paulo
+TZ_AFTER ?= Europe/Dublin
 
+.PHONY: etl-extract
+etl-extract:
+> @echo "=== ETL extract: participant=$(PARTICIPANT) snapshot=$(SNAPSHOT) ==="
+> @test -d "data/raw/$(PARTICIPANT)" || (echo "ERROR: data/raw/$(PARTICIPANT) not found. Place participant-scoped zips under data/raw/$(PARTICIPANT)/" && exit 2)
+> @sh -c 'if ! ls "data/raw/$(PARTICIPANT)"/*.zip "data/raw/$(PARTICIPANT)"/*/*.zip >/dev/null 2>&1; then echo "ERROR: no zip files found under data/raw/$(PARTICIPANT)"; exit 2; fi'
+> $(VENV_PY) etl_pipeline.py extract \
+>   --participant $(PARTICIPANT) --snapshot $(SNAPSHOT) \
+>   --cutover $(CUTOVER) --tz_before $(TZ_BEFORE) --tz_after $(TZ_AFTER) \
+>   --auto-zip
+
+# ==== WORKFLOW TARGETS (ETL → AI → NB2) ============================================
+# Defaults (override na CLI: make alvo VAR=valor)
+PY            ?= python
+PARTICIPANT   ?= P000001
+SNAPSHOT      ?= 2025-09-29
+CUTOVER       ?= 2023-07-15       # Brasil → Irlanda (ajuste a sua data real)
+TZ_BEFORE     ?= America/Sao_Paulo
+TZ_AFTER      ?= Europe/Dublin
+
+AI_DIR           ?= data/ai/$(PARTICIPANT)/snapshots/$(SNAPSHOT)
+NB2_SCRIPT       ?= notebooks/NB2_Baseline_and_LSTM.py
+FEATURES_LABELED ?= $(AI_DIR)/features_daily_labeled.csv
+ETL_JOINED_DIR   ?= data/etl/$(PARTICIPANT)/snapshots/$(SNAPSHOT)/joined
+ETL_LABELED_SRC  ?= $(ETL_JOINED_DIR)/features_daily_labeled.csv
+
+.PHONY: help-workflow etl etl-full etl-labels etl-aggregate nb2-dry-run nb2-run
+
+help-workflow:
+> echo ""
+> echo "🧭 Workflow (snapshot=$(SNAPSHOT), participant=$(PARTICIPANT))"
+> echo "  make etl-extract     → (já existente) extrai zips com --auto-zip"
+> echo "  make etl-full        → normaliza + join + features (pipeline completo)"
+> echo "  make etl-labels      → mescla labels no joined/features_daily.csv"
+> echo "  make etl-aggregate   → promove para $(AI_DIR) e materializa features_daily_labeled.csv"
+> echo "  make nb2-dry-run     → checa dataset e mostra comando NB2"
+> echo "  make nb2-run         → executa NB2 apontando para $(FEATURES_LABELED)"
+> echo ""
+> echo "Variáveis úteis: PARTICIPANT SNAPSHOT CUTOVER TZ_BEFORE TZ_AFTER NB2_SCRIPT"
+> echo ""
+
+# Alias tradicional: 'make etl' chama o pipeline completo (etl-full)
+etl: etl-full
+> echo "⚙️  Alias: 'make etl' → 'make etl-full'"
+
+# Pipeline completo (normalize + join + features). Respeita --auto-zip se implementado no script.
+etl-full:
+> echo "🧠 ETL FULL → $(PARTICIPANT) @ $(SNAPSHOT)"
+> $(PY) etl_pipeline.py full \
+>   --participant $(PARTICIPANT) \
+>   --snapshot $(SNAPSHOT) \
+>   --cutover $(CUTOVER) \
+>   --tz_before $(TZ_BEFORE) \
+>   --tz_after $(TZ_AFTER) \
+>   --auto-zip
+> echo "✅ ETL FULL concluído. Verifique: $(ETL_JOINED_DIR)"
+
+# Apenas a fusão de labels (se o joined já existir)
+etl-labels:
+> echo "🧩 ETL LABELS → $(PARTICIPANT) @ $(SNAPSHOT)"
+> $(PY) etl_pipeline.py labels \
+>   --participant $(PARTICIPANT) \
+>   --snapshot $(SNAPSHOT)
+> if [ ! -f "$(ETL_LABELED_SRC)" ]; then \
+>   echo "❌ Esperado: $(ETL_LABELED_SRC) — rode 'make etl-full' antes."; exit 1; \
+> fi
+> echo "✅ Labels mesclados: $(ETL_LABELED_SRC)"
+
+# Promove do ETL para data/ai (cópia determinística do labeled)
+etl-aggregate:
+> echo "📦 AGGREGATE → $(AI_DIR)"
+> if [ ! -f "$(ETL_LABELED_SRC)" ]; then \
+>   echo "❌ Não encontrei $(ETL_LABELED_SRC). Rode 'make etl-full' e 'make etl-labels' antes."; exit 1; \
+> fi
+> mkdir -p "$(AI_DIR)"
+> cp -f "$(ETL_LABELED_SRC)" "$(FEATURES_LABELED)"
+> if [ ! -f "$(FEATURES_LABELED)" ]; then \
+>   echo "❌ Falha ao materializar $(FEATURES_LABELED)"; exit 1; \
+> fi
+> echo "✅ Dataset AI pronto: $(FEATURES_LABELED)"
+
+# Mostra o comando NB2 e valida a existência do dataset
+nb2-dry-run:
+> echo "🔎 NB2 DRY-RUN"
+> if [ ! -f "$(FEATURES_LABELED)" ]; then \
+>   echo "❌ Missing: $(FEATURES_LABELED). Rode 'make etl-aggregate' primeiro."; exit 1; \
+> fi
+> echo "✅ Found: $(FEATURES_LABELED)"
+> echo "💡 NB2 command:"
+> echo '$(PY) $(NB2_SCRIPT) --features "$(FEATURES_LABELED)"'
+
+# Executa o NB2 com o labeled promovido
+nb2-run:
+> echo "🚀 NB2 RUN"
+> if [ ! -f "$(FEATURES_LABELED)" ]; then \
+>   echo "❌ Missing: $(FEATURES_LABELED). Rode 'make etl-aggregate' primeiro."; exit 1; \
+> fi
+> $(PY) $(NB2_SCRIPT) --features "$(FEATURES_LABELED)"
+> echo "📊 NB2 concluído. Verifique notebooks/outputs/NB2/…"
