@@ -1115,6 +1115,12 @@ def main():
     if args.cmd == "full":
         pid, snap = args.participant, args.snapshot
         xml = find_export_xml(pid, snap)
+        # Fallback: some runs place the extracted Apple export under data/etl/<pid>/snapshots/<snap>/extracted/apple
+        if xml is None:
+            alt_path = Path("data/etl") / pid / "snapshots" / canon_snap_id(snap) / "extracted" / "apple"
+            xml_candidates = list(alt_path.rglob("export.xml")) if alt_path.exists() else []
+            xml = xml_candidates[0] if xml_candidates else None
+        # Only warn/exit if both primary and fallback searches failed
         if xml is None:
             print("WARNING: export.xml não encontrado para:", pid, snap)
             return 1
