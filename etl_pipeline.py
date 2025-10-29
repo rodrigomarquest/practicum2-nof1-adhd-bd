@@ -549,6 +549,266 @@ def extract_apple_per_metric(xml_file: Path, outdir: Path, cutover_str: str, tz_
     _write_atomic_json(manifest, str(outdir / "extract_manifest.json"))
     return written
 
+
+# ----------------------------------------------------------------------
+# Apple CDA (State of Mind) parser
+# ----------------------------------------------------------------------
+def _parse_apple_cda_som(cda_xml_path: Path, tz_selector) -> pd.DataFrame:
+    """Parse export_cda.xml (CCDA-like) to extract Mood / State of Mind observations.
+
+    Returns DataFrame with columns: timestamp_utc (ISO UTC), date (YYYY-MM-DD in project tz),
+    source (apple_som), value_raw, value_norm, notes
+
+    Heuristic mapping for value_norm (documented):
+      positive (+1): tokens like 'very pleasant','pleasant','happy','excited','joyful'
+      neutral  (0) : tokens like 'neutral','calm','ok','okay'
+      negative (-1): tokens like 'very unpleasant','unpleasant','sad','angry','stressed','anxious'
+
+    The parser is intentionally tolerant: if the file is missing or no mood-like
+    observations are found, returns an empty DataFrame.
+    """
+    rows = []
+    if not cda_xml_path.exists():
+        return pd.DataFrame(columns=["timestamp_utc", "date", "source", "value_raw", "value_norm", "notes"])
+
+    try:
+        tree = ET.parse(str(cda_xml_path))
+        root = tree.getroot()
+    except Exception:
+        print(f"WARNING: failed to parse CDA XML: {cda_xml_path}")
+        return pd.DataFrame(columns=["timestamp_utc", "date", "source", "value_raw", "value_norm", "notes"])
+
+    # candidate tags/paths that may contain mood/state obs
+    candidates = []
+    for elem in root.iter():
+        tag = elem.tag.lower()
+        text = (elem.text or "").strip()
+        # look for nodes mentioning 'mood' or 'state of mind' or named Observation
+        if 'mood' in tag or 'stateofmind' in tag or 'state' in tag and 'mind' in tag:
+            candidates.append(elem)
+        # also look for displayName/code elements that include 'Mood'
+        if 'mood' in text.lower() or 'state of mind' in text.lower():
+            candidates.append(elem)
+
+    # fallback: scan for Observation entries that reference mood-like codes
+    for entry in root.iter():
+        try:
+            tag = entry.tag.lower()
+            if 'observation' in tag or 'entry' in tag:
+                txt = ''.join([ (c.text or '') for c in entry.iter() if c.text ])
+                if 'mood' in txt.lower() or 'state of mind' in txt.lower() or 'mood' in (entry.attrib.get('displayName') or '').lower():
+                    candidates.append(entry)
+        except Exception:
+            continue
+
+    seen = set()
+    for elem in candidates:
+        try:
+            txt = ' '.join([ (c.text or '').strip() for c in elem.iter() if c.text ])
+            if not txt or txt.strip() == '':
+                continue
+            key = (elem.tag, txt)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            # Try to find a timestamp inside the entry (effectiveTime, time, value/@value)
+            ts = None
+            for c in elem.iter():
+                if c.tag.lower().endswith('effective') or c.tag.lower().endswith('time') or 'time' in c.tag.lower():
+                    ttxt = (c.attrib.get('value') or c.text or '').strip()
+                    if ttxt:
+                        try:
+                            ts = pd.to_datetime(ttxt)
+                            break
+                        except Exception:
+                            pass
+                # value elements
+                if c.tag.lower().endswith('value') or c.tag.lower().endswith('valuecode'):
+                    if 'value' in c.attrib:
+                        vraw = c.attrib.get('value')
+                    else:
+                        vraw = (c.text or '').strip()
+                    if vraw:
+                        # keep as candidate
+                        pass
+
+            # fallback: use root document date
+            if ts is None:
+                ts = pd.Timestamp.now(tz=pd.Timestamp.utcnow().tz)
+
+            # normalize raw value (take code display or text)
+            value_raw = txt.strip()
+
+            vr = value_raw.lower()
+            value_norm = None
+            if any(tok in vr for tok in ('very pleasant','very_pleasant','verypleasant','very pleasant', 'joy', 'happy', 'excited', 'pleasant')):
+                value_norm = 1
+            elif any(tok in vr for tok in ('neutral','calm','ok','okay','fine')):
+                value_norm = 0
+            elif any(tok in vr for tok in ('very unpleasant','very_unpleasant','sad','angry','stressed','anxious','unpleasant','upset')):
+                value_norm = -1
+            else:
+                # unknown tokens -> try simple heuristics
+                if 'pleasant' in vr or 'happy' in vr:
+                    value_norm = 1
+                elif 'neutral' in vr or 'calm' in vr:
+                    value_norm = 0
+                elif 'sad' in vr or 'angry' in vr or 'stress' in vr:
+                    value_norm = -1
+                else:
+                    value_norm = None
+
+            # convert timestamp to UTC ISO and date in project tz
+            try:
+                ts_parsed = pd.to_datetime(ts)
+                # assume naive -> UTC
+                if ts_parsed.tzinfo is None:
+                    ts_parsed = ts_parsed.tz_localize('UTC')
+                ts_utc = ts_parsed.astimezone(pd.Timestamp.utcnow().tz)
+            except Exception:
+                ts_utc = pd.Timestamp.utcnow()
+
+            # project date in tz_selector (if provided)
+            try:
+                proj_tz = tz_selector(ts_parsed) if tz_selector is not None else get_tz('UTC')
+                date_proj = ts_parsed.astimezone(proj_tz).date()
+            except Exception:
+                date_proj = ts_utc.date()
+
+            rows.append({
+                "timestamp_utc": ts_utc.isoformat(),
+                "date": date_proj.isoformat(),
+                "source": "apple_som",
+                "value_raw": value_raw,
+                "value_norm": int(value_norm) if value_norm is not None else pd.NA,
+                "notes": f"parsed_from:{cda_xml_path.name}"
+            })
+        except Exception:
+            continue
+
+    if not rows:
+        return pd.DataFrame(columns=["timestamp_utc", "date", "source", "value_raw", "value_norm", "notes"])
+    return pd.DataFrame(rows)
+
+
+# ----------------------------------------------------------------------
+# Zepp HEALTH_DATA emotion/stress parser
+# ----------------------------------------------------------------------
+def _parse_zepp_health_emotion(health_csv_paths: Iterable[Union[str, Path]], tz_selector) -> pd.DataFrame:
+    """Parse Zepp HEALTH_DATA CSVs to extract emotion and stress information.
+
+    Returns DataFrame with columns: timestamp_utc, date, source, emotion_raw, emotion_norm, stress_raw, stress_norm, notes
+    Mapping heuristics: common emotion labels mapped to {-1,0,1} where possible; stress_norm scaled to [0..1] per-file.
+    """
+    rows = []
+    paths = [Path(p) for p in health_csv_paths] if health_csv_paths else []
+    if not paths:
+        return pd.DataFrame(columns=["timestamp_utc","date","source","emotion_raw","emotion_norm","stress_raw","stress_norm","notes"])
+
+    for p in paths:
+        if not p.exists():
+            continue
+        try:
+            df = pd.read_csv(p)
+        except Exception:
+            print(f"WARNING: failed to read Zepp health CSV: {p}")
+            continue
+
+        # detect timestamp/emotion/stress columns
+        cols = [c.lower() for c in df.columns]
+        ts_col = None
+        emotion_col = None
+        stress_col = None
+        for c in df.columns:
+            lc = c.lower()
+            if lc in ('timestamp','time','datetime','ts') and ts_col is None:
+                ts_col = c
+            if 'emotion' in lc and emotion_col is None:
+                emotion_col = c
+            if 'stress' in lc and stress_col is None:
+                stress_col = c
+
+        # if no timestamp column, try first column
+        if ts_col is None and df.shape[1] > 0:
+            ts_col = df.columns[0]
+
+        # parse stress numeric normalization per file
+        stress_vals = None
+        if stress_col:
+            try:
+                stress_vals = pd.to_numeric(df[stress_col], errors='coerce')
+                s_min = float(stress_vals.min(skipna=True)) if not stress_vals.dropna().empty else 0.0
+                s_max = float(stress_vals.max(skipna=True)) if not stress_vals.dropna().empty else 1.0
+            except Exception:
+                s_min, s_max = 0.0, 1.0
+        else:
+            s_min, s_max = 0.0, 1.0
+
+        for _, r in df.iterrows():
+            try:
+                tval = r[ts_col] if ts_col in r else None
+                ts = pd.to_datetime(tval, errors='coerce')
+                if pd.isna(ts):
+                    continue
+                # localize naive -> assume UTC, then convert
+                if ts.tzinfo is None:
+                    ts = ts.tz_localize('UTC')
+                ts_utc = ts.astimezone(pd.Timestamp.utcnow().tz)
+
+                # project date
+                try:
+                    proj_tz = tz_selector(ts) if tz_selector is not None else get_tz('UTC')
+                    date_proj = ts.astimezone(proj_tz).date()
+                except Exception:
+                    date_proj = ts_utc.date()
+
+                emotion_raw = ''
+                emotion_norm = pd.NA
+                if emotion_col and emotion_col in r and pd.notna(r[emotion_col]):
+                    emotion_raw = str(r[emotion_col])
+                    er = emotion_raw.lower()
+                    if any(tok in er for tok in ('happy','excited','joy','pleasant')):
+                        emotion_norm = 1
+                    elif any(tok in er for tok in ('neutral','calm','ok')):
+                        emotion_norm = 0
+                    elif any(tok in er for tok in ('sad','angry','stressed','anxious')):
+                        emotion_norm = -1
+                    else:
+                        emotion_norm = pd.NA
+
+                stress_raw = ''
+                stress_norm = pd.NA
+                if stress_col and stress_col in r and pd.notna(r[stress_col]):
+                    try:
+                        sval = float(r[stress_col])
+                        stress_raw = sval
+                        # scale to [0..1]
+                        if s_max > s_min:
+                            stress_norm = (sval - s_min) / (s_max - s_min)
+                        else:
+                            stress_norm = 0.0
+                    except Exception:
+                        stress_raw = str(r[stress_col])
+                        stress_norm = pd.NA
+
+                rows.append({
+                    "timestamp_utc": ts_utc.isoformat(),
+                    "date": date_proj.isoformat(),
+                    "source": "zepp",
+                    "emotion_raw": emotion_raw,
+                    "emotion_norm": int(emotion_norm) if pd.notna(emotion_norm) else pd.NA,
+                    "stress_raw": stress_raw,
+                    "stress_norm": float(stress_norm) if pd.notna(stress_norm) else pd.NA,
+                    "notes": f"parsed_from:{p.name}"
+                })
+            except Exception:
+                continue
+
+    if not rows:
+        return pd.DataFrame(columns=["timestamp_utc","date","source","emotion_raw","emotion_norm","stress_raw","stress_norm","notes"])
+    return pd.DataFrame(rows)
+
 # ----------------------------------------------------------------------
 # Cardiovascular stage
 # ----------------------------------------------------------------------
@@ -697,6 +957,364 @@ def run_stage_labels_synthetic(snapshot_dir: Path, synthetic_path: Path | None =
 
     return {"features_daily_labeled": str(out_csv), "labels_manifest": str(manifest_path)}
 
+
+# ----------------------------------------------------------------------
+# Labels (full): Apple SoM + Zepp Emotion merging
+# ----------------------------------------------------------------------
+# label mapping dictionaries
+LABEL_MAP_APPLE_TERNARY = {
+    'very_pleasant': 'positive', 'pleasant': 'positive',
+    'neutral': 'neutral',
+    'unpleasant': 'negative', 'very_unpleasant': 'negative'
+}
+
+LABEL_MAP_ZEPP_TERNARY = {
+    'happy': 'positive', 'excited': 'positive', 'calm': 'neutral',
+    'neutral': 'neutral',
+    'sad': 'negative', 'angry': 'negative', 'stressed': 'negative', 'anxious': 'negative'
+}
+
+LABEL_MAP_APPLE_BINARY = {k: ('positive' if v == 'positive' else 'negative') for k, v in LABEL_MAP_APPLE_TERNARY.items()}
+LABEL_MAP_ZEPP_BINARY = {k: ('positive' if v == 'positive' else 'negative') for k, v in LABEL_MAP_ZEPP_TERNARY.items()}
+
+# five-class (Apple native, Zepp best-effort mapping)
+LABEL_MAP_APPLE_FIVE = {
+    'very_unpleasant': 'very_unpleasant', 'unpleasant': 'unpleasant', 'neutral': 'neutral',
+    'pleasant': 'pleasant', 'very_pleasant': 'very_pleasant'
+}
+
+LABEL_MAP_ZEPP_FIVE = {
+    'angry': 'very_unpleasant', 'stressed': 'unpleasant', 'anxious': 'unpleasant', 'sad': 'unpleasant',
+    'neutral': 'neutral', 'calm': 'neutral', 'happy': 'pleasant', 'excited': 'pleasant'
+}
+
+SEVERITY_TERNARY = {'negative': 0, 'neutral': 1, 'positive': 2}
+SEVERITY_FIVE = {
+    'very_unpleasant': 0, 'unpleasant': 1, 'neutral': 2, 'pleasant': 3, 'very_pleasant': 4
+}
+
+
+def _write_if_changed_df(df: 'pd.DataFrame', out_path: Path) -> bool:
+    """Write DataFrame to out_path atomically only if content changed.
+    Returns True if written (changed), False if skipped because identical.
+    """
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".tmp_labels_", dir=str(out_path.parent), suffix=".csv")
+    os.close(fd)
+    try:
+        df.to_csv(tmp, index=False)
+        if out_path.exists():
+            try:
+                old = _sha256_file(str(out_path))
+                new = _sha256_file(tmp)
+                if old == new:
+                    os.remove(tmp)
+                    return False
+            except Exception:
+                pass
+        os.replace(tmp, str(out_path))
+        return True
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+
+
+def run_stage_labels(snapshot_dir: Path, label_schema: str = 'ternary', prefer: str = 'mixed', dry_run: bool = False) -> Dict[str, str]:
+    """Merge Apple SoM and Zepp Emotion into features_daily_labeled.csv.
+
+    snapshot_dir: Path to data/etl/<PID>/snapshots/<SNAP>/
+    Returns a manifest dict like the synthetic runner.
+    """
+    # locate features base (prefer canonical ETL joined/features_daily.csv)
+    pid = snapshot_dir.parts[-3] if len(snapshot_dir.parts) >= 3 else None
+    snap_iso = snapshot_dir.parts[-1] if len(snapshot_dir.parts) >= 1 else None
+    etl_joined = snapshot_dir / 'joined' / 'features_daily.csv'
+    ai_fallback = AI_ROOT / pid / 'snapshots' / snap_iso / 'features_daily_updated.csv'
+
+    if etl_joined.exists():
+        features_path = etl_joined
+        used_backcompat = False
+    elif ai_fallback.exists():
+        features_path = ai_fallback
+        used_backcompat = True
+    else:
+        raise FileNotFoundError(f"features_daily not found in either {etl_joined} or {ai_fallback}")
+
+    fdf = pd.read_csv(features_path, dtype={"date": "string"})
+    if fdf.empty:
+        raise ValueError(f"features_daily is empty: {features_path}")
+    fdf['date'] = pd.to_datetime(fdf['date'], errors='coerce').dt.date
+
+    # label sources under snapshot_dir (ETL canonical layout)
+    apple_path = snapshot_dir / 'normalized' / 'apple_state_of_mind.csv'
+    zepp_path = snapshot_dir / 'normalized' / 'zepp' / 'zepp_emotion.csv'
+
+    apple_df = pd.DataFrame()
+    zepp_df = pd.DataFrame()
+
+    # helper to detect ts and label cols
+    def _detect_ts_label(df: pd.DataFrame):
+        cols = [c.lower() for c in df.columns]
+        ts_candidates = [c for c in df.columns if c.lower() in ('timestamp', 'time', 'ts', 'datetime', 'date')]
+        lbl_candidates = [c for c in df.columns if any(k in c.lower() for k in ('label', 'state', 'emotion', 'mood'))]
+        ts_col = ts_candidates[0] if ts_candidates else (df.columns[0] if df.shape[1] >= 1 else None)
+        lbl_col = lbl_candidates[0] if lbl_candidates else (df.columns[1] if df.shape[1] >= 2 else None)
+        return ts_col, lbl_col
+
+    # infer tz_name from version_log_enriched if possible
+    tz_name = None
+    vpath = snapshot_dir / VERSION_LOG
+    if not vpath.exists():
+        # try ai fallback
+        vpath = (AI_ROOT / pid / 'snapshots' / snap_iso / VERSION_LOG)
+    try:
+        if vpath.exists():
+            vdf = pd.read_csv(vpath)
+            if 'tz_name' in vdf.columns and not vdf['tz_name'].dropna().empty:
+                tz_name = vdf['tz_name'].dropna().iloc[0]
+    except Exception:
+        tz_name = None
+
+    target_tz = get_tz(tz_name) if tz_name else None
+
+    # load apple
+    apple_days = {}
+    if apple_path.exists():
+        try:
+            adf = pd.read_csv(apple_path)
+            ts_col, lbl_col = _detect_ts_label(adf)
+            if ts_col and lbl_col:
+                adf['__ts'] = pd.to_datetime(adf[ts_col], errors='coerce')
+                if target_tz is not None:
+                    adf['__ts'] = adf['__ts'].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT').dt.tz_convert(target_tz)
+                else:
+                    # assume UTC if naive
+                    adf['__ts'] = adf['__ts'].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
+                adf['date'] = adf['__ts'].dt.date
+                apple_df = adf[[ 'date', lbl_col ]].rename(columns={lbl_col: 'raw_label'})
+        except Exception:
+            apple_df = pd.DataFrame()
+
+    # load zepp
+    if zepp_path.exists():
+        try:
+            zdf = pd.read_csv(zepp_path)
+            ts_col, lbl_col = _detect_ts_label(zdf)
+            if ts_col and lbl_col:
+                zdf['__ts'] = pd.to_datetime(zdf[ts_col], errors='coerce')
+                if target_tz is not None:
+                    zdf['__ts'] = zdf['__ts'].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT').dt.tz_convert(target_tz)
+                else:
+                    zdf['__ts'] = zdf['__ts'].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
+                zdf['date'] = zdf['__ts'].dt.date
+                zepp_df = zdf[[ 'date', lbl_col ]].rename(columns={lbl_col: 'raw_label'})
+        except Exception:
+            zepp_df = pd.DataFrame()
+
+    # If no sources found, generate synthetic neutral labels (do not fail)
+    if (apple_df.empty if not isinstance(apple_df, pd.DataFrame) else apple_df.empty) and (zepp_df.empty if not isinstance(zepp_df, pd.DataFrame) else zepp_df.empty):
+        print("WARNING: no label sources found — generating synthetic neutral labels.")
+        synth = pd.DataFrame({'date': fdf['date'], 'label': ['neutral' if label_schema != 'binary' else 'positive' for _ in range(len(fdf))]})
+        out = fdf.merge(synth, on='date', how='left')
+        out['label_source'] = 'synthetic'
+        out['label_notes'] = ''
+        # write outputs
+        out_path = snapshot_dir / 'joined' / 'features_daily_labeled.csv'
+        if not dry_run:
+            _write_if_changed_df(out, out_path)
+            if used_backcompat:
+                back_path = AI_ROOT / pid / 'snapshots' / snap_iso / 'features_daily_labeled.csv'
+                _write_if_changed_df(out, back_path)
+        manifest = {
+            'type': 'labels_synthetic_fallback',
+            'snapshot_dir': str(snapshot_dir),
+            'inputs': {},
+            'outputs': {'features_daily_labeled.csv': str(out_path)}
+        }
+        manifest_path = snapshot_dir / 'labels_manifest.json'
+        if not dry_run:
+            _write_atomic_json(manifest, manifest_path)
+        return {'features_daily_labeled': str(out_path), 'labels_manifest': str(manifest_path)}
+
+    # normalize raw labels to lowercase
+    def _normalize_map(df, mapping):
+        if df.empty:
+            return df
+        df = df.copy()
+        df['raw_label'] = df['raw_label'].astype(str).str.lower()
+        return df
+
+    apple_df = _normalize_map(apple_df, {}) if not apple_df.empty else pd.DataFrame()
+    zepp_df = _normalize_map(zepp_df, {}) if not zepp_df.empty else pd.DataFrame()
+
+    # map raw -> schema labels
+    def _map_label(raw, source, schema):
+        if pd.isna(raw):
+            return None
+        r = str(raw).lower().strip()
+        if schema == 'ternary':
+            if source == 'apple':
+                return LABEL_MAP_APPLE_TERNARY.get(r, None)
+            else:
+                return LABEL_MAP_ZEPP_TERNARY.get(r, None)
+        if schema == 'binary':
+            if source == 'apple':
+                return LABEL_MAP_APPLE_BINARY.get(r, None)
+            else:
+                return LABEL_MAP_ZEPP_BINARY.get(r, None)
+        if schema == 'five':
+            if source == 'apple':
+                return LABEL_MAP_APPLE_FIVE.get(r, None)
+            else:
+                return LABEL_MAP_ZEPP_FIVE.get(r, None)
+        return None
+
+    # aggregate per date: mode with severity tie-break
+    def _aggregate_source(df, source):
+        if df.empty:
+            return pd.DataFrame(columns=['date', 'label', 'count'])
+        df = df.copy()
+        df['mapped'] = df['raw_label'].apply(lambda r: _map_label(r, source, 'five' if label_schema=='five' else label_schema))
+        # For conflict resolution, reduce five->ternary mapping severity bands when needed
+        if label_schema == 'five':
+            # keep five labels for final projection
+            df['band'] = df['mapped'].map(lambda x: None if pd.isna(x) else ('negative' if x in ('very_unpleasant','unpleasant') else ('positive' if x in ('pleasant','very_pleasant') else 'neutral')))
+        else:
+            df['band'] = df['mapped']
+
+        # count occurrences per day and pick mode
+        ag = df.groupby('date').agg({'mapped': lambda s: list(s.dropna()), 'band': lambda s: list(s.dropna())}).reset_index()
+        rows = []
+        for _, r in ag.iterrows():
+            datev = r['date']
+            mapped_list = r['mapped']
+            band_list = r['band']
+            if not mapped_list:
+                rows.append({'date': datev, 'label': None, 'count': 0})
+                continue
+            # tally band for tie-breaking
+            band_counts = {}
+            for b in band_list:
+                band_counts[b] = band_counts.get(b, 0) + 1
+            # pick most frequent band; on tie, pick worst (negative < neutral < positive)
+            best_band = None
+            best_count = -1
+            for b, c in band_counts.items():
+                if c > best_count or (c == best_count and (SEVERITY_TERNARY.get(b,1) < SEVERITY_TERNARY.get(best_band,1))):
+                    best_count = c; best_band = b
+            # within mapped_list, pick the most severe mapped that belongs to best_band
+            chosen = None
+            if label_schema == 'five':
+                # choose the most severe within the band using SEVERITY_FIVE
+                candidates = [m for m in mapped_list if (m in SEVERITY_FIVE and ((best_band=='negative' and m in ('very_unpleasant','unpleasant')) or (best_band=='positive' and m in ('pleasant','very_pleasant')) or (best_band=='neutral' and m=='neutral')))]
+                if not candidates:
+                    chosen = mapped_list[0]
+                else:
+                    chosen = sorted(candidates, key=lambda x: SEVERITY_FIVE.get(x,2))[0]
+            else:
+                # pick mode among mapped values
+                try:
+                    ser = pd.Series(mapped_list)
+                    m = ser.mode()
+                    if not m.empty:
+                        chosen = m.iloc[0]
+                    else:
+                        chosen = mapped_list[0]
+                except Exception:
+                    chosen = mapped_list[0]
+
+            rows.append({'date': datev, 'label': chosen, 'count': len(mapped_list)})
+        return pd.DataFrame(rows)
+
+    apple_agg = _aggregate_source(apple_df, 'apple') if not apple_df.empty else pd.DataFrame()
+    zepp_agg = _aggregate_source(zepp_df, 'zepp') if not zepp_df.empty else pd.DataFrame()
+
+    # build merge frame by dates
+    merged = fdf[['date']].drop_duplicates()
+    if not apple_agg.empty:
+        merged = merged.merge(apple_agg.rename(columns={'label':'apple_label','count':'apple_count'}), on='date', how='left')
+    else:
+        merged['apple_label'] = pd.NA; merged['apple_count'] = 0
+    if not zepp_agg.empty:
+        merged = merged.merge(zepp_agg.rename(columns={'label':'zepp_label','count':'zepp_count'}), on='date', how='left')
+    else:
+        merged['zepp_label'] = pd.NA; merged['zepp_count'] = 0
+
+    # resolve final label per prefer/mixed rules
+    def _resolve_row(row):
+        a = row.get('apple_label')
+        z = row.get('zepp_label')
+        ac = int(row.get('apple_count') or 0)
+        zc = int(row.get('zepp_count') or 0)
+        if prefer == 'apple':
+            chosen = a if pd.notna(a) else z
+            source = 'apple' if pd.notna(a) else ('zepp' if pd.notna(z) else None)
+        elif prefer == 'zepp':
+            chosen = z if pd.notna(z) else a
+            source = 'zepp' if pd.notna(z) else ('apple' if pd.notna(a) else None)
+        else:  # mixed
+            # if any negative -> negative; else if any positive -> positive; else neutral
+            bands = []
+            for v in (a,z):
+                if pd.isna(v):
+                    continue
+                if label_schema == 'five':
+                    band = 'negative' if v in ('very_unpleasant','unpleasant') else ('positive' if v in ('pleasant','very_pleasant') else 'neutral')
+                else:
+                    band = v
+                bands.append(band)
+            if not bands:
+                chosen = None; source = None
+            elif any(b == 'negative' for b in bands):
+                chosen = 'negative'; source = 'apple+zepp' if (pd.notna(a) and pd.notna(z)) else ('apple' if pd.notna(a) else 'zepp')
+            elif any(b == 'positive' for b in bands):
+                chosen = 'positive'; source = 'apple+zepp' if (pd.notna(a) and pd.notna(z)) else ('apple' if pd.notna(a) else 'zepp')
+            else:
+                chosen = 'neutral'; source = 'apple+zepp' if (pd.notna(a) and pd.notna(z)) else ('apple' if pd.notna(a) else 'zepp')
+
+        # project back to five-class if needed
+        final_label = chosen
+        if label_schema == 'five' and chosen is not None:
+            # if chosen was 'negative'/'positive'/'neutral' from mixed logic, pick representative in five-class
+            if chosen == 'negative':
+                final_label = 'unpleasant'
+            elif chosen == 'positive':
+                final_label = 'pleasant'
+            elif chosen == 'neutral':
+                final_label = 'neutral'
+
+        notes = f"apple={ac},zepp={zc}"
+        return pd.Series({'label': final_label, 'label_source': source or pd.NA, 'label_notes': notes})
+
+    resolved = merged.apply(_resolve_row, axis=1)
+    out = fdf.merge(resolved, on='date', how='left')
+
+    # write outputs
+    out_path = snapshot_dir / 'joined' / 'features_daily_labeled.csv'
+    if not dry_run:
+        written = _write_if_changed_df(out, out_path)
+        if used_backcompat:
+            back_path = AI_ROOT / pid / 'snapshots' / snap_iso / 'features_daily_labeled.csv'
+            _write_if_changed_df(out, back_path)
+        manifest = {
+            'type': 'labels', 'snapshot_dir': str(snapshot_dir),
+            'inputs': {
+                'features': str(features_path),
+                'apple_source': str(apple_path) if apple_path.exists() else None,
+                'zepp_source': str(zepp_path) if zepp_path.exists() else None
+            },
+            'outputs': {'features_daily_labeled.csv': _sha256_file(str(out_path))}
+        }
+        manifest_path = snapshot_dir / 'labels_manifest.json'
+        _write_atomic_json(manifest, manifest_path)
+    else:
+        manifest = {'type': 'labels_dry_run', 'snapshot_dir': str(snapshot_dir)}
+
+    return {'features_daily_labeled': str(out_path), 'labels_manifest': str(manifest_path) if not dry_run else ''}
+
 # ----------------------------------------------------------------------
 # CLI
 # ----------------------------------------------------------------------
@@ -743,6 +1361,9 @@ def main():
     p_lab.add_argument("--snapshot", help=HELP_SNAPSHOT_ID)
     p_lab.add_argument("--synthetic", action="store_true", help="Use synthetic labels (state_of_mind_synthetic.csv)")
     p_lab.add_argument("--labels_path", help="Caminho alternativo para labels (opcional)")
+    p_lab.add_argument("--label-schema", choices=["binary","ternary","five"], default="ternary", help="Label schema to produce")
+    p_lab.add_argument("--prefer", choices=["apple","zepp","mixed"], default="mixed", help="Preference when both sources present")
+    p_lab.add_argument("--dry-run", action="store_true", help="Do not write outputs; just report summary")
 
     # aggregate
     p_agg = sub.add_parser("aggregate", help="Aggregate features to one row per day (optional synthetic labels)")
@@ -979,6 +1600,52 @@ def main():
                     print("[OK] extract (apple parse) concluído")
                     for k,v in written.items():
                         print(f" - {k}: {v}")
+                    # Attempt to parse Zepp HEALTH_DATA for emotion/stress (non-fatal)
+                    try:
+                        if 'zepp' in results:
+                            zepp_dir = Path(results['zepp'])
+                            health_files = list(zepp_dir.rglob('HEALTH_DATA_*.csv')) + list(zepp_dir.rglob('HEALTH_DATA/**/*.csv'))
+                            # dedupe
+                            health_files = list({str(p): p for p in health_files}.values())
+                            if health_files:
+                                y, m, d = map(int, args.cutover.split('-'))
+                                tz_sel = make_tz_selector(date(y, m, d), args.tz_before, args.tz_after)
+                                zepp_df = _parse_zepp_health_emotion(health_files, tz_sel)
+                                norm_dir = outdir / 'normalized' / 'zepp'
+                                norm_dir.mkdir(parents=True, exist_ok=True)
+                                out_path = norm_dir / 'zepp_emotion.csv'
+                                if not zepp_df.empty:
+                                    written_flag = _write_if_changed_df(zepp_df, out_path)
+                                    if written_flag:
+                                        print(f"INFO: wrote zepp emotion -> {out_path}")
+                                    else:
+                                        print(f"[SKIP] zepp emotion unchanged -> {out_path}")
+                                else:
+                                    print("WARNING: no zepp HEALTH_DATA emotion/stress observations found; skipping zepp_emotion.csv")
+                    except Exception as _e:
+                        print(f"WARNING: zepp emotion parsing failed (non-fatal): {_e}")
+                    # Attempt to parse export_cda.xml for State of Mind (non-fatal)
+                    try:
+                        cda_paths = list(extracted_apple_dir.rglob('export_cda.xml'))
+                        if cda_paths:
+                            cda = cda_paths[0]
+                            # build tz selector based on cutover
+                            y, m, d = map(int, args.cutover.split('-'))
+                            tz_sel = make_tz_selector(date(y, m, d), args.tz_before, args.tz_after)
+                            som_df = _parse_apple_cda_som(cda, tz_sel)
+                            norm_dir = outdir / 'normalized'
+                            norm_dir.mkdir(parents=True, exist_ok=True)
+                            out_path = norm_dir / 'apple_state_of_mind.csv'
+                            if not som_df.empty:
+                                written_flag = _write_if_changed_df(som_df, out_path)
+                                if written_flag:
+                                    print(f"INFO: wrote apple SoM -> {out_path}")
+                                else:
+                                    print(f"[SKIP] apple SoM unchanged -> {out_path}")
+                            else:
+                                print("WARNING: no mood/state observations found in export_cda.xml; skipping apple_state_of_mind.csv")
+                    except Exception as _e:
+                        print(f"WARNING: apple SoM parsing failed (non-fatal): {_e}")
 
             return 0
         # fallback: existing behavior (find export.xml via current RAW_ROOT locations)
@@ -1072,21 +1739,34 @@ def main():
             print(SNAPSHOT_NOT_EXISTS, snapdir)
             return 1
 
-        if not args.synthetic:
-            print("Somente --synthetic implementado nesta fase.")
-            return 2
-
         labels_path = Path(args.labels_path) if args.labels_path else None
+        # If user explicitly requested synthetic labels, run existing synthetic flow
+        if args.synthetic:
+            try:
+                res = run_stage_labels_synthetic(snapdir, labels_path)
+            except FileNotFoundError as e:
+                print("WARNING:", e)
+                return 1
+            except Exception as e:
+                print("ERROR: failed to run labels:", e)
+                return 1
+
+            print("[OK] labels (synthetic) concluído:", res)
+            return 0
+
+        # Otherwise run the full labels merger (Apple SoM + Zepp Emotion)
+        # Prefer the ETL snapshot path (data/etl/...) as the canonical SNAP; pass it to the labels runner.
+        etl_snapdir = ETL_ROOT / args.participant / 'snapshots' / canon_snap_id(args.snapshot) if args.participant and args.snapshot else snapdir
         try:
-            res = run_stage_labels_synthetic(snapdir, labels_path)
+            res = run_stage_labels(etl_snapdir, label_schema=args.label_schema, prefer=args.prefer, dry_run=args.dry_run)
         except FileNotFoundError as e:
-            print("WARNING:", e)
+            print("ERROR:", e)
             return 1
         except Exception as e:
             print("ERROR: failed to run labels:", e)
             return 1
 
-        print("[OK] labels (synthetic) concluído:", res)
+        print("[OK] labels concluído:", res)
         return 0
 
     if args.cmd == "aggregate":

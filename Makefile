@@ -1109,22 +1109,21 @@ etl-aggregate:
 
 # Mostra o comando NB2 e valida a existência do dataset
 nb2-dry-run:
-> echo "🔎 NB2 DRY-RUN"
-> if [ ! -f "$(FEATURES_LABELED)" ]; then \
->   echo "❌ Missing: $(FEATURES_LABELED). Rode 'make etl-aggregate' primeiro."; exit 1; \
+> echo "NB2 DRY-RUN"
+> if [ ! -f "./data/ai/$(PARTICIPANT)/features_daily_labeled.csv" ]; then \
+>   echo "ERROR: Missing ./data/ai/$(PARTICIPANT)/features_daily_labeled.csv. Run 'make etl-aggregate' first."; exit 1; \
 > fi
-> echo "✅ Found: $(FEATURES_LABELED)"
-> echo "💡 NB2 command:"
-> echo '$(PY) $(NB2_SCRIPT) --features "$(FEATURES_LABELED)"'
+> echo "OK: ./data/ai/$(PARTICIPANT)/features_daily_labeled.csv"
+> $(PY) notebooks/NB2_Baseline_and_LSTM.py --features "./data/ai/$(PARTICIPANT)/features_daily_labeled.csv" --dry-run
 
 # Executa o NB2 com o labeled promovido
 nb2-run:
-> echo "🚀 NB2 RUN"
-> if [ ! -f "$(FEATURES_LABELED)" ]; then \
->   echo "❌ Missing: $(FEATURES_LABELED). Rode 'make etl-aggregate' primeiro."; exit 1; \
+> echo "NB2 RUN"
+> if [ ! -f "./data/ai/$(PARTICIPANT)/features_daily_labeled.csv" ]; then \
+>   echo "ERROR: Missing ./data/ai/$(PARTICIPANT)/features_daily_labeled.csv. Run 'make etl-aggregate' first."; exit 1; \
 > fi
-> $(PY) $(NB2_SCRIPT) --features "$(FEATURES_LABELED)"
-> echo "📊 NB2 concluído. Verifique notebooks/outputs/NB2/…"
+> $(PY) notebooks/NB2_Baseline_and_LSTM.py --features "./data/ai/$(PARTICIPANT)/features_daily_labeled.csv"
+> echo "NB2 finished; outputs -> notebooks/outputs/NB2/"
 
 .PHONY: selftest-extract
 selftest-extract:
