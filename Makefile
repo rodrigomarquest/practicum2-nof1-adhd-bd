@@ -155,6 +155,7 @@ ENV_ARGS ?=
 REPORT_ARGS ?=
 INTAKE_ARGS ?=
 PROV_ARGS ?=
+SOM_SCAN_FLAGS ?=
 
 
 install-dev:
@@ -1131,3 +1132,24 @@ selftest-extract:
 > @echo "Scanning: data/raw/$(PARTICIPANT)/apple and zepp"
 > @ls -lh data/raw/$(PARTICIPANT)/apple 2>/dev/null || true
 > @ls -lh data/raw/$(PARTICIPANT)/zepp  2>/dev/null || true
+
+SOM_SCAN_FLAGS ?=
+
+.PHONY: som-scan
+som-scan:
+> @test -n "$(PARTICIPANT)" || (echo "Set PARTICIPANT=Pxxxxxx" && exit 2)
+> @test -n "$(SNAPSHOT_DATE)" || (echo "Set SNAPSHOT_DATE=YYYY-MM-DD" && exit 2)
+> @echo "Running som-scan for $(PARTICIPANT) snapshot=$(SNAPSHOT_DATE)"
+> @PYTHONPATH="$$PWD" $(VENV_PY) etl_pipeline.py som-scan \
+>   --participant "$(PARTICIPANT)" \
+>   --snapshot "$(SNAPSHOT_DATE)" \
+>   --cutover "$(CUTOVER)" \
+>   --tz_before "$(TZ_BEFORE)" \
+>   --tz_after "$(TZ_AFTER)" \
+>   $(SOM_SCAN_FLAGS)
+
+.PHONY: help-som-scan
+help-som-scan:
+> @echo "Examples:"
+> @echo "  make som-scan PARTICIPANT=P000001 SNAPSHOT_DATE=2025-09-29 SOM_SCAN_FLAGS='--trace'"
+> @echo "  make som-scan PARTICIPANT=P000001 SNAPSHOT_DATE=2025-09-29 SOM_SCAN_FLAGS='--write-normalized'"
