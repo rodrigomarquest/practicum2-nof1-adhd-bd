@@ -49,11 +49,11 @@ make nb2-run PARTICIPANT=P000001
 Commits since `v3.0.2` (up to 5):
 
 ```
+64bdc75 chore: Extract SoM from Auto Extract app
 1fec1cc chore: checkpoint before enduring SoM extratction
 e8e197e chore: checkpoint before implementing labels subcommand (safe state post-full)
 8eea5b1 chore: checkpoint before Copilot interventions
 c1fef18 chore(makefile): stabilize ETL → AI → NB2 workflow targets
-92dc97d chore: reorganize notebooks into notebooks/legacy and update .gitignore
 ```
 
 ---
