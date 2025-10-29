@@ -714,6 +714,7 @@ def main():
     p_ext.add_argument("--auto-zip", action="store_true", help="Auto-discover latest Apple/Zepp ZIPs under data/raw/<participant>/")
     p_ext.add_argument("--apple-zip", help="Optional override path to Apple ZIP (must be under data/raw/<participant>/)")
     p_ext.add_argument("--zepp-zip", help="Optional override path to Zepp ZIP (must be under data/raw/<participant>/)")
+    p_ext.add_argument("--debug-paths", action="store_true", help="Print resolved base_dir and exact glob patterns and files found for apple/zepp (debug)")
     p_ext.add_argument("--zepp-password", help="Password for encrypted Zepp ZIP (or set ZEPP_ZIP_PASSWORD env var)")
     p_ext.add_argument("--dry-run", action="store_true", help="Discovery/validation only; do not extract")
 
@@ -805,6 +806,39 @@ def main():
                 print(f"INFO: using participant '{pid}' -> raw path: {RAW_ARCHIVE / pid}")
             except Exception:
                 pass
+
+            # Debug: print resolved base_dir, the exact glob patterns and files found
+            if getattr(args, 'debug_paths', False):
+                try:
+                    resolved = (base_dir).resolve(strict=False)
+                    print(f"DEBUG: base_dir.resolve() = {resolved}")
+                    apple_pattern = base_dir / "apple" / "**" / "*.zip"
+                    zepp_pattern = base_dir / "zepp" / "**" / "*.zip"
+                    print(f"DEBUG: apple glob pattern: {apple_pattern}")
+                    print(f"DEBUG: zepp glob pattern: {zepp_pattern}")
+
+                    apple_files = list((base_dir / "apple").rglob("*.zip")) if (base_dir / "apple").exists() else []
+                    zepp_files = list((base_dir / "zepp").rglob("*.zip")) if (base_dir / "zepp").exists() else []
+
+                    print(f"DEBUG: apple files found: {len(apple_files)}")
+                    for p in sorted(apple_files):
+                        try:
+                            print(" -", p.resolve())
+                        except Exception:
+                            print(" -", p)
+
+                    print(f"DEBUG: zepp files found: {len(zepp_files)}")
+                    for p in sorted(zepp_files):
+                        try:
+                            print(" -", p.resolve())
+                        except Exception:
+                            print(" -", p)
+
+                    if not apple_files and not zepp_files:
+                        print(f"ERROR: No zip files under {resolved}. Check your working directory (PWD={os.getcwd()}) or PARTICIPANT.")
+                        return 1
+                except Exception as e:
+                    print(f"DEBUG: failed to enumerate paths: {e}")
 
             # Auto-discover if not overridden
             if not apple_candidate and args.auto_zip:

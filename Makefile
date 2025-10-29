@@ -241,9 +241,8 @@ ios-daily-join:
 > @echo "Aggregate iOS usage daily and join with AI features"
 > @NORMALIZED_DIR="$(NORMALIZED_DIR)" PROCESSED_DIR="$(PROCESSED_DIR)" AI_INPUT_DIR="$(AI_INPUT_DIR)" JOINED_DIR="$(JOINED_DIR)" $(VENV_PY) make_scripts/ios/aggregate_join_ios_daily.py --normalized-dir "$(NORMALIZED_DIR)/ios" --ai-input "$(AI_INPUT_DIR)/features_daily.csv" --processed-dir "$(PROCESSED_DIR)" --joined-dir "$(JOINED_DIR)" --participant "$(PARTICIPANT)" --snapshot "$(SNAPSHOT_DATE)"
 
-etl:
-> @IOS_BACKUP_DIR="$(IOS_BACKUP_DIR)" BACKUP_DIR="$(IOS_BACKUP_DIR)" EXTRACTED_DIR="$(EXTRACTED_DIR)" BACKUP_PASSWORD="$${BACKUP_PASSWORD:-}" \
->  ZEPP_ZIP_PASSWORD="$(ZEPP_ZIP_PASSWORD)" $(PY) $(ETL_PIPELINE) --cutover $(CUTOVER) --tz_before $(TZ_BEFORE) --tz_after $(TZ_AFTER)
+# Note: the `etl` alias (aliasing to `etl-full`) is defined later near the workflow help block.
+# The full pipeline runner `etl-full` should be used for end-to-end runs.
 
 
 # --- Zepp Export -------------------------------------------------
@@ -1031,9 +1030,9 @@ TZ_AFTER ?= Europe/Dublin
 
 .PHONY: etl-extract
 etl-extract:
-> @echo "=== ETL extract: participant=$(PARTICIPANT) snapshot=$(SNAPSHOT) ==="
+> @echo "=== etl-extract: participant=$(PARTICIPANT) snapshot=$(SNAPSHOT) PWD=$$(pwd) ==="
 > @test -d "data/raw/$(PARTICIPANT)" || (echo "ERROR: data/raw/$(PARTICIPANT) not found. Place participant-scoped zips under data/raw/$(PARTICIPANT)/" && exit 2)
-> @sh -c 'if ! ls "data/raw/$(PARTICIPANT)"/*.zip "data/raw/$(PARTICIPANT)"/*/*.zip >/dev/null 2>&1; then echo "ERROR: no zip files found under data/raw/$(PARTICIPANT)"; exit 2; fi'
+> @$(VENV_PY) tools/check_zips.py $(PARTICIPANT)
 > $(VENV_PY) etl_pipeline.py extract \
 >   --participant $(PARTICIPANT) --snapshot $(SNAPSHOT) \
 >   --cutover $(CUTOVER) --tz_before $(TZ_BEFORE) --tz_after $(TZ_AFTER) \
@@ -1075,14 +1074,13 @@ etl: etl-full
 
 # Pipeline completo (normalize + join + features). Respeita --auto-zip se implementado no script.
 etl-full:
-> echo "🧠 ETL FULL → $(PARTICIPANT) @ $(SNAPSHOT)"
+> echo ">>> ETL FULL > $(PARTICIPANT) @ $(SNAPSHOT)"
 > $(PY) etl_pipeline.py full \
 >   --participant $(PARTICIPANT) \
 >   --snapshot $(SNAPSHOT) \
 >   --cutover $(CUTOVER) \
 >   --tz_before $(TZ_BEFORE) \
->   --tz_after $(TZ_AFTER) \
->   --auto-zip
+>   --tz_after $(TZ_AFTER)
 > echo "✅ ETL FULL concluído. Verifique: $(ETL_JOINED_DIR)"
 
 # Apenas a fusão de labels (se o joined já existir)
@@ -1127,3 +1125,10 @@ nb2-run:
 > fi
 > $(PY) $(NB2_SCRIPT) --features "$(FEATURES_LABELED)"
 > echo "📊 NB2 concluído. Verifique notebooks/outputs/NB2/…"
+
+.PHONY: selftest-extract
+selftest-extract:
+> @echo "PWD=$$(pwd)"
+> @echo "Scanning: data/raw/$(PARTICIPANT)/apple and zepp"
+> @ls -lh data/raw/$(PARTICIPANT)/apple 2>/dev/null || true
+> @ls -lh data/raw/$(PARTICIPANT)/zepp  2>/dev/null || true
