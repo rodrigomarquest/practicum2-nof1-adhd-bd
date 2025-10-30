@@ -1050,7 +1050,11 @@ TZ_AFTER      ?= Europe/Dublin
 
 AI_DIR           ?= data/ai/$(PARTICIPANT)/snapshots/$(SNAPSHOT)
 NB2_SCRIPT       ?= notebooks/NB2_Baseline_and_LSTM.py
-FEATURES_LABELED ?= $(AI_DIR)/features_daily_labeled.csv
+# New layout variables: local active datasets and kaggle export root
+AI_LOCAL_ROOT    ?= ./data/ai/local
+AI_KAGGLE_ROOT   ?= ./data/ai/kaggle
+# FEATURES_LABELED defaults to the local active dataset location for backwards compat
+FEATURES_LABELED ?= $(AI_LOCAL_ROOT)/$(PARTICIPANT)/features_daily_labeled.csv
 ETL_JOINED_DIR   ?= data/etl/$(PARTICIPANT)/snapshots/$(SNAPSHOT)/joined
 ETL_LABELED_SRC  ?= $(ETL_JOINED_DIR)/features_daily_labeled.csv
 
@@ -1108,23 +1112,97 @@ etl-aggregate:
 > fi
 > echo "✅ Dataset AI pronto: $(FEATURES_LABELED)"
 
-# Mostra o comando NB2 e valida a existência do dataset
+# Mostra o comando NB2 e valida a existência do dataset (now using AI_LOCAL_ROOT)
 nb2-dry-run:
 > echo "NB2 DRY-RUN"
-> if [ ! -f "./data/ai/$(PARTICIPANT)/features_daily_labeled.csv" ]; then \
->   echo "ERROR: Missing ./data/ai/$(PARTICIPANT)/features_daily_labeled.csv. Run 'make etl-aggregate' first."; exit 1; \
+> if [ ! -f "$(FEATURES_LABELED)" ]; then \
+>   echo "ERROR: Missing $(FEATURES_LABELED). Run 'make etl-aggregate' or etl-promote-slug first."; exit 1; \
 > fi
-> echo "OK: ./data/ai/$(PARTICIPANT)/features_daily_labeled.csv"
-> $(PY) notebooks/NB2_Baseline_and_LSTM.py --features "./data/ai/$(PARTICIPANT)/features_daily_labeled.csv" --dry-run
+> echo "OK: $(FEATURES_LABELED)"
+> $(PY) notebooks/NB2_Baseline_and_LSTM.py --features "$(FEATURES_LABELED)" --dry-run
 
-# Executa o NB2 com o labeled promovido
+# Executa o NB2 com o labeled promovido (default path now points to AI_LOCAL_ROOT)
 nb2-run:
 > echo "NB2 RUN"
-> if [ ! -f "./data/ai/$(PARTICIPANT)/features_daily_labeled.csv" ]; then \
->   echo "ERROR: Missing ./data/ai/$(PARTICIPANT)/features_daily_labeled.csv. Run 'make etl-aggregate' first."; exit 1; \
+> if [ ! -f "$(FEATURES_LABELED)" ]; then \
+>   echo "ERROR: Missing $(FEATURES_LABELED). Run 'make etl-aggregate' or etl-promote-slug first."; exit 1; \
 > fi
-> $(PY) notebooks/NB2_Baseline_and_LSTM.py --features "./data/ai/$(PARTICIPANT)/features_daily_labeled.csv"
+> $(PY) notebooks/NB2_Baseline_and_LSTM.py --features "$(FEATURES_LABELED)"
 > echo "NB2 finished; outputs -> notebooks/outputs/NB2/"
+
+# ========= NB2 slug / packaging targets =========
+.PHONY: nb2-run-slug etl-promote-slug kaggle-pack clean-legacy
+
+# Run NB2 for a specific slug under AI_LOCAL_ROOT
+nb2-run-slug: check-nb2-entry
+> @test -n "$(SLUG)" || (echo "ERROR: SLUG must be provided. e.g. SLUG=p000001-s20250929-nb2v303-r1" && exit 1)
+> @test -f "$(AI_LOCAL_ROOT)/$(SLUG)/features_daily_labeled.csv" || (echo "ERROR: features file not found for slug: $(AI_LOCAL_ROOT)/$(SLUG)/features_daily_labeled.csv" && exit 1)
+> @echo "[NB2] Run slug=$(SLUG) -> $(AI_LOCAL_ROOT)/$(SLUG)/features_daily_labeled.csv"
+> $(PY) "$(NB2_SCRIPT)" --slug "$(SLUG)" --local-root "$(AI_LOCAL_ROOT)"
+
+# Run NB2 for a slug letting the script autodetect environment (no --local-root needed)
+nb2-run-auto: check-nb2-entry
+> @test -n "$(SLUG)" || (echo "ERROR: SLUG must be provided. e.g. SLUG=p000001-s20250929-nb2v303-r1" && exit 1)
+> @test -d "$(AI_LOCAL_ROOT)/$(SLUG)" || (echo "ERROR: slug not found under $(AI_LOCAL_ROOT): $(SLUG). Run 'make etl-promote-slug' or check path." && exit 1)
+> @echo "[NB2] Auto-run slug=$(SLUG) (script will autodetect local vs kaggle)"
+> $(PY) "$(NB2_SCRIPT)" --slug "$(SLUG)"
+
+# Promote an existing promoted snapshot into the slugged local datasets root
+etl-promote-slug:
+> @test -n "$(PARTICIPANT)" || (echo "Set PARTICIPANT=Pxxxxxx" && exit 2)
+> @test -n "$(SNAPSHOT)" || (echo "Set SNAPSHOT=YYYY-MM-DD" && exit 2)
+> @test -n "$(SLUG)" || (echo "Set SLUG=p000001-s20250929-nb2v303-r1" && exit 1)
+> if [ ! -f "$(ETL_LABELED_SRC)" ]; then echo "ERROR: expected labeled source at $(ETL_LABELED_SRC). Run 'make etl-full' and 'make etl-labels' first."; exit 1; fi
+> mkdir -p "$(AI_LOCAL_ROOT)/$(SLUG)"
+> cp -f "$(ETL_LABELED_SRC)" "$(AI_LOCAL_ROOT)/$(SLUG)/features_daily_labeled.csv"
+> if [ -f "$(ETL_JOINED_DIR)/version_log_enriched.csv" ]; then cp -f "$(ETL_JOINED_DIR)/version_log_enriched.csv" "$(AI_LOCAL_ROOT)/$(SLUG)/version_log_enriched.csv"; fi
+> echo "✅ Promoted snapshot -> $(AI_LOCAL_ROOT)/$(SLUG)/features_daily_labeled.csv"
+
+# Create a kaggle-ready zip from a slug folder with a small provenance file
+kaggle-pack:
+> @test -n "$(SLUG)" || (echo "ERROR: SLUG must be provided. e.g. SLUG=p000001-s20250929-nb2v303-r1" && exit 1)
+> @test -d "$(AI_LOCAL_ROOT)/$(SLUG)" || (echo "ERROR: slug folder missing: $(AI_LOCAL_ROOT)/$(SLUG)" && exit 1)
+> mkdir -p "$(AI_KAGGLE_ROOT)"
+> $(PY) -c "import json, pathlib; p=pathlib.Path('$(AI_LOCAL_ROOT)')/ '$(SLUG)'; (p/'provenance.json').write_text(json.dumps({'slug':'$(SLUG)'})); (p/'README.md').write_text('Kaggle package for $(SLUG)\n')"
+> $(PY) -c "import shutil; shutil.make_archive('$(AI_KAGGLE_ROOT)/$(SLUG)','zip','$(AI_LOCAL_ROOT)/$(SLUG)')"
+> echo "✅ Wrote kaggle package -> $(AI_KAGGLE_ROOT)/$(SLUG).zip"
+
+# Safely handle legacy data_ai folder: rename to data_ai_legacy_YYYYMMDD or delete if FORCE=1
+clean-legacy:
+> if [ -d "data_ai" ]; then \
+>   if [ "$(FORCE)" = "1" ]; then echo "Deleting legacy data_ai (FORCE=1)"; rm -rf data_ai; else bak="data_ai_legacy_$$(date +%Y%m%d)"; echo "Renaming data_ai -> $$bak"; mv data_ai "$$bak"; fi; \
+> else echo "No legacy data_ai dir found"; fi
+
+.PHONY: nb2-batch-dry-run nb2-batch check-nb2-entry check-local-root
+
+# ========= NB2 batch (discovery-based) =========
+# Vars:
+#   LOCAL_DATASETS_ROOT: where slugged datasets live locally (default ./data/ai/datasets)
+#   LIMIT: max number of datasets to process in batch (default 1)
+# Usage:
+#   make nb2-batch-dry-run
+#   make nb2-batch-dry-run LOCAL_DATASETS_ROOT=./data/ai/local LIMIT=2
+#   make nb2-batch
+#   make nb2-batch LOCAL_DATASETS_ROOT=./data/ai/local LIMIT=5
+AI_LOCAL_ROOT ?= ./data/ai/local
+LOCAL_DATASETS_ROOT ?= $(AI_LOCAL_ROOT)
+NB2_ENTRY ?= notebooks/NB2_Baseline_and_LSTM.py
+LIMIT ?= 1
+
+
+check-nb2-entry:
+> @test -f "$(NB2_ENTRY)" || (echo "ERROR: NB2 entry not found at $(NB2_ENTRY). Set NB2_ENTRY or fix path." && exit 1)
+
+check-local-root:
+> @test -d "$(LOCAL_DATASETS_ROOT)" || (echo "ERROR: LOCAL_DATASETS_ROOT not found: $(LOCAL_DATASETS_ROOT). Create a slug dir like p000001-s20250929-nb2v303-r1/" && exit 1)
+
+nb2-batch-dry-run: check-nb2-entry check-local-root
+> @echo "[NB2] Batch DRY-RUN from $(LOCAL_DATASETS_ROOT) (limit=$(LIMIT))"
+> $(PY) "$(NB2_ENTRY)" --batch --local-root "$(LOCAL_DATASETS_ROOT)" --limit $(LIMIT) --dry-run
+
+nb2-batch: check-nb2-entry check-local-root
+> @echo "[NB2] Batch RUN from $(LOCAL_DATASETS_ROOT) (limit=$(LIMIT))"
+> $(PY) "$(NB2_ENTRY)" --batch --local-root "$(LOCAL_DATASETS_ROOT)" --limit $(LIMIT)
 
 .PHONY: selftest-extract
 selftest-extract:
