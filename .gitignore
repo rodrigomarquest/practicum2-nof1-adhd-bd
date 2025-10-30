@@ -70,6 +70,8 @@ notebook.log
 notebooks/**/*
 !notebooks/*.ipynb
 !notebooks/README.md
+!notebooks/NB2_Baseline_and_LSTM.py
+
 # ignorar saídas e dados auxiliares em notebooks
 notebooks/**/eda_outputs/
 notebooks/**/data_*/
