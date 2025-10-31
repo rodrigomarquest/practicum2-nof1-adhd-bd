@@ -1,146 +1,71 @@
-.venv/
-data/
-notebooks/outputs/
-dist/assets/
-logs/
-backups/
-processed/
-__pycache__/
-*.pyc
-.ipynb_checkpoints/
-.DS_Store
-.vscode/
-# venv
-.venv/
-# data & outputs
-data/
-notebooks/outputs/
-dist/assets/
-logs/
-backups/
-processed/
-# caches
-__pycache__/
-*.pyc
-.ipynb_checkpoints/
-# OS/IDE
-.DS_Store
-.vscode/
 # ================================
-# Practicum2 – N-of-1 ADHD + BD
-# Git ignore rules for ETL, Kaggle notebooks, and ethical compliance
+# Practicum2 — N-of-1 ADHD + BD (v4.2)
+# Canonical ignore rules — local ETL + Kaggle
 # ================================
 
-# -------------------------------------------------------------------
-# 📂 ETL local data (raw / decrypted iOS backups)
-data_ai/
-!data_ai/.keep
-data_etl/
-!data_etl/.keep
-# Canonical data layout used in Makefile: data/etl and data/ai
-# Keep both legacy (data_etl/data_ai) and canonical paths ignored.
-data/etl/
-!data/etl/.keep
-data/ai/
-!data/ai/.keep
-
-# iOS extraction artefacts and decrypted outputs (personal/PII)
-decrypted_output/
-!decrypted_output/.keep
-ios_extract/**/*
-*_manifest.db
-*_knowledgec.db
-*_usage_daily.csv
-*.bplist
-*.sqlite*
-*.db
-*.plist
-*.tsv
-*.csv
-
-# -------------------------------------------------------------------
-# 🧩 System / OS
+# --- OS / IDE
 .DS_Store
 Thumbs.db
 desktop.ini
-ehthumbs.db
-Icon?
-$RECYCLE.BIN/
-*.lnk
+.vscode/
+.idea/
+.history/
+*.code-workspace
 
-# -------------------------------------------------------------------
-# 🐍 Python / Virtual environments
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.so
-*.egg-info/
+# --- Python / venv / caches
 .venv/
 env/
 venv/
 ENV/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
 *.egg
 pip-wheel-metadata/
 build/
 dist/
 
-# -------------------------------------------------------------------
-# 📓 Jupyter / Kaggle notebooks
+# --- Jupyter / Kaggle
 .ipynb_checkpoints/
 *.ipynb_backup
 *.nbconvert.ipynb
 notebook.log
 .kaggle/
 
-# Apenas os .ipynb e README do diretório notebooks ficam visíveis;
-# outputs/dados auxiliares CONTINUAM IGNORADOS.
-notebooks/**/*
-!notebooks/*.ipynb
-!notebooks/README.md
-!notebooks/NB2_Baseline_and_LSTM.py
-
-# ignorar saídas e dados auxiliares em notebooks
-notebooks/**/eda_outputs/
-notebooks/**/data_*/
-notebooks/**/figures/
-notebooks/**/artifacts/
-
-# -------------------------------------------------------------------
-# 🧾 Logs / temp / cache
-*.log
-*.tmp
-*.bak
-*.swp
-*.swo
-.cache/
-__logs__/
-__temp__/
-tmp/
-
-# -------------------------------------------------------------------
-# 🧰 IDE / Editors
-.vscode/
-.idea/
-.history/
-*.code-workspace
-
-# -------------------------------------------------------------------
-# 📊 Data files (genéricos)
+# --- Data layout (canonical)
 data/
 !data/sample_input/**
 !data/sample_output/**
-*.xlsx
-*.xls
-*.ods
-*.zip
-*.tar.gz
-*.parquet
-*.npy
-*.npz
+data/etl/
+!data/etl/.keep
+data/ai/
+!data/ai/.keep
 
-# -------------------------------------------------------------------
-# 🤖 Models / weights / serialized
+# --- Outputs / artifacts
+notebooks/outputs/
+logs/
+backups/
+processed/
+dist/assets/
+!dist/assets/.keep
+
+# --- Provenance (keep reports, ignore heavy/transient)
+provenance/cleanup_log_*.txt
+provenance/pip_freeze_*.txt
+provenance/hash_snapshot_*.json
+provenance/migrate_layout_*.json
+# keep audit CSV/MD
+!provenance/*.csv
+!provenance/*.md
+!provenance/zepp_zip_inventory.json
+!provenance/zepp_zip_filelist.tsv
+
+# --- Archive (completely ignored)
+archive/
+
+# --- Models / serialized weights
 *.tflite
 *.h5
 *.hdf5
@@ -150,86 +75,35 @@ data/
 *.pt
 *.ckpt
 
-# -------------------------------------------------------------------
-# 📈 Outputs / results / figures
+# --- Generic binaries / docs (keep README)
 *.png
 *.jpg
 *.jpeg
 *.svg
 *.pdf
 *.html
-*.yaml
-*.yml
 *.out
 *.txt
 !README.md
 
-# --- Allow requirements files to be tracked ---
-!requirements_*.txt
+# --- Config (track YAMLs in config/)
+config/*.tmp
+!config/*.yaml
 
-# -------------------------------------------------------------------
-# 🔐 Config / secrets / credentials
-.env
-.env.*
-secrets*.json
-config.yaml
-config.yml
-token_*.txt
-credentials.json
-apikey.txt
-*.pem
-*.key
-*.pfx
-*.cer
+# --- Requirements (centralized)
+!requirements/*.txt
 
-# -------------------------------------------------------------------
-# 🧪 Test / sandbox / scratch
-test_*.py
-debug_*.py
+# --- Legacy & scratch (sane defaults)
 sandbox/
 scratch/
-
-# Allow the specific test helper used by Makefile even if make_scripts/ is broadly ignored
-!make_scripts/test_etl_one_skip.py
-
-# -------------------------------------------------------------------
-# 🧬 Keep sample data, docs, and LaTeX
-!docs/**
-!models/**
-!ios_extract/README.md
-!README.md
-notebooks/eda_outputs/
-openchat.ps1
-
-# local backups
+*.tmp
+*.bak
 *.bak.*
+__logs__/
+__temp__/
+tmp/
 
-# Local timestamped backups
-*.bak.*
-
-# Local timestamped backups
-*.bak.*
-
-# local timestamped backups
-*.bak.*
-
-# Local user configs and stray/temp files
-.bashrc
-@echo
-pytest
-python
-
-# Common Python repo ignores
-.venv/
-__pycache__/
-*.pyc
-.vscode/
-.DS_Store
-
-# Notebooks antigos e experimentais
-notebooks/legacy/
-notebooks/legacy_*/
-
-# keep versioned YAMLs
-!config/*.yaml
-config/*.tmp
+# --- Notebooks: só raiz visível (NB1/NB2). Subpastas/artefatos ignorados.
+notebooks/**/*
+!notebooks/*.ipynb
+!notebooks/README.md
