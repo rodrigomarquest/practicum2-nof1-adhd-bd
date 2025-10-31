@@ -1396,3 +1396,19 @@ pack-kaggle:
 > print('Wrote', zipfn)
 > PY
 
+.PHONY: install-dev install-kaggle install-local
+
+install-dev:
+> echo ">>> install-dev: requirements/dev.txt"
+> $(PYTHON) -m pip install -U pip
+> $(PYTHON) -m pip install -r requirements/dev.txt
+
+install-kaggle:
+> echo ">>> install-kaggle: requirements/kaggle.txt"
+> python -m pip install -U pip
+> python -m pip install -r requirements/kaggle.txt
+
+install-local:
+> echo ">>> install-local: requirements/local.txt"
+> $(PYTHON) -m pip install -U pip
+> $(PYTHON) -m pip install -r requirements/local.txt
