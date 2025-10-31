@@ -229,3 +229,7 @@ __pycache__/
 # Notebooks antigos e experimentais
 notebooks/legacy/
 notebooks/legacy_*/
+
+# keep versioned YAMLs
+!config/*.yaml
+config/*.tmp

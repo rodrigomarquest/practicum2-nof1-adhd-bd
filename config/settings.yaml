@@ -1,0 +1,25 @@
+seed: 42
+cv:
+  train_days: 120
+  gap_days: 10
+  val_days: 60
+rolling_windows: [7, 14]
+segment_column: segment_id
+date_column: date
+features_csv: "data/etl/<PID>/<SNAPSHOT>/joined/features_daily.csv"
+labeled_csv: "data/etl/<PID>/<SNAPSHOT>/joined/features_daily_labeled.csv"
+seed: 42
+cv:
+  train_days: 120
+  gap_days: 10
+  val_days: 60
+rolling_windows: [7, 14]
+segment_column: segment_id
+date_column: date
+features_csv: "data/etl/<PID>/<SNAPSHOT>/joined/features_daily.csv"
+labeled_csv: "data/etl/<PID>/<SNAPSHOT>/joined/features_daily_labeled.csv"
+]633;E;{   echo ""\x3b   echo "# v4.0.2 centralized defaults"\x3b   echo "participants_file: config/participants.yaml"\x3b   echo "default_participant: P000001"\x3b   echo "snapshot_date: 2025-09-29"\x3b } >> config/settings.yaml;6fa86249-f9dc-42f4-b9b3-1e21e29bb3c2]633;C
+# v4.0.2 centralized defaults
+participants_file: config/participants.yaml
+default_participant: P000001
+snapshot_date: 2025-09-29
