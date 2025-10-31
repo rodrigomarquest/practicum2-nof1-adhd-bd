@@ -76,15 +76,15 @@ clean-all: clean clean-data clean-provenance
 
 etl:
 > echo ">>> etl: running src.etl_pipeline"
-> $(PYTHON) -m src.etl_pipeline
+> PYTHONPATH="$$PWD" $(PYTHON) -m src.etl_pipeline
 
 # Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
 labels:
-> echo ">>> labels: running src.make_labels for $(PARTICIPANT) @ $(SNAPSHOT)"
-> $(PYTHON) -m src.make_labels \
+> @echo ">>> labels: running src.make_labels for $(PID) @ $(SNAPSHOT)"
+> @PYTHONPATH="$$PWD" $(PYTHON) -m src.make_labels \
 >   --rules config/label_rules.yaml \
->   --in  data/etl/$(PARTICIPANT)/snapshots/$(SNAPSHOT)/joined/features_daily.csv \
->   --out data/etl/$(PARTICIPANT)/snapshots/$(SNAPSHOT)/joined/features_daily_labeled.csv
+>   --in data/etl/$(PID)/snapshots/$(SNAPSHOT)/joined/features_daily.csv \
+>   --out data/etl/$(PID)/snapshots/$(SNAPSHOT)/joined/features_daily_labeled.csv
 
 
 
@@ -179,8 +179,8 @@ qc:
 PACK_OUT := dist/assets
 
 pack-kaggle:
-> @echo ">>> pack-kaggle: packaging Kaggle dataset snapshot for $(PARTICIPANT) $(SNAPSHOT)"
-> @PID=$(PARTICIPANT) SNAPSHOT=$(SNAPSHOT) $(PYTHON) - <<'PY'
+> @echo ">>> pack-kaggle: packaging Kaggle dataset snapshot for $(PID) $(SNAPSHOT)"
+> @PID=$(PID) SNAPSHOT=$(SNAPSHOT) $(PYTHON) - <<'PY'
 > import zipfile, pathlib, sys, os
 > pid = os.environ.get("PID", "$(PID)")
 > snap = os.environ.get("SNAPSHOT", "$(SNAPSHOT)")
