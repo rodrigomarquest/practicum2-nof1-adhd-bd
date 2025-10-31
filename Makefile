@@ -180,27 +180,7 @@ PACK_OUT := dist/assets
 
 pack-kaggle:
 > @echo ">>> pack-kaggle: packaging Kaggle dataset snapshot for $(PID) $(SNAPSHOT)"
-> @PID=$(PID) SNAPSHOT=$(SNAPSHOT) $(PYTHON) - <<'PY'
-> import zipfile, pathlib, sys, os
-> pid = os.environ.get("PID", "$(PID)")
-> snap = os.environ.get("SNAPSHOT", "$(SNAPSHOT)")
-> base = pathlib.Path(f"data/etl/{pid}/snapshots/{snap}/joined")
-> files = list(base.glob("features_daily*.csv"))
-> v = base / "version_log_enriched.csv"
-> if v.exists(): files.append(v)
-> readme = pathlib.Path("README.md")
-> if readme.exists(): files.append(readme)
-> if not files:
->     print("No files found to package from", base)
->     sys.exit(1)
-> outdir = pathlib.Path("dist/assets")
-> outdir.mkdir(parents=True, exist_ok=True)
-> zipfn = outdir / f"{pid}_{snap}_ai.zip"
-> with zipfile.ZipFile(zipfn, "w", compression=zipfile.ZIP_DEFLATED) as z:
->     for f in files:
->         z.write(f, arcname=f.name)
-> print("Wrote", zipfn)
-> PY
+> @PYTHONPATH="$$PWD" $(PYTHON) -m src.tools.pack_kaggle
 
 # -------- Help --------
 .PHONY: help
