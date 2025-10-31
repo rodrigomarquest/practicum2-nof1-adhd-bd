@@ -1,11 +1,39 @@
-# Excluir do 'git archive' (release zip/tar) — preserva localmente
-data_ai/ export-ignore
-data_etl/ export-ignore
-decrypted_output/ export-ignore
-*.csv export-ignore
-*.tsv export-ignore
-*.db export-ignore
-*.plist export-ignore
-.ipynb_checkpoints/ export-ignore
-.vscode/ export-ignore
-.venv/ export-ignore
+# ================================
+# Practicum2 — .gitattributes (v4)
+# - export-ignore: exclui do git archive (release .zip/.tar)
+# - EOL: normaliza onde scripts exigem LF
+# ================================
+
+# --- EOL normalization (scripts & Make)
+*.sh        text eol=lf
+Makefile    text eol=lf
+*.py        text eol=lf
+*.ipynb     -text
+
+# --- Excluir dados pesados/locais do release archive
+archive/                        export-ignore
+data/ai/                        export-ignore
+data/etl/                       export-ignore
+notebooks/outputs/              export-ignore
+dist/assets/                    export-ignore
+logs/                           export-ignore
+backups/                        export-ignore
+processed/                      export-ignore
+.venv/                          export-ignore
+.vscode/                        export-ignore
+.ipynb_checkpoints/             export-ignore
+
+# --- Provenance: manter relatórios, excluir transitórios
+provenance/cleanup_log_*.txt            export-ignore
+provenance/pip_freeze_*.txt             export-ignore
+provenance/hash_snapshot_*.json         export-ignore
+provenance/migrate_layout_*.json        export-ignore
+
+# --- CSV/TSV/DB: por padrão entram; use export-ignore só p/ pesados específicos
+# *.csv     export-ignore
+# *.tsv     export-ignore
+# *.db      export-ignore
+
+# --- Re-incluir amostras (sobrescreve export-ignore)
+data/sample_input/**             -export-ignore
+data/sample_output/**            -export-ignore

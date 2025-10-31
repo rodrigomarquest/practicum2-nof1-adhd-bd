@@ -1,0 +1,898 @@
+[
+  {
+    "src": "make_scripts\\create_cardio_join.py",
+    "file": ".\\fix_cardio_files.sh",
+    "line": 10,
+    "dst": "make_scripts\\create_cardio_join.py",
+    "classification": "top-level",
+    "match": "make_scripts/create_cardio_join.py"
+  },
+  {
+    "src": "make_scripts\\create_cardio_features.py",
+    "file": ".\\fix_cardio_files.sh",
+    "line": 16,
+    "dst": "make_scripts\\create_cardio_features.py",
+    "classification": "top-level",
+    "match": "make_scripts/create_cardio_features.py"
+  },
+  {
+    "src": "make_scripts\\create_cardio_join.py",
+    "file": ".\\install_cardio_min.sh",
+    "line": 48,
+    "dst": "make_scripts\\create_cardio_join.py",
+    "classification": "top-level",
+    "match": "make_scripts/create_cardio_join.py"
+  },
+  {
+    "src": "make_scripts\\create_cardio_features.py",
+    "file": ".\\install_cardio_min.sh",
+    "line": 53,
+    "dst": "make_scripts\\create_cardio_features.py",
+    "classification": "top-level",
+    "match": "make_scripts/create_cardio_features.py"
+  },
+  {
+    "src": "make_scripts\\ios_backup_probe.py",
+    "file": ".\\Makefile",
+    "line": 203,
+    "dst": "make_scripts\\ios\\ios_backup_probe.py",
+    "classification": "safe",
+    "match": "make_scripts/ios_backup_probe.py"
+  },
+  {
+    "src": "make_scripts\\manifest_probe.py",
+    "file": ".\\Makefile",
+    "line": 209,
+    "dst": "make_scripts\\ios\\manifest_probe.py",
+    "classification": "safe",
+    "match": "make_scripts/manifest_probe.py"
+  },
+  {
+    "src": "make_scripts\\normalize_ios_usage.py",
+    "file": ".\\Makefile",
+    "line": 214,
+    "dst": "make_scripts\\ios\\normalize_ios_usage.py",
+    "classification": "safe",
+    "match": "make_scripts/normalize_ios_usage.py"
+  },
+  {
+    "src": "make_scripts\\aggregate_join_ios_daily.py",
+    "file": ".\\Makefile",
+    "line": 219,
+    "dst": "make_scripts\\ios\\aggregate_join_ios_daily.py",
+    "classification": "safe",
+    "match": "make_scripts/aggregate_join_ios_daily.py"
+  },
+  {
+    "src": "make_scripts\\parse_zepp_make.py",
+    "file": ".\\Makefile",
+    "line": 241,
+    "dst": "make_scripts\\zepp\\parse_zepp_make.py",
+    "classification": "safe",
+    "match": "make_scripts/parse_zepp_make.py"
+  },
+  {
+    "src": "make_scripts\\parse_zepp_make.py",
+    "file": ".\\Makefile",
+    "line": 242,
+    "dst": "make_scripts\\zepp\\parse_zepp_make.py",
+    "classification": "safe",
+    "match": "make_scripts/parse_zepp_make.py"
+  },
+  {
+    "src": "make_scripts\\parse_zepp_make.py",
+    "file": ".\\Makefile",
+    "line": 252,
+    "dst": "make_scripts\\zepp\\parse_zepp_make.py",
+    "classification": "safe",
+    "match": "make_scripts/parse_zepp_make.py"
+  },
+  {
+    "src": "make_scripts\\parse_zepp_make.py",
+    "file": ".\\Makefile",
+    "line": 253,
+    "dst": "make_scripts\\zepp\\parse_zepp_make.py",
+    "classification": "safe",
+    "match": "make_scripts/parse_zepp_make.py"
+  },
+  {
+    "src": "make_scripts\\zepp_zip_inventory.py",
+    "file": ".\\Makefile",
+    "line": 258,
+    "dst": "make_scripts\\zepp\\zepp_zip_inventory.py",
+    "classification": "safe",
+    "match": "make_scripts/zepp_zip_inventory.py"
+  },
+  {
+    "src": "make_scripts\\zepp_normalize.py",
+    "file": ".\\Makefile",
+    "line": 263,
+    "dst": "make_scripts\\zepp\\zepp_normalize.py",
+    "classification": "safe",
+    "match": "make_scripts/zepp_normalize.py"
+  },
+  {
+    "src": "make_scripts\\zepp_daily_aggregate.py",
+    "file": ".\\Makefile",
+    "line": 268,
+    "dst": "make_scripts\\zepp\\zepp_daily_aggregate.py",
+    "classification": "safe",
+    "match": "make_scripts/zepp_daily_aggregate.py"
+  },
+  {
+    "src": "make_scripts\\pii_guard.py",
+    "file": ".\\Makefile",
+    "line": 318,
+    "dst": "make_scripts\\pii_guard.py",
+    "classification": "top-level",
+    "match": "make_scripts/pii_guard.py"
+  },
+  {
+    "src": "make_scripts\\apple_etl_summary.py",
+    "file": ".\\Makefile",
+    "line": 327,
+    "dst": "make_scripts\\apple\\apple_etl_summary.py",
+    "classification": "safe",
+    "match": "make_scripts/apple_etl_summary.py"
+  },
+  {
+    "src": "make_scripts\\hash_snapshot.py",
+    "file": ".\\Makefile",
+    "line": 337,
+    "dst": null,
+    "classification": "skip",
+    "match": "make_scripts/hash_snapshot.py"
+  },
+  {
+    "src": "make_scripts\\hash_snapshot.py",
+    "file": ".\\Makefile",
+    "line": 341,
+    "dst": null,
+    "classification": "skip",
+    "match": "make_scripts/hash_snapshot.py"
+  },
+  {
+    "src": "make_scripts\\compare_snapshots.py",
+    "file": ".\\Makefile",
+    "line": 342,
+    "dst": "make_scripts\\compare_snapshots.py",
+    "classification": "top-level",
+    "match": "make_scripts/compare_snapshots.py"
+  },
+  {
+    "src": "make_scripts\\simulate_partial_write.py",
+    "file": ".\\Makefile",
+    "line": 347,
+    "dst": "make_scripts\\simulate_partial_write.py",
+    "classification": "top-level",
+    "match": "make_scripts/simulate_partial_write.py"
+  },
+  {
+    "src": "make_scripts\\plots_all_lite.py",
+    "file": ".\\Makefile",
+    "line": 380,
+    "dst": "make_scripts\\plots_all_lite.py",
+    "classification": "top-level",
+    "match": "make_scripts/plots_all_lite.py"
+  },
+  {
+    "src": "make_scripts\\plots_all_lite.py",
+    "file": ".\\Makefile",
+    "line": 381,
+    "dst": "make_scripts\\plots_all_lite.py",
+    "classification": "top-level",
+    "match": "make_scripts/plots_all_lite.py"
+  },
+  {
+    "src": "make_scripts\\run_a6_apple.py",
+    "file": ".\\Makefile",
+    "line": 415,
+    "dst": "make_scripts\\apple\\run_a6_apple.py",
+    "classification": "safe",
+    "match": "make_scripts/run_a6_apple.py"
+  },
+  {
+    "src": "make_scripts\\run_a7_apple.py",
+    "file": ".\\Makefile",
+    "line": 422,
+    "dst": "make_scripts\\apple\\run_a7_apple.py",
+    "classification": "safe",
+    "match": "make_scripts/run_a7_apple.py"
+  },
+  {
+    "src": "make_scripts\\run_a8_labels.py",
+    "file": ".\\Makefile",
+    "line": 429,
+    "dst": "make_scripts\\apple\\run_a8_labels.py",
+    "classification": "safe",
+    "match": "make_scripts/run_a8_labels.py"
+  },
+  {
+    "src": "make_scripts\\clean_data_make.py",
+    "file": ".\\Makefile",
+    "line": 489,
+    "dst": "make_scripts\\clean_data_make.py",
+    "classification": "top-level",
+    "match": "make_scripts/clean_data_make.py"
+  },
+  {
+    "src": "make_scripts\\clean_data_make.py",
+    "file": ".\\Makefile",
+    "line": 493,
+    "dst": "make_scripts\\clean_data_make.py",
+    "classification": "top-level",
+    "match": "make_scripts/clean_data_make.py"
+  },
+  {
+    "src": "make_scripts\\clean_data_make.py",
+    "file": ".\\Makefile",
+    "line": 497,
+    "dst": "make_scripts\\clean_data_make.py",
+    "classification": "top-level",
+    "match": "make_scripts/clean_data_make.py"
+  },
+  {
+    "src": "make_scripts\\clean_data_make.py",
+    "file": ".\\Makefile",
+    "line": 501,
+    "dst": "make_scripts\\clean_data_make.py",
+    "classification": "top-level",
+    "match": "make_scripts/clean_data_make.py"
+  },
+  {
+    "src": "make_scripts\\clean_data_make.py",
+    "file": ".\\Makefile",
+    "line": 505,
+    "dst": "make_scripts\\clean_data_make.py",
+    "classification": "top-level",
+    "match": "make_scripts/clean_data_make.py"
+  },
+  {
+    "src": "make_scripts\\clean_data_make.py",
+    "file": ".\\Makefile",
+    "line": 511,
+    "dst": "make_scripts\\clean_data_make.py",
+    "classification": "top-level",
+    "match": "make_scripts/clean_data_make.py"
+  },
+  {
+    "src": "make_scripts\\lint_deprecated_exports.py",
+    "file": ".\\Makefile",
+    "line": 516,
+    "dst": "make_scripts\\lint_deprecated_exports.py",
+    "classification": "top-level",
+    "match": "make_scripts/lint_deprecated_exports.py"
+  },
+  {
+    "src": "make_scripts\\check_layout.py",
+    "file": ".\\Makefile",
+    "line": 523,
+    "dst": "make_scripts\\check_layout.py",
+    "classification": "top-level",
+    "match": "make_scripts/check_layout.py"
+  },
+  {
+    "src": "make_scripts\\test_etl_one_skip.py",
+    "file": ".\\Makefile",
+    "line": 529,
+    "dst": "make_scripts\\test_etl_one_skip.py",
+    "classification": "top-level",
+    "match": "make_scripts/test_etl_one_skip.py"
+  },
+  {
+    "src": "make_scripts\\venv_create.py",
+    "file": ".\\Makefile",
+    "line": 534,
+    "dst": "make_scripts\\venv_create.py",
+    "classification": "top-level",
+    "match": "make_scripts/venv_create.py"
+  },
+  {
+    "src": "make_scripts\\venv_create.py",
+    "file": ".\\Makefile",
+    "line": 535,
+    "dst": "make_scripts\\venv_create.py",
+    "classification": "top-level",
+    "match": "make_scripts/venv_create.py"
+  },
+  {
+    "src": "make_scripts\\version_guard.py",
+    "file": ".\\Makefile",
+    "line": 634,
+    "dst": "make_scripts\\release\\version_guard.py",
+    "classification": "top-level",
+    "match": "make_scripts/release/version_guard.py"
+  },
+  {
+    "src": "make_scripts\\version_guard.py",
+    "file": ".\\Makefile",
+    "line": 648,
+    "dst": "make_scripts\\release\\version_guard.py",
+    "classification": "top-level",
+    "match": "make_scripts/release/version_guard.py"
+  },
+  {
+    "src": "make_scripts\\version_guard.py",
+    "file": ".\\Makefile",
+    "line": 708,
+    "dst": "make_scripts\\release\\version_guard.py",
+    "classification": "top-level",
+    "match": "make_scripts/release/version_guard.py"
+  },
+  {
+    "src": "make_scripts\\sanitize_release_text.py",
+    "file": ".\\Makefile",
+    "line": 719,
+    "dst": "make_scripts\\sanitize_release_text.py",
+    "classification": "top-level",
+    "match": "make_scripts/sanitize_release_text.py"
+  },
+  {
+    "src": "make_scripts\\sanitize_release_text.py",
+    "file": ".\\Makefile",
+    "line": 720,
+    "dst": "make_scripts\\sanitize_release_text.py",
+    "classification": "top-level",
+    "match": "make_scripts/sanitize_release_text.py"
+  },
+  {
+    "src": "make_scripts\\suggested_version.py",
+    "file": ".\\Makefile",
+    "line": 729,
+    "dst": "make_scripts\\suggested_version.py",
+    "classification": "top-level",
+    "match": "make_scripts/suggested_version.py"
+  },
+  {
+    "src": "make_scripts\\lint_make.py",
+    "file": ".\\Makefile",
+    "line": 772,
+    "dst": "make_scripts\\lint_make.py",
+    "classification": "top-level",
+    "match": "make_scripts/lint_make.py"
+  },
+  {
+    "src": "make_scripts\\lint_layout.py",
+    "file": ".\\Makefile",
+    "line": 777,
+    "dst": "make_scripts\\lint_layout.py",
+    "classification": "top-level",
+    "match": "make_scripts/lint_layout.py"
+  },
+  {
+    "src": "make_scripts\\migrate_layout.py",
+    "file": ".\\Makefile",
+    "line": 784,
+    "dst": "make_scripts\\migrate_layout.py",
+    "classification": "top-level",
+    "match": "make_scripts/migrate_layout.py"
+  },
+  {
+    "src": "make_scripts\\intake_zip.py",
+    "file": ".\\Makefile",
+    "line": 795,
+    "dst": "make_scripts\\intake_zip.py",
+    "classification": "top-level",
+    "match": "make_scripts/intake_zip.py"
+  },
+  {
+    "src": "make_scripts\\provenance_audit.py",
+    "file": ".\\Makefile",
+    "line": 801,
+    "dst": "make_scripts\\provenance_audit.py",
+    "classification": "top-level",
+    "match": "make_scripts/provenance_audit.py"
+  },
+  {
+    "src": "make_scripts\\lint_make.py",
+    "file": ".\\Makefile",
+    "line": 817,
+    "dst": "make_scripts\\lint_make.py",
+    "classification": "top-level",
+    "match": "make_scripts/lint_make.py"
+  },
+  {
+    "src": "make_scripts\\clean_data_make.py",
+    "file": ".\\Makefile",
+    "line": 826,
+    "dst": "make_scripts\\clean_data_make.py",
+    "classification": "top-level",
+    "match": "make_scripts/clean_data_make.py"
+  },
+  {
+    "src": "make_scripts\\clean_data_make.py",
+    "file": ".\\Makefile",
+    "line": 827,
+    "dst": "make_scripts\\clean_data_make.py",
+    "classification": "top-level",
+    "match": "make_scripts/clean_data_make.py"
+  },
+  {
+    "src": "make_scripts\\clean_data_make.py",
+    "file": ".\\Makefile",
+    "line": 828,
+    "dst": "make_scripts\\clean_data_make.py",
+    "classification": "top-level",
+    "match": "make_scripts/clean_data_make.py"
+  },
+  {
+    "src": "make_scripts\\clean_data_make.py",
+    "file": ".\\Makefile",
+    "line": 829,
+    "dst": "make_scripts\\clean_data_make.py",
+    "classification": "top-level",
+    "match": "make_scripts/clean_data_make.py"
+  },
+  {
+    "src": "make_scripts\\env_versions.py",
+    "file": ".\\Makefile",
+    "line": 834,
+    "dst": "make_scripts\\env_versions.py",
+    "classification": "top-level",
+    "match": "make_scripts/env_versions.py"
+  },
+  {
+    "src": "make_scripts\\env_versions.py",
+    "file": ".\\Makefile",
+    "line": 835,
+    "dst": "make_scripts\\env_versions.py",
+    "classification": "top-level",
+    "match": "make_scripts/env_versions.py"
+  },
+  {
+    "src": "make_scripts\\freeze_model_input.py",
+    "file": ".\\Makefile",
+    "line": 855,
+    "dst": "make_scripts\\freeze_model_input.py",
+    "classification": "top-level",
+    "match": "make_scripts/freeze_model_input.py"
+  },
+  {
+    "src": "make_scripts\\freeze_model_input.py",
+    "file": ".\\Makefile",
+    "line": 856,
+    "dst": "make_scripts\\freeze_model_input.py",
+    "classification": "top-level",
+    "match": "make_scripts/freeze_model_input.py"
+  },
+  {
+    "src": "make_scripts\\weekly_report.py",
+    "file": ".\\Makefile",
+    "line": 890,
+    "dst": "make_scripts\\weekly_report.py",
+    "classification": "top-level",
+    "match": "make_scripts/weekly_report.py"
+  },
+  {
+    "src": "make_scripts\\weekly_report.py",
+    "file": ".\\Makefile",
+    "line": 891,
+    "dst": "make_scripts\\weekly_report.py",
+    "classification": "top-level",
+    "match": "make_scripts/weekly_report.py"
+  },
+  {
+    "src": "make_scripts\\patch_cardio_segments.py",
+    "file": ".\\patch_cardio_segments.sh",
+    "line": 7,
+    "dst": "make_scripts\\patch_cardio_segments.py",
+    "classification": "top-level",
+    "match": "make_scripts/patch_cardio_segments.py"
+  },
+  {
+    "src": "make_scripts\\install_etl_pipeline.py",
+    "file": ".\\refactor_etl_pipeline.sh",
+    "line": 13,
+    "dst": "make_scripts\\install_etl_pipeline.py",
+    "classification": "top-level",
+    "match": "make_scripts/install_etl_pipeline.py"
+  },
+  {
+    "src": "make_scripts\\run_a6_apple.py",
+    "file": ".\\.github\\workflows\\etl_smoke.yml",
+    "line": 63,
+    "dst": "make_scripts\\apple\\run_a6_apple.py",
+    "classification": "safe",
+    "match": "make_scripts/run_a6_apple.py"
+  },
+  {
+    "src": "make_scripts\\run_a6_apple.py",
+    "file": ".\\.github\\workflows\\etl_smoke.yml",
+    "line": 69,
+    "dst": "make_scripts\\apple\\run_a6_apple.py",
+    "classification": "safe",
+    "match": "make_scripts/run_a6_apple.py"
+  },
+  {
+    "src": "make_scripts\\run_a7_apple.py",
+    "file": ".\\.github\\workflows\\etl_smoke.yml",
+    "line": 75,
+    "dst": "make_scripts\\apple\\run_a7_apple.py",
+    "classification": "safe",
+    "match": "make_scripts/run_a7_apple.py"
+  },
+  {
+    "src": "make_scripts\\clean_data.py",
+    "file": ".\\make_scripts\\clean_data.py",
+    "line": 6,
+    "dst": "make_scripts\\utils\\clean_data.py",
+    "classification": "safe",
+    "match": "make_scripts/clean_data.py"
+  },
+  {
+    "src": "make_scripts\\foo.py",
+    "file": ".\\make_scripts\\common.py",
+    "line": 4,
+    "dst": null,
+    "classification": "skip",
+    "match": "make_scripts/foo.py"
+  },
+  {
+    "src": "make_scripts\\compare_snapshots.py",
+    "file": ".\\make_scripts\\compare_snapshots.py",
+    "line": 4,
+    "dst": "make_scripts\\compare_snapshots.py",
+    "classification": "top-level",
+    "match": "make_scripts/compare_snapshots.py"
+  },
+  {
+    "src": "make_scripts\\env_versions.py",
+    "file": ".\\make_scripts\\env_versions.py",
+    "line": 5,
+    "dst": "make_scripts\\env_versions.py",
+    "classification": "top-level",
+    "match": "make_scripts/env_versions.py"
+  },
+  {
+    "src": "make_scripts\\intake_zip.py",
+    "file": ".\\make_scripts\\intake_zip.py",
+    "line": 6,
+    "dst": "make_scripts\\intake_zip.py",
+    "classification": "top-level",
+    "match": "make_scripts/intake_zip.py"
+  },
+  {
+    "src": "make_scripts\\migrate_layout.py",
+    "file": ".\\make_scripts\\lint_deprecated_exports.py",
+    "line": 10,
+    "dst": "make_scripts\\migrate_layout.py",
+    "classification": "top-level",
+    "match": "make_scripts/migrate_layout.py"
+  },
+  {
+    "src": "make_scripts\\lint_deprecated_exports.py",
+    "file": ".\\make_scripts\\lint_deprecated_exports.py",
+    "line": 11,
+    "dst": "make_scripts\\lint_deprecated_exports.py",
+    "classification": "top-level",
+    "match": "make_scripts/lint_deprecated_exports.py"
+  },
+  {
+    "src": "make_scripts\\lint_layout.py",
+    "file": ".\\make_scripts\\lint_deprecated_exports.py",
+    "line": 13,
+    "dst": "make_scripts\\lint_layout.py",
+    "classification": "top-level",
+    "match": "make_scripts/lint_layout.py"
+  },
+  {
+    "src": "make_scripts\\migrate_layout.py",
+    "file": ".\\make_scripts\\lint_layout.py",
+    "line": 20,
+    "dst": "make_scripts\\migrate_layout.py",
+    "classification": "top-level",
+    "match": "make_scripts/migrate_layout.py"
+  },
+  {
+    "src": "make_scripts\\lint_deprecated_exports.py",
+    "file": ".\\make_scripts\\lint_layout.py",
+    "line": 20,
+    "dst": "make_scripts\\lint_deprecated_exports.py",
+    "classification": "top-level",
+    "match": "make_scripts/lint_deprecated_exports.py"
+  },
+  {
+    "src": "make_scripts\\lint_layout.py",
+    "file": ".\\make_scripts\\lint_layout.py",
+    "line": 20,
+    "dst": "make_scripts\\lint_layout.py",
+    "classification": "top-level",
+    "match": "make_scripts/lint_layout.py"
+  },
+  {
+    "src": "make_scripts\\migrate_layout.py",
+    "file": ".\\make_scripts\\lint_layout.py",
+    "line": 49,
+    "dst": "make_scripts\\migrate_layout.py",
+    "classification": "top-level",
+    "match": "make_scripts/migrate_layout.py"
+  },
+  {
+    "src": "make_scripts\\intake_zip.py",
+    "file": ".\\make_scripts\\lint_layout.py",
+    "line": 49,
+    "dst": "make_scripts\\intake_zip.py",
+    "classification": "top-level",
+    "match": "make_scripts/intake_zip.py"
+  },
+  {
+    "src": "make_scripts\\provenance_audit.py",
+    "file": ".\\make_scripts\\lint_layout.py",
+    "line": 49,
+    "dst": "make_scripts\\provenance_audit.py",
+    "classification": "top-level",
+    "match": "make_scripts/provenance_audit.py"
+  },
+  {
+    "src": "make_scripts\\migrate_layout.py",
+    "file": ".\\make_scripts\\lint_layout.py",
+    "line": 51,
+    "dst": "make_scripts\\migrate_layout.py",
+    "classification": "top-level",
+    "match": "make_scripts/migrate_layout.py"
+  },
+  {
+    "src": "make_scripts\\intake_zip.py",
+    "file": ".\\make_scripts\\lint_layout.py",
+    "line": 51,
+    "dst": "make_scripts\\intake_zip.py",
+    "classification": "top-level",
+    "match": "make_scripts/intake_zip.py"
+  },
+  {
+    "src": "make_scripts\\provenance_audit.py",
+    "file": ".\\make_scripts\\lint_layout.py",
+    "line": 51,
+    "dst": "make_scripts\\provenance_audit.py",
+    "classification": "top-level",
+    "match": "make_scripts/provenance_audit.py"
+  },
+  {
+    "src": "make_scripts\\clean_data_make.py",
+    "file": ".\\make_scripts\\lint_layout.py",
+    "line": 51,
+    "dst": "make_scripts\\clean_data_make.py",
+    "classification": "top-level",
+    "match": "make_scripts/clean_data_make.py"
+  },
+  {
+    "src": "make_scripts\\lint_layout.py",
+    "file": ".\\make_scripts\\lint_layout.py",
+    "line": 51,
+    "dst": "make_scripts\\lint_layout.py",
+    "classification": "top-level",
+    "match": "make_scripts/lint_layout.py"
+  },
+  {
+    "src": "make_scripts\\lint_deprecated_exports.py",
+    "file": ".\\make_scripts\\lint_layout.py",
+    "line": 51,
+    "dst": "make_scripts\\lint_deprecated_exports.py",
+    "classification": "top-level",
+    "match": "make_scripts/lint_deprecated_exports.py"
+  },
+  {
+    "src": "make_scripts\\migrate_layout.py",
+    "file": ".\\make_scripts\\migrate_layout.py",
+    "line": 8,
+    "dst": "make_scripts\\migrate_layout.py",
+    "classification": "top-level",
+    "match": "make_scripts/migrate_layout.py"
+  },
+  {
+    "src": "make_scripts\\migrate_layout.py",
+    "file": ".\\make_scripts\\migrate_layout.py",
+    "line": 9,
+    "dst": "make_scripts\\migrate_layout.py",
+    "classification": "top-level",
+    "match": "make_scripts/migrate_layout.py"
+  },
+  {
+    "src": "make_scripts\\migrate_to_snapshot_layout.py",
+    "file": ".\\make_scripts\\migrate_to_snapshot_layout.py",
+    "line": 4,
+    "dst": "make_scripts\\migrate_to_snapshot_layout.py",
+    "classification": "top-level",
+    "match": "make_scripts/migrate_to_snapshot_layout.py"
+  },
+  {
+    "src": "make_scripts\\release_notes.py",
+    "file": ".\\make_scripts\\release_notes.py",
+    "line": 5,
+    "dst": "make_scripts\\release_notes.py",
+    "classification": "top-level",
+    "match": "make_scripts/release_notes.py"
+  },
+  {
+    "src": "make_scripts\\run_a6_apple.py",
+    "file": ".\\make_scripts\\run_a6_apple.py",
+    "line": 5,
+    "dst": "make_scripts\\apple\\run_a6_apple.py",
+    "classification": "safe",
+    "match": "make_scripts/run_a6_apple.py"
+  },
+  {
+    "src": "make_scripts\\run_a7_apple.py",
+    "file": ".\\make_scripts\\run_a7_apple.py",
+    "line": 9,
+    "dst": "make_scripts\\apple\\run_a7_apple.py",
+    "classification": "safe",
+    "match": "make_scripts/run_a7_apple.py"
+  },
+  {
+    "src": "make_scripts\\run_a8_labels.py",
+    "file": ".\\make_scripts\\run_a8_labels.py",
+    "line": 10,
+    "dst": "make_scripts\\apple\\run_a8_labels.py",
+    "classification": "safe",
+    "match": "make_scripts/run_a8_labels.py"
+  },
+  {
+    "src": "make_scripts\\set_extracted_mtime.py",
+    "file": ".\\make_scripts\\set_extracted_mtime.py",
+    "line": 4,
+    "dst": "make_scripts\\set_extracted_mtime.py",
+    "classification": "top-level",
+    "match": "make_scripts/set_extracted_mtime.py"
+  },
+  {
+    "src": "make_scripts\\simulate_partial_write.py",
+    "file": ".\\make_scripts\\simulate_partial_write.py",
+    "line": 4,
+    "dst": "make_scripts\\simulate_partial_write.py",
+    "classification": "top-level",
+    "match": "make_scripts/simulate_partial_write.py"
+  },
+  {
+    "src": "make_scripts\\update_latest_snapshot.py",
+    "file": ".\\make_scripts\\update_latest_snapshot.py",
+    "line": 4,
+    "dst": "make_scripts\\update_latest_snapshot.py",
+    "classification": "top-level",
+    "match": "make_scripts/update_latest_snapshot.py"
+  },
+  {
+    "src": "make_scripts\\venv_create.py",
+    "file": ".\\make_scripts\\venv_create.py",
+    "line": 7,
+    "dst": "make_scripts\\venv_create.py",
+    "classification": "top-level",
+    "match": "make_scripts/venv_create.py"
+  },
+  {
+    "src": "make_scripts\\venv_create.py",
+    "file": ".\\make_scripts\\venv_create.py",
+    "line": 8,
+    "dst": "make_scripts\\venv_create.py",
+    "classification": "top-level",
+    "match": "make_scripts/venv_create.py"
+  },
+  {
+    "src": "make_scripts\\zepp_normalize.py",
+    "file": ".\\make_scripts\\zepp_normalize.py",
+    "line": 160,
+    "dst": "make_scripts\\zepp\\zepp_normalize.py",
+    "classification": "safe",
+    "match": "make_scripts/zepp_normalize.py"
+  },
+  {
+    "src": "make_scripts\\run_a6_apple.py",
+    "file": ".\\make_scripts\\apple\\run_a6_apple.py",
+    "line": 4,
+    "dst": "make_scripts\\apple\\run_a6_apple.py",
+    "classification": "safe",
+    "match": "make_scripts/run_a6_apple.py"
+  },
+  {
+    "src": "make_scripts\\hash_snapshot.py",
+    "file": ".\\make_scripts\\utils\\hashing.py",
+    "line": 4,
+    "dst": null,
+    "classification": "skip",
+    "match": "make_scripts/hash_snapshot.py"
+  },
+  {
+    "src": "make_scripts\\zepp_normalize.py",
+    "file": ".\\make_scripts\\zepp\\zepp_normalize.py",
+    "line": 160,
+    "dst": "make_scripts\\zepp\\zepp_normalize.py",
+    "classification": "safe",
+    "match": "make_scripts/zepp_normalize.py"
+  },
+  {
+    "src": "make_scripts\\zepp_zip_inventory.py",
+    "file": ".\\tests\\test_zepp_inventory_aes.py",
+    "line": 20,
+    "dst": "make_scripts\\zepp\\zepp_zip_inventory.py",
+    "classification": "safe",
+    "match": "make_scripts/zepp_zip_inventory.py"
+  },
+  {
+    "src": "make_scripts\\common.py",
+    "file": ".\\make_scripts\\freeze_model_input.py",
+    "line": 11,
+    "dst": "make_scripts\\common.py",
+    "classification": "top-level",
+    "match": "import make_scripts.common"
+  },
+  {
+    "src": "make_scripts\\pii_guard.py",
+    "file": ".\\make_scripts\\intake_zip.py",
+    "line": 185,
+    "dst": "make_scripts\\pii_guard.py",
+    "classification": "top-level",
+    "match": "import make_scripts.pii_guard"
+  },
+  {
+    "src": "make_scripts\\io_utils.py",
+    "file": ".\\make_scripts\\run_a6_apple.py",
+    "line": 33,
+    "dst": "make_scripts\\io_utils.py",
+    "classification": "top-level",
+    "match": "import make_scripts.io_utils"
+  },
+  {
+    "src": "make_scripts\\common.py",
+    "file": ".\\make_scripts\\weekly_report.py",
+    "line": 10,
+    "dst": "make_scripts\\common.py",
+    "classification": "top-level",
+    "match": "import make_scripts.common"
+  },
+  {
+    "src": "make_scripts\\run_a6_apple.py",
+    "file": ".\\make_scripts\\apple\\run_a6_apple.py",
+    "line": 10,
+    "dst": "make_scripts\\apple\\run_a6_apple.py",
+    "classification": "safe",
+    "match": "import make_scripts.run_a6_apple"
+  },
+  {
+    "src": "make_scripts\\run_a7_apple.py",
+    "file": ".\\make_scripts\\apple\\run_a7_apple.py",
+    "line": 5,
+    "dst": "make_scripts\\apple\\run_a7_apple.py",
+    "classification": "safe",
+    "match": "import make_scripts.run_a7_apple"
+  },
+  {
+    "src": "make_scripts\\run_a8_labels.py",
+    "file": ".\\make_scripts\\apple\\run_a8_labels.py",
+    "line": 5,
+    "dst": "make_scripts\\apple\\run_a8_labels.py",
+    "classification": "safe",
+    "match": "import make_scripts.run_a8_labels"
+  },
+  {
+    "src": "make_scripts\\aggregate_join_ios_daily.py",
+    "file": ".\\make_scripts\\ios\\aggregate_join_ios_daily.py",
+    "line": 5,
+    "dst": "make_scripts\\ios\\aggregate_join_ios_daily.py",
+    "classification": "safe",
+    "match": "import make_scripts.aggregate_join_ios_daily"
+  },
+  {
+    "src": "make_scripts\\ios_backup_probe.py",
+    "file": ".\\make_scripts\\ios\\ios_backup_probe.py",
+    "line": 5,
+    "dst": "make_scripts\\ios\\ios_backup_probe.py",
+    "classification": "safe",
+    "match": "import make_scripts.ios_backup_probe"
+  },
+  {
+    "src": "make_scripts\\manifest_probe.py",
+    "file": ".\\make_scripts\\ios\\manifest_probe.py",
+    "line": 5,
+    "dst": "make_scripts\\ios\\manifest_probe.py",
+    "classification": "safe",
+    "match": "import make_scripts.manifest_probe"
+  },
+  {
+    "src": "make_scripts\\normalize_ios_usage.py",
+    "file": ".\\make_scripts\\ios\\normalize_ios_usage.py",
+    "line": 5,
+    "dst": "make_scripts\\ios\\normalize_ios_usage.py",
+    "classification": "safe",
+    "match": "import make_scripts.normalize_ios_usage"
+  }
+]

@@ -1,0 +1,57 @@
+name: Close Issues on Release
+on:
+  release:
+    types: [published]
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Parse config
+        id: cfg
+        run: |
+          set -e
+          if [ ! -f ".github/close_on_release.yml" ]; then
+            echo "no_config=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          python - <<'PY' > parsed.txt
+import sys, yaml, os
+cfg = yaml.safe_load(open('.github/close_on_release.yml','r',encoding='utf-8'))
+ver = (cfg or {}).get('version','')
+issues = (cfg or {}).get('issues',[])
+print(f"version={ver}")
+print("issues=" + ",".join(str(i) for i in issues))
+PY
+          cat parsed.txt | while IFS= read -r line; do echo "$line" >> $GITHUB_OUTPUT; done
+      - name: Maybe close
+        if: steps.cfg.outputs.no_config != 'true'
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          CONF_VERSION: ${{ steps.cfg.outputs.version }}
+          ISSUES: ${{ steps.cfg.outputs.issues }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="${TAG_NAME#v}"
+          if [ -z "$CONF_VERSION" ] || [ -z "$ISSUES" ]; then
+            echo "Config missing version/issues; skipping."
+            exit 0
+          fi
+          if [ "$TAG" != "$CONF_VERSION" ]; then
+            echo "Config version ($CONF_VERSION) != released ($TAG); skipping."
+            exit 0
+          fi
+          IFS=',' read -ra arr <<< "$ISSUES"
+          for num in "${arr[@]}"; do
+            num="${num//[!0-9]/}"
+            if [ -n "$num" ]; then
+              gh issue close "$num" --comment "Closed on release v${TAG_NAME}. See release notes."
+              echo "Closed #$num"
+            fi
+          done

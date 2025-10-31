@@ -1,4 +1,6 @@
-from .iphone_backup import EncryptedBackup
-from .utils import RelativePath, RelativePathsLike, DomainLike, MatchFiles
+from importlib import import_module as _imp
 
-__all__ = ["EncryptedBackup", "RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles"]
+iphone_backup = _imp("src.domains.iphone_backup.iphone_backup")
+utils = _imp("src.domains.iphone_backup.utils")
+
+__all__ = ["iphone_backup", "utils"]

@@ -1,21 +1,6 @@
-"""Lightweight I/O utilities (stubs)."""
-import os, warnings, pandas as pd
-
-def read_csv_if_exists(path: str, **kwargs) -> pd.DataFrame | None:
-    try:
-        return pd.read_csv(path, **kwargs) if os.path.exists(path) else None
-    except Exception as e:
-        warnings.warn(f'read_csv_if_exists falhou: {e}')
-        return None
-
-def ensure_dir(path: str): os.makedirs(path, exist_ok=True)
-
-def to_local_dt(series, tz: str):
-    s = pd.to_datetime(series, errors='coerce', utc=True)
-    try:
-        return s.dt.tz_convert(tz)
-    except Exception:
-        return s
-
-def date_col(series): return pd.to_datetime(series).dt.date
-
+# Thin re-export for legacy import path: etl_modules.common.io
+from importlib import import_module as _imp
+_mod = _imp('src.domains.common.io')
+globals().update(_mod.__dict__)
+del _imp, _mod
+__all__ = [k for k in globals().keys() if not k.startswith('__')]

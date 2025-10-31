@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse
 import json
 import hashlib
 import os
-import tempfile
 from pathlib import Path
-from collections import Counter
 from typing import Dict, Callable, Any
 
-import numpy as np
 import pandas as pd
 
 
@@ -67,17 +63,17 @@ def agg_map_for(df: pd.DataFrame) -> Dict[str, Any]:
 
 
 def aggregate_snapshot(snapshot_dir: Path, labels: str = 'none') -> Dict[str, str | None]:
-    # common filenames
-    FEATURES_UPDATED = 'features_daily_updated.csv'
+    # common filenames (canonical)
+    FEATURES_FILE = 'features_daily.csv'
     STATE_SYNTHETIC = 'state_of_mind_synthetic.csv'
 
-    features_path = snapshot_dir / FEATURES_UPDATED
+    features_path = snapshot_dir / FEATURES_FILE
     if not features_path.exists():
-        raise FileNotFoundError(f"{FEATURES_UPDATED} not found: {features_path}")
+        raise FileNotFoundError(f"{FEATURES_FILE} not found: {features_path}")
 
     fdf = pd.read_csv(features_path, dtype={'date': 'string'})
     if fdf.empty:
-        raise ValueError('features_daily_updated.csv is empty')
+        raise ValueError(f'{FEATURES_FILE} is empty')
 
     # ensure date column -> date
     fdf['date'] = pd.to_datetime(fdf['date'], errors='coerce').dt.date
@@ -220,7 +216,7 @@ def aggregate_snapshot(snapshot_dir: Path, labels: str = 'none') -> Dict[str, st
         'type': 'aggregate_daily',
         'snapshot_dir': str(snapshot_dir),
         'inputs': {
-            FEATURES_UPDATED: _sha256_file(features_path),
+            FEATURES_FILE: _sha256_file(features_path),
             STATE_SYNTHETIC: _sha256_file(snapshot_dir / STATE_SYNTHETIC) if (snapshot_dir / STATE_SYNTHETIC).exists() else None
         },
         'outputs': {
@@ -249,7 +245,7 @@ def run(snapshot_dir: Path, labels: str = "none") -> dict:
     res = aggregate_snapshot(snapshot_dir, labels=labels)
 
     # Re-open outputs to compute and print summary/logs (minimal, once per run)
-    features_path = snapshot_dir / 'features_daily_updated.csv'
+    features_path = snapshot_dir / 'features_daily.csv'
     fdf = pd.read_csv(features_path, dtype={'date': 'string'})
     # numeric cols count
     numeric_cols = [c for c in fdf.columns if pd.api.types.is_numeric_dtype(fdf[c])]
@@ -302,6 +298,6 @@ if __name__ == "__main__":
     ap.add_argument("--labels", choices=["none", "synthetic"], default="none")
     a = ap.parse_args()
     from pathlib import Path as _P
-    snap = _P(f"data_ai/{a.participant}/snapshots/{a.snapshot}")
+    snap = _P(f"data/etl/{a.participant}/snapshots/{a.snapshot}")
     out = run(snap, labels=a.labels)
     print("✅ aggregate done:", out)

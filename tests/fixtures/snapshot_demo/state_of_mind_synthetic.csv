@@ -1,0 +1,4 @@
+date,score,label
+2020-01-01,0.2,positive
+2020-01-02,-0.5,negative
+2020-01-03,0.0,neutral

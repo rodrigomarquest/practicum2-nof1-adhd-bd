@@ -1,0 +1,15 @@
+participants:
+  - id: P000001
+    label: primary
+    tz: Europe/Dublin
+    consent: self
+  - id: P000002
+    label: secondary
+    tz: America/Sao_Paulo
+    consent: external # ensure written consent stored offline
+    nt: self
+  - id: P000003
+    label: secondary
+    tz: America/Sao_Paulo
+    consent: external # ensure written consent stored offline
+    nt: self
