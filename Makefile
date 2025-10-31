@@ -17,6 +17,7 @@ PYTHON := $(if $(wildcard .venv/Scripts/python.exe),.venv/Scripts/python.exe,$(i
 VENV_DIR := .venv
 PID ?= P000001
 SNAPSHOT ?= 2025-09-29
+ETL_CMD ?= full
 
 # -------- Installation (centralized requirements/) --------
 .PHONY: install-base install-dev install-kaggle install-local
@@ -76,7 +77,7 @@ clean-all: clean clean-data clean-provenance
 
 etl:
 > echo ">>> etl: running src.etl_pipeline"
-> PYTHONPATH="$$PWD" $(PYTHON) -m src.etl_pipeline
+> PYTHONPATH="$$PWD" $(PYTHON) -m src.etl_pipeline $(ETL_CMD) PID=$(PID) SNAPSHOT=$(SNAPSHOT)
 
 # Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
 labels:
