@@ -1,0 +1,26 @@
+meta: { version: 1, label_source: heuristic_v1, conflict_priority: [hypomanic_irritable, anxious_stress, dysphoric_depressive, euthymic] }
+features: {}
+zscore_columns: []
+thresholds: { low: -0.67, high: 0.67, very_high: 1.0, sleep_eff_poor: 85 }
+rules: {}
+outputs: { label_column: "label", confidence_column: "label_confidence", notes_column: "label_notes", source_value: "heuristic_v1", min_coverage_pct: 90, min_class_pct: 10 }
+meta:
+  version: 1
+  label_source: heuristic_v1
+  conflict_priority:
+    [hypomanic_irritable, anxious_stress, dysphoric_depressive, euthymic]
+features: {}
+zscore_columns: []
+thresholds:
+  low: -0.67
+  high: 0.67
+  very_high: 1.0
+  sleep_eff_poor: 85
+rules: {}
+outputs:
+  label_column: "label"
+  confidence_column: "label_confidence"
+  notes_column: "label_notes"
+  source_value: "heuristic_v1"
+  min_coverage_pct: 90
+  min_class_pct: 10
