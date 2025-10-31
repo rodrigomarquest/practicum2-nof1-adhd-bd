@@ -25,6 +25,12 @@ def _load_notebook_module():
         spec = importlib.util.spec_from_file_location('nb1_eda_orig', str(SRC_PATH))
         _mod = importlib.util.module_from_spec(spec)
         sys.modules['nb1_eda_orig'] = _mod
+        # Inject a safe ENV into the notebook module namespace so imports that
+        # reference ENV won't raise NameError during exec.
+        try:
+            setattr(_mod, 'ENV', ENV)
+        except Exception:
+            pass
         # Execute module in its own namespace; notebook may reference ENV from here
         spec.loader.exec_module(_mod)
         names = [n for n in dir(_mod) if not n.startswith('_')]
