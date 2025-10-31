@@ -49,7 +49,12 @@ logs/
 backups/
 processed/
 dist/assets/
+# --- Keep empty release staging structure ---
 !dist/assets/.keep
+!dist/changelog/
+!dist/changelog/CHANGELOG.dryrun.md
+!dist/provenance/.keep
+
 
 # --- Provenance (keep reports, ignore heavy/transient)
 provenance/cleanup_log_*.txt
