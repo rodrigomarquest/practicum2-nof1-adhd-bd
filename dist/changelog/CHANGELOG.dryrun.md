@@ -1,13 +1,6 @@
-# 🚀 v4.0.2 — v4.0.2 – Environment centralization & Developer Guide
+Wrote docs/release_notes/release_notes_v4.0.2.md
 
-**Release date (UTC):** 2025-10-31T21:16:18.590313Z
-**Branch:** `v4-main`
-
-## Summary
-Repo restructuring v4, ETL auto-snapshot+idempotent extract, path canon to data/etl, Makefile release targets, pack-kaggle tool, QC preview runner, and full DEV_GUIDE.
-
-## Changes since last tag
-```text
+331c1263a0e005da639cddbd80caee6687ba66fa docs(release): add v4.0.2 release notes and changelog (dry-run)
 9434f734f0cdd09b53845524a64c9c2c176e0d93 fix(paths): remove legacy data_ai writes and use etl_snapshot_root consistently
 047e6af7d817e16695e3971012023e21f1d01c84 chore(make): set fixed ETL defaults (CUTOVER/TZ) per request
 e1f5aac9fccd881236c80507a26b12cf93d5440b fix(make): add ETL defaults (CUTOVER/TZ) and pass long flags to src.etl_pipeline so make etl runs with safe defaults
@@ -38,4 +31,3 @@ b5e4b1c8387ad9737b1e02da0d446e38fae42678 refactor(nb_common): move unified Kaggl
 21704a44b3fa59449bf0d0a7f812f5a296938fb8 chore(make): add clean-provenance target (UTF-8 safe, v4 prefix compatible)
 24c705e888aa020bd0e3683112508345590137c5 chore(config): centralize participants_file/default_participant/snapshot_date in settings.yaml
 570272ccdf7c5038a190f8bef0fdf3b4c3f0e1eb chore(config): relocate participants.yaml into config directory
-```

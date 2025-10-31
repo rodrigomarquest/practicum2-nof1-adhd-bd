@@ -1,13 +1,14 @@
-# 🚀 v4.0.2 — v4.0.2 – Environment centralization & Developer Guide
+# 🚀 v4.0.2 — Release v4.0.2
 
-**Release date (UTC):** 2025-10-31T21:16:18.590313Z
+**Release date (UTC):** 2025-10-31T21:18:53.921643Z
 **Branch:** `v4-main`
 
 ## Summary
-Repo restructuring v4, ETL auto-snapshot+idempotent extract, path canon to data/etl, Makefile release targets, pack-kaggle tool, QC preview runner, and full DEV_GUIDE.
+Auto-generated draft. See CHANGES_SINCE_LAST_TAG.txt.
 
 ## Changes since last tag
 ```text
+331c1263a0e005da639cddbd80caee6687ba66fa docs(release): add v4.0.2 release notes and changelog (dry-run)
 9434f734f0cdd09b53845524a64c9c2c176e0d93 fix(paths): remove legacy data_ai writes and use etl_snapshot_root consistently
 047e6af7d817e16695e3971012023e21f1d01c84 chore(make): set fixed ETL defaults (CUTOVER/TZ) per request
 e1f5aac9fccd881236c80507a26b12cf93d5440b fix(make): add ETL defaults (CUTOVER/TZ) and pass long flags to src.etl_pipeline so make etl runs with safe defaults
