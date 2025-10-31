@@ -1,0 +1,21 @@
+name: Release Check (dry-run)
+on:
+  pull_request:
+  push:
+    branches: [ v4-main ]
+
+jobs:
+  release-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Make dry-run final
+        run: |
+          set -e
+          make -n release-final RELEASE_VERSION=0.0.0-test || exit 1
