@@ -1,13 +1,45 @@
-# 🚀 v4.0.2 — Release v4.0.2
 
-**Release date (UTC):** 2025-10-31T21:18:53.921643Z
-**Branch:** `v4-main`
+# 🚀 4.0.2 – Release v4.0.2
 
-## Summary
+**Release date:** 2025-10-31T22:20:21.046227Z  
+**Branch:** v4-main  
+**Author:** Rodrigo Marques Teixeira  
+**Project:** MSc AI for Business – Practicum Part 2 (N-of-1 ADHD + BD)
+
+---
+
+## 🧩 Summary
 Auto-generated draft. See CHANGES_SINCE_LAST_TAG.txt.
 
-## Changes since last tag
+Summary of commits since v4.0.1: other:31, ci:1, chore:1.
+
+---
+
+## 🌿 Highlights
+### Chore (1)
+- remove zep_zip_filelist from root, create DEV_GUIDE.md, create release_notes_v4.0.2.md
+
+### Ci (1)
+- keep single valid release dry-run workflow (release_check.yml)
+
+### Other (31)
+- feat(release): canonical release-note template + commit grouping in renderer
+- chore(release): finalize artifacts for v4.0.2
+- docs(release): add v4.0.2 release notes and changelog (dry-run)
+
+---
+
+## 🧱 Build & Provenance
+* Commit range: v4.0.1..HEAD
+* Tag: v4.0.2
+* Renderer: `render_release_from_templates.py`
+
+---
+
+## 🔎 Appendix – Changes since last tag
 ```text
+e9a67967b105eb58d92d221402a2192ef8f8f7e7 feat(release): canonical release-note template + commit grouping in renderer
+b99b4b1035c5c5627708cabe4971e8e62be1d7cb chore(release): finalize artifacts for v4.0.2
 331c1263a0e005da639cddbd80caee6687ba66fa docs(release): add v4.0.2 release notes and changelog (dry-run)
 9434f734f0cdd09b53845524a64c9c2c176e0d93 fix(paths): remove legacy data_ai writes and use etl_snapshot_root consistently
 047e6af7d817e16695e3971012023e21f1d01c84 chore(make): set fixed ETL defaults (CUTOVER/TZ) per request
@@ -40,3 +72,4 @@ b5e4b1c8387ad9737b1e02da0d446e38fae42678 refactor(nb_common): move unified Kaggl
 24c705e888aa020bd0e3683112508345590137c5 chore(config): centralize participants_file/default_participant/snapshot_date in settings.yaml
 570272ccdf7c5038a190f8bef0fdf3b4c3f0e1eb chore(config): relocate participants.yaml into config directory
 ```
+

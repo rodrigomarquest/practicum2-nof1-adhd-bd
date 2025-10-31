@@ -1,5 +1,7 @@
 Wrote docs/release_notes/release_notes_v4.0.2.md
 
+e9a67967b105eb58d92d221402a2192ef8f8f7e7 feat(release): canonical release-note template + commit grouping in renderer
+b99b4b1035c5c5627708cabe4971e8e62be1d7cb chore(release): finalize artifacts for v4.0.2
 331c1263a0e005da639cddbd80caee6687ba66fa docs(release): add v4.0.2 release notes and changelog (dry-run)
 9434f734f0cdd09b53845524a64c9c2c176e0d93 fix(paths): remove legacy data_ai writes and use etl_snapshot_root consistently
 047e6af7d817e16695e3971012023e21f1d01c84 chore(make): set fixed ETL defaults (CUTOVER/TZ) per request
