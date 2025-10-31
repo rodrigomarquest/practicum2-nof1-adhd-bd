@@ -15,7 +15,7 @@ ifeq ($(OS),)
   PYTHON=$(VENV)/Scripts/python.exe
 endif
 
-.PHONY: venv-create venv-recreate freeze etl labels qc clean pack-kaggle
+.PHONY: venv-create venv-recreate freeze etl labels qc clean pack-kaggle clean-data clean-all
 
 venv-create:
 	@echo ">>> Creating venv"
@@ -52,9 +52,27 @@ pack-kaggle:
 	# Implement: zip features_daily(_labeled).csv + version_log_enriched.csv + README into dist/assets/<slug>.zip
 
 clean:
-	@echo ">>> Cleaning caches"
-	- rm -rf __pycache__ */__pycache__ .ipynb_checkpoints */.ipynb_checkpoints *.pyc
+	@echo ">>> clean: caches and temp files"
+	- find . -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
+	- find . -name ".ipynb_checkpoints" -type d -prune -exec rm -rf {} + 2>/dev/null || true
+	- find . -name "*.pyc" -delete 2>/dev/null || true
+	- find . -name "*.log" -delete 2>/dev/null || true
+	@echo "✔ caches/logs removed"
 
+# Remove dataset outputs (but keep source code and configs)
+clean-data:
+	@echo ">>> clean-data: ETL/AI outputs and reports"
+	- rm -rf notebooks/outputs dist/assets logs backups processed 2>/dev/null || true
+	- rm -rf data/etl data/ai 2>/dev/null || true
+	@echo "✔ data outputs removed"
+
+# Full sweep: clean + data + common leftovers introduced pre-v4
+clean-all: clean
+	@echo ">>> clean-all: legacy dirs (pre-v4) and provenance artifacts"
+	- rm -rf data_ai data_ai_legacy_* reports 2>/dev/null || true
+	- rm -rf etl_tools make_scripts processed apple_etl_cache 2>/dev/null || true
+	- rm -rf notebooks/eda_outputs 2>/dev/null || true
+	@echo "✔ everything swept (safe)"
 
 # PROJECT RULES FOR MAKE (READ FIRST)
 # 1) Never use heredoc (<<EOF) in Make recipes.
@@ -101,17 +119,6 @@ RAW_DIR := data/raw/$(PARTICIPANT)
 ETL_DIR := data/etl/$(PARTICIPANT)
 AI_DIR  := data/ai/$(PARTICIPANT)
 
-# Release / version metadata (overridable)
-<<<<<<< Updated upstream:Makefile
-# Provide a stable LATEST / NEXT layer for automation. Logic:
-# - Prefer an explicit VERSION if set by the caller
-# - Otherwise infer LATEST_TAG from git tags (prefer semver-like vN.N.N by creatordate)
-# - LATEST_VERSION is the LATEST_TAG without the leading 'v'
-# - NEXT_VERSION is computed by bumping the patch number of LATEST_VERSION
-# - NEXT_TAG is the TAG_PREFIX + NEXT_VERSION
-VERSION       ?= 
-TAG_PREFIX    ?= v
-=======
 # --- Version Info ---------------------------------------------------
 TAG_PREFIX ?= v
 
@@ -136,8 +143,6 @@ NEXT_TAG := $(TAG_PREFIX)$(NEXT_VERSION)
 # Backwards-compatible aliases used by existing scripts
 VERSION ?= $(NEXT_VERSION)
 TAG := $(NEXT_TAG)
-
->>>>>>> Stashed changes:makefile
 RELEASE_TITLE ?= Tooling & Provenance Refactor
 
 # Discover latest tag (prefer semver-like tags). Fallback to git describe or v0.0.0
@@ -746,13 +751,8 @@ help-venv:
 
 .PHONY: print-version version-guard
 print-version:
-<<<<<<< Updated upstream:Makefile
-> 	@echo "LATEST_TAG=$(LATEST_TAG)"
-> 	@echo "LATEST_VERSION=$(LATEST_VERSION)"
-=======
 > 	@echo "LATEST_VERSION=$(LATEST_VERSION)"
 > 	@echo "LATEST_TAG=$(LATEST_TAG_RAW)"
->>>>>>> Stashed changes:makefile
 > 	@echo "COMMITS_SINCE_LATEST_TAG=$(COMMITS_SINCE_LATEST_TAG)"
 > 	@echo "LATEST_COMMIT_ID=$(LATEST_COMMIT_ID)"
 > 	@echo "NEXT_VERSION=$(NEXT_VERSION)"
@@ -956,13 +956,9 @@ intake-zip:
 .PHONY: provenance
 provenance:
 > @echo "Running provenance audit for participant=$(PARTICIPANT)"
-<<<<<<< Updated upstream:Makefile
-> @NORMALIZED_DIR="$(NORMALIZED_DIR)" PROCESSED_DIR="$(PROCESSED_DIR)" JOINED_DIR="$(JOINED_DIR)" AI_SNAPSHOT_DIR="$(AI_SNAPSHOT_DIR)" PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/provenance_audit.py $(if $(PARTICIPANT),--participant $(PARTICIPANT),) $(if $(SNAPSHOT),--snapshot $(SNAPSHOT),) $(if $(filter 1,$(DRY_RUN)),--dry-run,)
-=======
 > @# Ensure pip freeze exists before running full provenance audit (idempotent)
 > @$(VENV_PY) make_scripts/release/generate_pip_freeze.py --out-dir provenance || true
 > @NORMALIZED_DIR="$(NORMALIZED_DIR)" PROCESSED_DIR="$(PROCESSED_DIR)" JOINED_DIR="$(JOINED_DIR)" AI_SNAPSHOT_DIR="$(AI_SNAPSHOT_DIR)" PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/provenance_audit.py $(if $(PARTICIPANT),--participant $(PARTICIPANT),) $(if $(SNAPSHOT),--snapshot $(SNAPSHOT),) $(if $(DRY_RUN),--dry-run,)
->>>>>>> Stashed changes:makefile
 > @echo "Summary:"
 > @ls -1 provenance || true
 
@@ -1164,7 +1160,7 @@ etl-extract:
 > @echo "=== etl-extract: participant=$(PARTICIPANT) snapshot=$(SNAPSHOT) PWD=$$(pwd) ==="
 > @test -d "data/raw/$(PARTICIPANT)" || (echo "ERROR: data/raw/$(PARTICIPANT) not found. Place participant-scoped zips under data/raw/$(PARTICIPANT)/" && exit 2)
 > @$(VENV_PY) tools/check_zips.py $(PARTICIPANT)
-> $(VENV_PY) etl_pipeline.py extract \
+> $(VENV_PY) -m src.etl_pipeline extract \
 >   --participant $(PARTICIPANT) --snapshot $(SNAPSHOT) \
 >   --cutover $(CUTOVER) --tz_before $(TZ_BEFORE) --tz_after $(TZ_AFTER) \
 >   --auto-zip
@@ -1179,7 +1175,9 @@ TZ_BEFORE     ?= America/Sao_Paulo
 TZ_AFTER      ?= Europe/Dublin
 
 AI_DIR           ?= data/ai/$(PARTICIPANT)/snapshots/$(SNAPSHOT)
-NB2_SCRIPT       ?= notebooks/NB2_Baseline_and_LSTM.py
+# Script entrypoints moved to src/ for v4 layout
+ETL_SCRIPT       ?= src/etl_pipeline.py
+NB2_SCRIPT       ?= src/models_nb2.py
 # New layout variables: local active datasets and kaggle export root
 AI_LOCAL_ROOT    ?= ./data/ai/local
 AI_KAGGLE_ROOT   ?= ./data/ai/kaggle
@@ -1207,10 +1205,10 @@ help-workflow:
 etl: etl-full
 > echo "⚙️  Alias: 'make etl' → 'make etl-full'"
 
-# Pipeline completo (normalize + join + features). Respeita --auto-zip se implementado no script.
+# Pipeline complete (normalize + join + features). Respeita --auto-zip se implementado no script.
 etl-full:
 > echo ">>> ETL FULL > $(PARTICIPANT) @ $(SNAPSHOT)"
-> $(PY) etl_pipeline.py full \
+> $(PYTHON) -m src.etl_pipeline full \
 >   --participant $(PARTICIPANT) \
 >   --snapshot $(SNAPSHOT) \
 >   --cutover $(CUTOVER) \
@@ -1221,7 +1219,7 @@ etl-full:
 # Apenas a fusão de labels (se o joined já existir)
 etl-labels:
 > echo "🧩 ETL LABELS → $(PARTICIPANT) @ $(SNAPSHOT)"
-> $(PY) etl_pipeline.py labels \
+> $(PYTHON) -m src.etl_pipeline labels \
 >   --participant $(PARTICIPANT) \
 >   --snapshot $(SNAPSHOT)
 > if [ ! -f "$(ETL_LABELED_SRC)" ]; then \
@@ -1249,7 +1247,7 @@ nb2-dry-run:
 >   echo "ERROR: Missing $(FEATURES_LABELED). Run 'make etl-aggregate' or etl-promote-slug first."; exit 1; \
 > fi
 > echo "OK: $(FEATURES_LABELED)"
-> $(PY) notebooks/NB2_Baseline_and_LSTM.py --features "$(FEATURES_LABELED)" --dry-run
+> $(PY) $(NB2_SCRIPT) --features "$(FEATURES_LABELED)" --dry-run
 
 # Executa o NB2 com o labeled promovido (default path now points to AI_LOCAL_ROOT)
 nb2-run:
@@ -1257,7 +1255,7 @@ nb2-run:
 > if [ ! -f "$(FEATURES_LABELED)" ]; then \
 >   echo "ERROR: Missing $(FEATURES_LABELED). Run 'make etl-aggregate' or etl-promote-slug first."; exit 1; \
 > fi
-> $(PY) notebooks/NB2_Baseline_and_LSTM.py --features "$(FEATURES_LABELED)"
+> $(PY) $(NB2_SCRIPT) --features "$(FEATURES_LABELED)"
 > echo "NB2 finished; outputs -> notebooks/outputs/NB2/"
 
 # ========= NB2 slug / packaging targets =========
@@ -1331,8 +1329,9 @@ clean-legacy:
 #   make nb2-batch LOCAL_DATASETS_ROOT=./data/ai/local LIMIT=5
 AI_LOCAL_ROOT ?= ./data/ai/local
 LOCAL_DATASETS_ROOT ?= $(AI_LOCAL_ROOT)
-NB2_ENTRY ?= notebooks/NB2_Baseline.py
-NB3_ENTRY ?= notebooks/NB3_DeepLearning.py
+# Entrypoints now reference src/ modules (v4 layout)
+NB2_ENTRY ?= src/models_nb2.py
+NB3_ENTRY ?= src/models_nb3.py
 LIMIT ?= 1
 
 
@@ -1364,7 +1363,7 @@ som-scan:
 > @test -n "$(PARTICIPANT)" || (echo "Set PARTICIPANT=Pxxxxxx" && exit 2)
 > @test -n "$(SNAPSHOT_DATE)" || (echo "Set SNAPSHOT_DATE=YYYY-MM-DD" && exit 2)
 > @echo "Running som-scan for $(PARTICIPANT) snapshot=$(SNAPSHOT_DATE)"
-> @PYTHONPATH="$$PWD" $(VENV_PY) etl_pipeline.py som-scan \
+> @PYTHONPATH="$$PWD" $(VENV_PY) -m src.etl_pipeline som-scan \
 >   --participant "$(PARTICIPANT)" \
 >   --snapshot "$(SNAPSHOT_DATE)" \
 >   --cutover "$(CUTOVER)" \
