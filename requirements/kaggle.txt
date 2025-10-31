@@ -1,0 +1,2 @@
+# Kaggle preinstala numpy/pandas/sklearn/tensorflow
+pyyaml>=6.0

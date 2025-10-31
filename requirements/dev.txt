@@ -1,0 +1,4 @@
+-r base.txt
+ruff>=0.6
+black>=24.8
+pytest>=8.0
