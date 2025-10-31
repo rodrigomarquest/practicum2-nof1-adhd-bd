@@ -240,7 +240,7 @@ def update_footer_links(out: Path, tag: str, prev_tag: Optional[str]):
     owner_repo = repo_owner_repo()
     if not owner_repo:
         print('Warning: could not determine owner/repo from git remote; skipping compare links')
-        out.write_text(cleaned + '\n')
+        out.write_text(cleaned + '\n', encoding='utf-8')
         return
     owner, repo = owner_repo
     if prev_tag:
@@ -250,7 +250,7 @@ def update_footer_links(out: Path, tag: str, prev_tag: Optional[str]):
         # No previous tag found: link to commit list for the tag
         commits_url = f'https://github.com/{owner}/{repo}/commits/{tag}'
         link_text = f'---\n\n[Commits for {tag}]({commits_url})\n'
-    out.write_text(cleaned + '\n\n' + link_text)
+    out.write_text(cleaned + '\n\n' + link_text, encoding='utf-8')
 
 
 def main(argv=None):

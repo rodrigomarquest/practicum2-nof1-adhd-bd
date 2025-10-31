@@ -299,25 +299,25 @@
     "src": "make_scripts\\version_guard.py",
     "file": ".\\Makefile",
     "line": 634,
-    "dst": "make_scripts\\version_guard.py",
+    "dst": "make_scripts\\release\\version_guard.py",
     "classification": "top-level",
-    "match": "make_scripts/version_guard.py"
+    "match": "make_scripts/release/version_guard.py"
   },
   {
     "src": "make_scripts\\version_guard.py",
     "file": ".\\Makefile",
     "line": 648,
-    "dst": "make_scripts\\version_guard.py",
+    "dst": "make_scripts\\release\\version_guard.py",
     "classification": "top-level",
-    "match": "make_scripts/version_guard.py"
+    "match": "make_scripts/release/version_guard.py"
   },
   {
     "src": "make_scripts\\version_guard.py",
     "file": ".\\Makefile",
     "line": 708,
-    "dst": "make_scripts\\version_guard.py",
+    "dst": "make_scripts\\release\\version_guard.py",
     "classification": "top-level",
-    "match": "make_scripts/version_guard.py"
+    "match": "make_scripts/release/version_guard.py"
   },
   {
     "src": "make_scripts\\sanitize_release_text.py",

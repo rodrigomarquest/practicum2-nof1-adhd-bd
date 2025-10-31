@@ -1,9 +1,60 @@
-# ARG/PARAM POLICY
-# - CLI flags and ENV are both supported. Precedence: CLI flags > ENV vars > Make defaults > Script defaults.
-# - Core ENV: ETL_DIR, AI_DIR, PARTICIPANT, SNAPSHOT_DATE, DRY_RUN, NON_INTERACTIVE.
-# - Each target provides a *_ARGS pass-through (e.g., CLEAN_ARGS) for CLI flags.
-# - Never rely on venv activation in recipes; always call $(VENV_PY).
-# - Never use heredoc; multi-line logic lives in make_scripts/*.py (see lint targets).
+# -------- Makefile v4.0.0 --------
+PY_WIN := py -3.13
+PY_UNIX := python3.13
+PY := $(PY_UNIX)
+OS := $(shell uname 2>/dev/null)
+ifdef COMSPEC
+  PY := $(PY_WIN)
+endif
+
+VENV=.venv
+PIP=$(VENV)/bin/pip
+PYTHON=$(VENV)/bin/python
+ifeq ($(OS),)
+  PIP=$(VENV)/Scripts/pip.exe
+  PYTHON=$(VENV)/Scripts/python.exe
+endif
+
+.PHONY: venv-create venv-recreate freeze etl labels qc clean pack-kaggle
+
+venv-create:
+	@echo ">>> Creating venv"
+	$(PY) -m venv $(VENV)
+	$(PYTHON) -m pip install --upgrade pip setuptools wheel
+	$(PIP) install -r requirements.txt -r requirements_dev.txt || \
+		$(PIP) install -r requirements_etl.txt -r requirements_dev.txt
+	$(MAKE) freeze
+
+venv-recreate:
+	@echo ">>> Recreating venv"
+	- rm -rf $(VENV)
+	$(MAKE) venv-create
+
+freeze:
+	@echo ">>> Freezing environment"
+	$(PYTHON) -c "import platform; print(platform.python_version())"
+	$(PIP) freeze > provenance/pip_freeze_$$(date +%F).txt || $(PIP) freeze > provenance/pip_freeze.txt
+
+etl:
+	@echo ">>> Running ETL pipeline"
+	$(PYTHON) -m src.etl_pipeline
+
+labels:
+	@echo ">>> Applying label rules"
+	$(PYTHON) -m src.make_labels --rules config/label_rules.yaml --in data/etl/FEATURES_PATH/features_daily.csv --out data/etl/FEATURES_PATH/features_daily_labeled.csv
+
+qc:
+	@echo ">>> Running EDA/QC"
+	$(PYTHON) -m src.eda
+
+pack-kaggle:
+	@echo ">>> Packing dataset for Kaggle"
+	# Implement: zip features_daily(_labeled).csv + version_log_enriched.csv + README into dist/assets/<slug>.zip
+
+clean:
+	@echo ">>> Cleaning caches"
+	- rm -rf __pycache__ */__pycache__ .ipynb_checkpoints */.ipynb_checkpoints *.pyc
+
 
 # PROJECT RULES FOR MAKE (READ FIRST)
 # 1) Never use heredoc (<<EOF) in Make recipes.
@@ -42,6 +93,7 @@ TZ  ?= Europe/Dublin
 
 # Participant alias (some older scripts use PARTICIPANT)
 PARTICIPANT ?= $(PID)
+SNAP ?= $(SNAPSHOT_DATE)
 
 # Consolidated directory layout (defaults)
 # RAW_DIR, ETL_DIR and AI_DIR include the participant subfolder
@@ -50,6 +102,7 @@ ETL_DIR := data/etl/$(PARTICIPANT)
 AI_DIR  := data/ai/$(PARTICIPANT)
 
 # Release / version metadata (overridable)
+<<<<<<< Updated upstream:Makefile
 # Provide a stable LATEST / NEXT layer for automation. Logic:
 # - Prefer an explicit VERSION if set by the caller
 # - Otherwise infer LATEST_TAG from git tags (prefer semver-like vN.N.N by creatordate)
@@ -58,6 +111,33 @@ AI_DIR  := data/ai/$(PARTICIPANT)
 # - NEXT_TAG is the TAG_PREFIX + NEXT_VERSION
 VERSION       ?= 
 TAG_PREFIX    ?= v
+=======
+# --- Version Info ---------------------------------------------------
+TAG_PREFIX ?= v
+
+# Get the latest annotated tag (no commit suffix)
+LATEST_TAG := $(shell git tag --list 'v[0-9]*' --sort=-creatordate 2>/dev/null | head -n1 || git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+# Back-compat raw tag variable used elsewhere
+LATEST_TAG_RAW := $(LATEST_TAG)
+# Extract numeric version (remove leading 'v')
+LATEST_VERSION := $(subst $(TAG_PREFIX),,$(LATEST_TAG))
+# Strip any git-describe metadata suffix from LATEST_VERSION (e.g., 1.2.3-20-gabcd)
+LATEST_VERSION_CORE := $(shell $(PY) -c "import re; v='$(LATEST_VERSION)'; m=re.match(r'^(\d+\.\d+\.\d+)', v); print(m.group(1) if m else '0.0.0')")
+# Get the short hash of the current commit
+LATEST_COMMIT_ID := $(shell git rev-parse --short HEAD 2>/dev/null)
+# Count commits since the latest tag
+COMMITS_SINCE_LATEST_TAG := $(shell git rev-list --count $(LATEST_TAG)..HEAD 2>/dev/null)
+
+# Auto-increment patch version if NEXT_VERSION not manually set
+NEXT_VERSION ?= $(shell python -c "v='$(LATEST_VERSION_CORE)'; parts=v.split('.'); parts[-1]=str(int(parts[-1])+1); print('.'.join(parts))")
+# Compose the next tag
+NEXT_TAG := $(TAG_PREFIX)$(NEXT_VERSION)
+
+# Backwards-compatible aliases used by existing scripts
+VERSION ?= $(NEXT_VERSION)
+TAG := $(NEXT_TAG)
+
+>>>>>>> Stashed changes:makefile
 RELEASE_TITLE ?= Tooling & Provenance Refactor
 
 # Discover latest tag (prefer semver-like tags). Fallback to git describe or v0.0.0
@@ -666,8 +746,13 @@ help-venv:
 
 .PHONY: print-version version-guard
 print-version:
+<<<<<<< Updated upstream:Makefile
 > 	@echo "LATEST_TAG=$(LATEST_TAG)"
 > 	@echo "LATEST_VERSION=$(LATEST_VERSION)"
+=======
+> 	@echo "LATEST_VERSION=$(LATEST_VERSION)"
+> 	@echo "LATEST_TAG=$(LATEST_TAG_RAW)"
+>>>>>>> Stashed changes:makefile
 > 	@echo "COMMITS_SINCE_LATEST_TAG=$(COMMITS_SINCE_LATEST_TAG)"
 > 	@echo "LATEST_COMMIT_ID=$(LATEST_COMMIT_ID)"
 > 	@echo "NEXT_VERSION=$(NEXT_VERSION)"
@@ -675,7 +760,7 @@ print-version:
 
 version-guard:
 > 	@echo "Running version guard for TAG=$(TAG) (allow dirty: $${ALLOW_DIRTY:-false})"
-> 	@$(VENV_PY) make_scripts/version_guard.py --tag "$(TAG)" $$( [ "$${ALLOW_DIRTY:-0}" = "1" ] && echo --allow-dirty || true )
+> 	@$(VENV_PY) make_scripts/release/version_guard.py --tag "$(TAG)" $$( [ "$${ALLOW_DIRTY:-0}" = "1" ] && echo --allow-dirty || true )
 
 .PHONY: help-release
 help-release:
@@ -698,6 +783,7 @@ RELEASE_PUSH  ?= 0
 
 .PHONY: release-draft release-publish release-assets
 
+<<<<<<< Updated upstream:Makefile
 # Orchestrated release-draft (idempotent, single version-guard, auto-commit generated files)
 release-draft:
 > 	@echo "Preparing release draft for $(NEXT_TAG)"
@@ -711,6 +797,16 @@ release-draft:
 > 	@git add CHANGELOG.md docs/release_notes/release_notes_$(NEXT_TAG).md 2>/dev/null || true
 > 	@if ! git diff --staged --quiet --exit-code; then \
 > 	  git commit -m "release($(NEXT_TAG)): notes + changelog"; \
+=======
+release-draft: version-guard release-notes changelog-update release-assets
+> 	@echo "Preparing release draft for $(TAG)"
+> 	@# run version guard (do not swallow failures). Allow dirty only when ALLOW_DIRTY=1
+> 	@$(VENV_PY) make_scripts/release/version_guard.py --tag "$(TAG)" $$( [ "$${ALLOW_DIRTY:-0}" = "1" ] && echo --allow-dirty || true ) --remote-check --remote origin
+> 	@# After changelog, stage CHANGELOG and release notes and commit if changed
+> 	@git add CHANGELOG.md docs/release_notes/release_notes_$(TAG).md 2>/dev/null || true
+> 	@if ! git diff --cached --quiet --exit-code; then \
+> 	  git commit -m "docs(release): update CHANGELOG for $(TAG)" || true; \
+>>>>>>> Stashed changes:makefile
 > 	else \
 > 	  echo "No changelog/release-notes changes to commit"; \
 > 	fi
@@ -721,13 +817,28 @@ release-draft:
 release-assets:
 > 	@echo "Collecting release assets into dist/assets/$(TAG)/"
 > 	@mkdir -p "dist/assets/$(TAG)"
-> 	@COPIED=0; \
-> 	# copy explicit provenance artifacts if present
-> 	if [ -e "provenance/etl_provenance_report.csv" ]; then cp "provenance/etl_provenance_report.csv" "dist/assets/$(TAG)/"; COPIED=1; fi; \
-> 	if [ -e "provenance/data_audit_summary.md" ]; then cp "provenance/data_audit_summary.md" "dist/assets/$(TAG)/"; COPIED=1; fi; \
-> 	LF=$$(ls -1t provenance/pip_freeze_*.txt 2>/dev/null | head -n1 || true); if [ -n "$$LF" ]; then cp "$$LF" "dist/assets/$(TAG)/"; COPIED=1; fi; \
-> 	# copy any intake logs for participant
-> 	for f in $$(ls -1 data/etl/$(PARTICIPANT)/runs/*/logs/*.json 2>/dev/null || true); do cp "$$f" "dist/assets/$(TAG)/"; COPIED=1; done; \
+> 	@MISSING=0; \
+> 	MISSING_LIST=""; \
+> 	# mandatory provenance files
+> 	if [ ! -f "provenance/etl_provenance_report.csv" ]; then MISSING=1; MISSING_LIST="$$MISSING_LIST provenance/etl_provenance_report.csv"; fi; \
+> 	if [ ! -f "provenance/data_audit_summary.md" ]; then MISSING=1; MISSING_LIST="$$MISSING_LIST provenance/data_audit_summary.md"; fi; \
+>	LF=$$(ls -1t provenance/pip_freeze_*.txt 2>/dev/null | head -n1 || true); \
+>	if [ -z "$$LF" ]; then \
+>	  echo "provenance: pip_freeze not found, attempting to generate via make provenance..."; \
+>	  $(MAKE) provenance || true; \
+>	  LF=$$(ls -1t provenance/pip_freeze_*.txt 2>/dev/null | head -n1 || true); \
+>	fi; \
+>	if [ -z "$$LF" ]; then \
+>	  MISSING=1; \
+>	  MISSING_LIST="$$MISSING_LIST provenance/pip_freeze_*.txt"; \
+>	fi; \
+> 	# copy mandatory provenance artifacts
+> 	cp "provenance/etl_provenance_report.csv" "dist/assets/$(TAG)/"; \
+> 	cp "provenance/data_audit_summary.md" "dist/assets/$(TAG)/"; \
+> 	cp "$$LF" "dist/assets/$(TAG)/"; \
+> 	COPIED=1; \
+> 	# copy any intake logs for participant (optional)
+> 	for f in $$(ls -1 data/etl/$(PARTICIPANT)/runs/*/logs/*.json 2>/dev/null || true); do cp "$$f" "dist/assets/$(TAG)/"; done; \
 > 	if [ $$COPIED -eq 0 ]; then \
 > 	  echo "No assets found to collect; dist/assets/$(TAG) will be empty."; \
 > 	else \
@@ -753,7 +864,7 @@ clean-assets:
 release-publish: version-guard release-notes changelog-update release-assets
 > 	@echo "Publishing release $(TAG) to origin/GitHub"
 > 	@# run version guard (no allow-dirty for real publish)
-> 	@$(VENV_PY) make_scripts/version_guard.py --tag "$(TAG)" --remote-check --remote origin
+> 	@$(VENV_PY) make_scripts/release/version_guard.py --tag "$(TAG)" --remote-check --remote origin
 > 	@# ensure annotated tag exists locally and push it
 > 	@if git rev-parse --verify "$(TAG)" >/dev/null 2>&1; then \
 > 	  echo "Tag $(TAG) already exists locally"; \
@@ -845,7 +956,13 @@ intake-zip:
 .PHONY: provenance
 provenance:
 > @echo "Running provenance audit for participant=$(PARTICIPANT)"
+<<<<<<< Updated upstream:Makefile
 > @NORMALIZED_DIR="$(NORMALIZED_DIR)" PROCESSED_DIR="$(PROCESSED_DIR)" JOINED_DIR="$(JOINED_DIR)" AI_SNAPSHOT_DIR="$(AI_SNAPSHOT_DIR)" PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/provenance_audit.py $(if $(PARTICIPANT),--participant $(PARTICIPANT),) $(if $(SNAPSHOT),--snapshot $(SNAPSHOT),) $(if $(filter 1,$(DRY_RUN)),--dry-run,)
+=======
+> @# Ensure pip freeze exists before running full provenance audit (idempotent)
+> @$(VENV_PY) make_scripts/release/generate_pip_freeze.py --out-dir provenance || true
+> @NORMALIZED_DIR="$(NORMALIZED_DIR)" PROCESSED_DIR="$(PROCESSED_DIR)" JOINED_DIR="$(JOINED_DIR)" AI_SNAPSHOT_DIR="$(AI_SNAPSHOT_DIR)" PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/provenance_audit.py $(if $(PARTICIPANT),--participant $(PARTICIPANT),) $(if $(SNAPSHOT),--snapshot $(SNAPSHOT),) $(if $(DRY_RUN),--dry-run,)
+>>>>>>> Stashed changes:makefile
 > @echo "Summary:"
 > @ls -1 provenance || true
 
@@ -855,6 +972,11 @@ provenance-snap:
 > @test -n "$(SNAPSHOT)" || (echo "Set SNAPSHOT=YYYY-MM-DD" && exit 2)
 > @echo "Running participant-scoped provenance for PID=$(PID) snapshot=$(SNAPSHOT)"
 > @PARTICIPANT="$(PID)" SNAPSHOT="$(SNAPSHOT)" $(MAKE) provenance
+
+.PHONY: provenance-pip-freeze
+provenance-pip-freeze:
+> @echo "Ensuring provenance pip freeze exists (provenance/)"
+> @$(VENV_PY) make_scripts/release/generate_pip_freeze.py --out-dir provenance || true
 
 .PHONY: lint-args
 lint-args:
@@ -911,19 +1033,27 @@ plot-sleep:
 > @PYTHONPATH="$$PWD" "$(VENV_PY)" etl_tools/plot_sleep_compare.py \
 > 	--join "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/join_hybrid_daily.csv" \
 > 	--outdir "data_ai/$(PID)/snapshots/$(SNAP)/hybrid_join/$(POLICY)/plots"
-
+# ---------------- Release & Reports ----------------
 # Release automation targets
 .PHONY: release-notes
 release-notes:
 > @test -n "$(TAG)" || (echo "Set TAG=..." && exit 2)
 > @echo "Rendering release notes for TAG=$(TAG) VERSION=$(VERSION)"
-> @PYTHONPATH="$$PWD" "$(VENV_PY)" tools/render_release_from_templates.py --version "$(VERSION)" --tag "$(TAG)" --title "$(RELEASE_TITLE)" $$( [ "$(RELEASE_DRY_RUN)" = "1" ] && echo --dry-run || true )
+> @PRE_REL=reports/pre_release/changes_since_$(LATEST_TAG_RAW).md; \
+> if [ ! -f "$$PRE_REL" ]; then \
+>   echo "NEED:"; \
+>   echo "- Missing pre-release changes summary at reports/pre_release/changes_since_$(LATEST_TAG_RAW).md"; \
+>   echo "- Ask VADER to summarize changes since $(LATEST_TAG_RAW) and save there."; \
+>   exit 2; \
+> fi; \
+> PYTHONPATH="$$PWD" LATEST_TAG="$(LATEST_TAG_RAW)" "$(VENV_PY)" make_scripts/release/render_release_from_templates.py --version "$(VERSION)" --tag "$(TAG)" --title "$(RELEASE_TITLE)" --branch "${BRANCH:-main}" --author "${AUTHOR:-Rodrigo Marques Teixeira}" --project "${PROJECT:-Practicum2 – N-of-1 ADHD + BD}" $$( [ "$(RELEASE_DRY_RUN)" = "1" ] && echo --dry-run || true )
 
 .PHONY: changelog-update
 changelog-update:
 > @test -n "$(TAG)" || (echo "Set TAG=..." && exit 2)
 > @echo "Updating CHANGELOG.md for VERSION=$(VERSION)"
-> @PYTHONPATH="$$PWD" "$(VENV_PY)" tools/update_changelog.py --version "$(VERSION)" --tag "$(TAG)" --title "$(RELEASE_TITLE)" $$( [ "$(RELEASE_DRY_RUN)" = "1" ] && echo --dry-run || true )
+> @OUTFILE=$$( [ "$(RELEASE_DRY_RUN)" = "1" ] && echo "CHANGELOG.dryrun.md" || echo "CHANGELOG.md" ); \
+> PYTHONPATH="$$PWD" "$(VENV_PY)" make_scripts/release/update_changelog.py --tag "$(TAG)" --version "$(VERSION)" --outfile "$$OUTFILE" $$( [ "$(RELEASE_DRY_RUN)" = "1" ] && echo --allow-missing-notes || true )
 # ---------------- Release & Reports ----------------
 SNAP     ?= 2025-09-29
 PID      ?= P000001
@@ -960,8 +1090,8 @@ release-pack:
 > @echo "📦 dist/practicum2_$(REL_TAG).tgz"
 
 release-all: weekly-report changelog release-pack
-> @echo "✔ release bundle pronto. Sugestão:"
-> @echo "  git add -A && git commit -m 'release $(REL_TAG)' && git tag $(REL_TAG)"
+> @echo "DEPRECATED: 'release-all' is a legacy alias. Use 'release-draft' and 'release-pack' explicitly."
+> @echo "If you still want the old behavior, run: make release-draft && make release-pack"
 
 
 tests:

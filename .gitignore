@@ -1,3 +1,31 @@
+.venv/
+data/
+notebooks/outputs/
+dist/assets/
+logs/
+backups/
+processed/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+.vscode/
+# venv
+.venv/
+# data & outputs
+data/
+notebooks/outputs/
+dist/assets/
+logs/
+backups/
+processed/
+# caches
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+# OS/IDE
+.DS_Store
+.vscode/
 # ================================
 # Practicum2 – N-of-1 ADHD + BD
 # Git ignore rules for ETL, Kaggle notebooks, and ethical compliance
