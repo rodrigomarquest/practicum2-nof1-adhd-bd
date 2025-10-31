@@ -8,3 +8,6 @@ __all__ = [
     "reports",
     "tf_models",
 ]
+
+# re-export Kaggle helpers
+from .portable import *
