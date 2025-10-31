@@ -1,5 +1,21 @@
-Wrote docs/release_notes/release_notes_v0.0.0.md
+# 🚀 v4.0.2 — v4.0.2 – Environment centralization & Developer Guide
 
+**Release date (UTC):** 2025-10-31T21:16:18.590313Z
+**Branch:** `v4-main`
+
+## Summary
+Repo restructuring v4, ETL auto-snapshot+idempotent extract, path canon to data/etl, Makefile release targets, pack-kaggle tool, QC preview runner, and full DEV_GUIDE.
+
+## Changes since last tag
+```text
+9434f734f0cdd09b53845524a64c9c2c176e0d93 fix(paths): remove legacy data_ai writes and use etl_snapshot_root consistently
+047e6af7d817e16695e3971012023e21f1d01c84 chore(make): set fixed ETL defaults (CUTOVER/TZ) per request
+e1f5aac9fccd881236c80507a26b12cf93d5440b fix(make): add ETL defaults (CUTOVER/TZ) and pass long flags to src.etl_pipeline so make etl runs with safe defaults
+fee43b3532c1546789823f4011ff1e56e07338bb fix(shim): add physical submodules for etl_modules.cardiovascular (/_join, cardio_*, apple/loader, zepp/loader); wire ETL_CMD in Makefile
+668acbb7ac22aac6af1386f29380b8ed1d7a6ad9 fix(shim): add physical submodules for etl_modules.common.* and expose _open_zip_any in io_utils shim
+fee08d9d1f7cea5d46e18821129c9af0c4371f0d fix(eda): inject safe ENV into notebook module to avoid NameError on import
+9843f25cdbd3ee874816713d5b109a2f2eae1c8a fix(shim): complete etl_modules dotted-import shims; harden src.eda ENV; wire pack-kaggle tool; add shim audit
+fbfb66589cc729d55e6537e877f5e026c2facdea chore(pipeline): add etl_modules compat shim, make pack-kaggle robust, guard qc entrypoint, fix labels path
 86f850129560f4eea05bb9ce1248dc67bee20fa5 chore(make): ensure PYTHONPATH for src.* entrypoints (fix etl/labels)
 d0201cf57eb33dea11449d9350f1356ac397f5f9 chore(make): fix recipe separators, remove placeholders, normalize EOLs; ensure release renderer path
 2c24adc32b0a53e722574af51db8293543ee55a8 ci: keep single valid release dry-run workflow (release_check.yml)
@@ -22,3 +38,4 @@ b5e4b1c8387ad9737b1e02da0d446e38fae42678 refactor(nb_common): move unified Kaggl
 21704a44b3fa59449bf0d0a7f812f5a296938fb8 chore(make): add clean-provenance target (UTF-8 safe, v4 prefix compatible)
 24c705e888aa020bd0e3683112508345590137c5 chore(config): centralize participants_file/default_participant/snapshot_date in settings.yaml
 570272ccdf7c5038a190f8bef0fdf3b4c3f0e1eb chore(config): relocate participants.yaml into config directory
+```
