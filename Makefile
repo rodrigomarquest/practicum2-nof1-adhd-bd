@@ -81,6 +81,90 @@ labels:
 > echo ">>> labels: running src.make_labels"
 > $(PYTHON) -m src.make_labels --rules config/label_rules.yaml --in data/etl/FEATURES_PATH/features_daily.csv --out data/etl/FEATURES_PATH/features_daily_labeled.csv
 
+# ----------------------------------------------------------------------
+# Release pipeline (v4-friendly helpers)
+# - Defaults are non-invasive; do not push automatically. Use release-push to push.
+# - Uses $(PYTHON) (auto-detected earlier) and preserves .RECIPEPREFIX := >
+# ----------------------------------------------------------------------
+
+RELEASE_VERSION ?= 4.0.2
+RELEASE_TAG ?= v$(RELEASE_VERSION)
+RELEASE_BRANCH ?= v4-main
+
+.PHONY: release-verify release-summary release-draft release-freeze release-tag release-push release-publish release-final help-release
+
+release-verify:
+> echo ">>> verify: tree clean, tag free, semver"
+> @test -z "$$((git status --porcelain))" || (echo "Working tree not clean" && exit 1)
+> @test -z "$$(git tag -l $(RELEASE_TAG))" || (echo "Tag $(RELEASE_TAG) already exists" && exit 1)
+> @echo "$(RELEASE_VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$' || (echo "Invalid SemVer: $(RELEASE_VERSION)" && exit 1)
+> @echo "[ok] verification passed"
+
+release-summary:
+> echo ">>> summary: collect commits since last tag"
+> @mkdir -p dist/changelog
+> @LAST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo ""); \
+> if [ -n "$$LAST_TAG" ]; then \
+>   git log --pretty=oneline $$LAST_TAG..HEAD > dist/changelog/CHANGES_SINCE_LAST_TAG.txt; \
+> else \
+>   git log --pretty=oneline > dist/changelog/CHANGES_SINCE_LAST_TAG.txt; \
+> fi; \
+> @echo "[ok] wrote dist/changelog/CHANGES_SINCE_LAST_TAG.txt"
+
+release-draft:
+> echo ">>> draft: release notes + changelog (dry-run)"
+> @mkdir -p docs/release_notes dist/changelog
+> $(PYTHON) -m src.tools.render_release_from_templates \
+>   --version $(RELEASE_VERSION) \
+>   --tag $(RELEASE_TAG) \
+>   --title "Release $(RELEASE_TAG)" \
+>   --summary "Auto-generated draft. See CHANGES_SINCE_LAST_TAG.txt." \
+>   --branch $(RELEASE_BRANCH)
+> @echo "[ok] draft prepared under docs/release_notes and dist/changelog"
+
+release-freeze:
+> echo ">>> freeze: pip freeze snapshot"
+> @mkdir -p dist/provenance
+> $(PYTHON) -m pip freeze > dist/provenance/pip_freeze_$$(date -u +%F).txt
+> @echo "[ok] freeze written"
+
+release-tag:
+> echo ">>> tagging $(RELEASE_TAG)"
+> @git add docs/release_notes dist/changelog dist/provenance || true
+> @git commit -m "chore(release): finalize artifacts for $(RELEASE_TAG)" || echo "(no changes to commit)"
+> @git tag -a $(RELEASE_TAG) -m "Release $(RELEASE_TAG)"
+> @echo "[ok] commit+tag created"
+
+release-push:
+> echo ">>> pushing branch + tags"
+> @git push origin $$(git rev-parse --abbrev-ref HEAD)
+> @git push origin --tags
+> @echo "[ok] pushed"
+
+release-publish:
+> echo ">>> gh release create $(RELEASE_TAG)"
+> echo "(gh CLI optional)"
+> gh release create $(RELEASE_TAG) \
+>   --title "$(RELEASE_TAG)" \
+>   --notes-file "docs/release_notes/release_notes_$(RELEASE_VERSION).md" \
+>   dist/changelog/CHANGELOG.dryrun.md \
+>   dist/provenance/pip_freeze_$$(date -u +%F).txt || true
+> @echo "[ok] GitHub Release created (or gh not available)"
+
+release-final: release-verify release-summary release-draft release-freeze release-tag
+> @echo "[ok] local release finalized: $(RELEASE_TAG)"
+
+help-release:
+> echo "Release targets:"
+> echo "  make release-verify    # tree clean, tag livre, SemVer"
+> echo "  make release-summary   # gera CHANGES_SINCE_LAST_TAG.txt"
+> echo "  make release-draft     # gera release_notes + changelog draft"
+> echo "  make release-freeze    # pip freeze -> dist/provenance"
+> echo "  make release-tag       # commit + tag local"
+> echo "  make release-push      # push branch + tags"
+> echo "  make release-publish   # cria GitHub Release (gh CLI)"
+> echo "  make release-final     # encadeado local (sem push/publish)"
+
 qc:
 > echo ">>> qc: running src.eda"
 > $(PYTHON) -m src.eda
