@@ -35,44 +35,9 @@ freeze:
 	$(PYTHON) -c "import platform; print(platform.python_version())"
 	$(PIP) freeze > provenance/pip_freeze_$$(date +%F).txt || $(PIP) freeze > provenance/pip_freeze.txt
 
-etl:
-	@echo ">>> Running ETL pipeline"
-	$(PYTHON) -m src.etl_pipeline
-
-labels:
-	@echo ">>> Applying label rules"
-	$(PYTHON) -m src.make_labels --rules config/label_rules.yaml --in data/etl/FEATURES_PATH/features_daily.csv --out data/etl/FEATURES_PATH/features_daily_labeled.csv
-
-qc:
-	@echo ">>> Running EDA/QC"
-	$(PYTHON) -m src.eda
-
-pack-kaggle:
-	@echo ">>> Packing dataset for Kaggle"
-	# Implement: zip features_daily(_labeled).csv + version_log_enriched.csv + README into dist/assets/<slug>.zip
-
-clean:
-	@echo ">>> clean: caches and temp files"
-	- find . -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
-	- find . -name ".ipynb_checkpoints" -type d -prune -exec rm -rf {} + 2>/dev/null || true
-	- find . -name "*.pyc" -delete 2>/dev/null || true
-	- find . -name "*.log" -delete 2>/dev/null || true
-	@echo "✔ caches/logs removed"
-
-# Remove dataset outputs (but keep source code and configs)
-clean-data:
-	@echo ">>> clean-data: ETL/AI outputs and reports"
-	- rm -rf notebooks/outputs dist/assets logs backups processed 2>/dev/null || true
-	- rm -rf data/etl data/ai 2>/dev/null || true
-	@echo "✔ data outputs removed"
-
-# Full sweep: clean + data + common leftovers introduced pre-v4
-clean-all: clean
-	@echo ">>> clean-all: legacy dirs (pre-v4) and provenance artifacts"
-	- rm -rf data_ai data_ai_legacy_* reports 2>/dev/null || true
-	- rm -rf etl_tools make_scripts processed apple_etl_cache 2>/dev/null || true
-	- rm -rf notebooks/eda_outputs 2>/dev/null || true
-	@echo "✔ everything swept (safe)"
+## NOTE: earlier workflow targets (etl, clean, clean-data, clean-all, qc, labels)
+## were intentionally removed from this section to avoid duplicate definitions.
+## See canonical definitions appended at the end of this Makefile (single source of truth).
 
 # PROJECT RULES FOR MAKE (READ FIRST)
 # 1) Never use heredoc (<<EOF) in Make recipes.
@@ -496,17 +461,11 @@ plots-all-lite:
 > @echo "Running: PYTHONPATH=\"$$PWD\" $(PY) make_scripts/plots_all_lite.py --pid \"$(PID)\" --snap \"$(SNAP)\" --policy \"$${POLICY:-best_of_day}\" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )"
 > @PYTHONPATH="$$PWD" $(PY) make_scripts/plots_all_lite.py --pid "$(PID)" --snap "$(SNAP)" --policy "$${POLICY:-best_of_day}" $$( [ "$(DRY_RUN)" = "1" ] && echo --dry-run || true )
 
-# --- Maintenance ---------------------------------------------
-clean:
-> @find . -name "__pycache__" -type d -prune -exec rm -rf {} + || true
-> @find . -name "*.pyc" -delete || true
-> @find . -name "*.log" -delete || true
-> @echo "✔ cleaned caches/logs"
-
-deepclean:
-> @rm -rf $(OUT_DIR) $(IOS_DIR)/decrypted_output || true
-> @echo "⚠ removed decrypted outputs (PII)."
-
+# --- Maintenance (legacy simple clean removed) -----------------
+# Use the top-level `make clean`, `make clean-data`, or `make clean-all` targets
+# added near the top of this Makefile. Legacy per-target cleanup recipes were
+# removed/disabled to avoid conflicting definitions and to provide a consistent
+# cross-platform cleaning experience after the v4 refactor.
 
 .PHONY: diag-a8
 diag-a8:
@@ -783,34 +742,10 @@ RELEASE_PUSH  ?= 0
 
 .PHONY: release-draft release-publish release-assets
 
-<<<<<<< Updated upstream:Makefile
-# Orchestrated release-draft (idempotent, single version-guard, auto-commit generated files)
+## NOTE: release-draft logic (legacy make_scripts based) removed for v4.
+## Use CI or the repository's release tooling to prepare drafts/releases.
 release-draft:
-> 	@echo "Preparing release draft for $(NEXT_TAG)"
-> 	@# Run version guard once at start. Allow dirty only when ALLOW_DIRTY=1
-> 	@echo "Running version guard for TAG=$(NEXT_TAG) (allow dirty: $${ALLOW_DIRTY:-false})"
-> 	@$(VENV_PY) make_scripts/version_guard.py --tag "$(NEXT_TAG)" $$( [ "$${ALLOW_DIRTY:-0}" = "1" ] && echo --allow-dirty || true ) --remote-check --remote origin
-> 	@# Render release notes and update changelog with explicit NEXT_VERSION/NEXT_TAG
-> 	@$(MAKE) release-notes VERSION="$(NEXT_VERSION)" TAG="$(NEXT_TAG)"
-> 	@$(MAKE) changelog-update VERSION="$(NEXT_VERSION)" TAG="$(NEXT_TAG)"
-> 	@# Stage and auto-commit generated changelog + release notes if they changed
-> 	@git add CHANGELOG.md docs/release_notes/release_notes_$(NEXT_TAG).md 2>/dev/null || true
-> 	@if ! git diff --staged --quiet --exit-code; then \
-> 	  git commit -m "release($(NEXT_TAG)): notes + changelog"; \
-=======
-release-draft: version-guard release-notes changelog-update release-assets
-> 	@echo "Preparing release draft for $(TAG)"
-> 	@# run version guard (do not swallow failures). Allow dirty only when ALLOW_DIRTY=1
-> 	@$(VENV_PY) make_scripts/release/version_guard.py --tag "$(TAG)" $$( [ "$${ALLOW_DIRTY:-0}" = "1" ] && echo --allow-dirty || true ) --remote-check --remote origin
-> 	@# After changelog, stage CHANGELOG and release notes and commit if changed
-> 	@git add CHANGELOG.md docs/release_notes/release_notes_$(TAG).md 2>/dev/null || true
-> 	@if ! git diff --cached --quiet --exit-code; then \
-> 	  git commit -m "docs(release): update CHANGELOG for $(TAG)" || true; \
->>>>>>> Stashed changes:makefile
-> 	else \
-> 	  echo "No changelog/release-notes changes to commit"; \
-> 	fi
-> 	@# Collect release assets after committing generated docs
+> @echo "[v4] release-draft disabled; use CI/release tooling"
 > 	@$(MAKE) release-assets RELEASE_DRY_RUN=$(RELEASE_DRY_RUN) TAG="$(NEXT_TAG)"
 > 	@echo "Draft prepared for $(NEXT_TAG). No tag pushed."
 
@@ -982,16 +917,10 @@ lint-args:
 > @python make_scripts/lint_make.py || (echo "ERROR: heredoc tokens found by lint_make.py" && exit 2)
 > @echo "lint-args: OK"
 
-# Safe cleanup of snapshot outputs and provenance outputs for PID P000001
 .PHONY: clean-data
-clean-data:
-> 	@echo "Cleaning under ETL_DIR=$(ETL_DIR) and AI_DIR=$(AI_DIR) (safe subset: extracted, normalized, processed, joined)"
->	@echo "Tip: set DRY_RUN=1 to preview what will be removed"
->	@echo "Running per-stage cleanup"
->	@ETL_DIR="$(ETL_DIR)" AI_DIR="$(AI_DIR)" SNAPSHOT_DATE="$(SNAPSHOT_DATE)" DRY_RUN="$(DRY_RUN)" NON_INTERACTIVE="$(NON_INTERACTIVE)" $(VENV_PY) make_scripts/clean_data_make.py --stage extracted $$( [ "$(PRUNE)" = "true" ] && echo --prune-extras || true ) $$( [ -n "$(PRUNE_LIST)" ] && echo --prune-list "$(PRUNE_LIST)" || true ) $(CLEAN_ARGS)
->	@ETL_DIR="$(ETL_DIR)" AI_DIR="$(AI_DIR)" SNAPSHOT_DATE="$(SNAPSHOT_DATE)" DRY_RUN="$(DRY_RUN)" NON_INTERACTIVE="$(NON_INTERACTIVE)" $(VENV_PY) make_scripts/clean_data_make.py --stage normalized $(CLEAN_ARGS)
->	@ETL_DIR="$(ETL_DIR)" AI_DIR="$(AI_DIR)" SNAPSHOT_DATE="$(SNAPSHOT_DATE)" DRY_RUN="$(DRY_RUN)" NON_INTERACTIVE="$(NON_INTERACTIVE)" $(VENV_PY) make_scripts/clean_data_make.py --stage processed $(CLEAN_ARGS)
->	@ETL_DIR="$(ETL_DIR)" AI_DIR="$(AI_DIR)" SNAPSHOT_DATE="$(SNAPSHOT_DATE)" DRY_RUN="$(DRY_RUN)" NON_INTERACTIVE="$(NON_INTERACTIVE)" $(VENV_PY) make_scripts/clean_data_make.py --stage joined $(CLEAN_ARGS)
+# Legacy per-stage clean-data removed in favor of top-level `make clean-data` target above which
+# performs a conservative removal of ETL/AI outputs and notebooks outputs. If you need per-stage
+# fine-grained removal, restore make_scripts/clean_data_make.py and the previous recipe.
 
 .PHONY: env-versions
 env-versions:
@@ -1201,9 +1130,7 @@ help-workflow:
 > echo "Variáveis úteis: PARTICIPANT SNAPSHOT CUTOVER TZ_BEFORE TZ_AFTER NB2_SCRIPT"
 > echo ""
 
-# Alias tradicional: 'make etl' chama o pipeline completo (etl-full)
-etl: etl-full
-> echo "⚙️  Alias: 'make etl' → 'make etl-full'"
+# NOTE: legacy alias 'make etl' -> 'etl-full' removed; canonical 'etl' target now defined at EOF
 
 # Pipeline complete (normalize + join + features). Respeita --auto-zip se implementado no script.
 etl-full:
@@ -1376,3 +1303,55 @@ help-som-scan:
 > @echo "Examples:"
 > @echo "  make som-scan PARTICIPANT=P000001 SNAPSHOT_DATE=2025-09-29 SOM_SCAN_FLAGS='--trace'"
 > @echo "  make som-scan PARTICIPANT=P000001 SNAPSHOT_DATE=2025-09-29 SOM_SCAN_FLAGS='--write-normalized'"
+
+# ----------------------------------------------------------------------
+# Canonical final targets for v4 (single source of truth)
+# ----------------------------------------------------------------------
+.PHONY: clean clean-data clean-all etl qc labels
+
+# Folders considered data/artefacts
+DATA_DIRS := notebooks/outputs dist/assets logs backups processed data/etl data/ai
+
+LEGACY_DIRS := data_ai data_ai_legacy_* reports etl_tools make_scripts apple_etl_cache notebooks/eda_outputs
+
+.PHONY: clean clean-data clean-all etl qc labels
+
+# Remove caches/artefacts generated by Python & notebooks (safe)
+
+clean:
+> @echo ">>> clean: caches and temp files"
+> - find . -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
+> - find . -name ".ipynb_checkpoints" -type d -prune -exec rm -rf {} + 2>/dev/null || true
+> - find . -name "*.pyc" -delete 2>/dev/null || true
+> - find . -name "*.log" -delete 2>/dev/null || true
+> @echo "✔ caches/logs removed"
+
+# Remove dataset outputs (but keep source code and configs)
+clean-data:
+> @echo ">>> clean-data: ETL/AI outputs and reports"
+> - rm -rf notebooks/outputs dist/assets logs backups processed 2>/dev/null || true
+> - rm -rf data/etl data/ai 2>/dev/null || true
+> @echo "✔ data outputs removed"
+
+# Full sweep: clean + data + common leftovers introduced pre-v4
+
+clean-all: clean
+> @echo ">>> clean-all: legacy dirs (pre-v4) and provenance artifacts"
+> - rm -rf data_ai data_ai_legacy_* reports 2>/dev/null || true
+> - rm -rf etl_tools make_scripts processed apple_etl_cache 2>/dev/null || true
+> - rm -rf notebooks/eda_outputs 2>/dev/null || true
+> @echo "✔ everything swept (safe)"
+
+
+etl:
+> @echo ">>> etl: running src.etl_pipeline"
+> $(PYTHON) -m src.etl_pipeline
+
+qc:
+> @echo ">>> qc: running src.eda"
+> $(PYTHON) -m src.eda
+
+labels:
+> @echo ">>> labels: running src.make_labels (adjust FEATURES_PATH before running)"
+> $(PYTHON) -m src.make_labels --rules config/label_rules.yaml --in data/etl/FEATURES_PATH/features_daily.csv --out data/etl/FEATURES_PATH/features_daily_labeled.csv
+
