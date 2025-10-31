@@ -1138,7 +1138,22 @@ nb2-run-slug: check-nb2-entry
 > @test -n "$(SLUG)" || (echo "ERROR: SLUG must be provided. e.g. SLUG=p000001-s20250929-nb2v303-r1" && exit 1)
 > @test -f "$(AI_LOCAL_ROOT)/$(SLUG)/features_daily_labeled.csv" || (echo "ERROR: features file not found for slug: $(AI_LOCAL_ROOT)/$(SLUG)/features_daily_labeled.csv" && exit 1)
 > @echo "[NB2] Run slug=$(SLUG) -> $(AI_LOCAL_ROOT)/$(SLUG)/features_daily_labeled.csv"
-> $(PY) "$(NB2_SCRIPT)" --slug "$(SLUG)" --local-root "$(AI_LOCAL_ROOT)"
+> $(PY) "$(NB2_ENTRY)" --slug "$(SLUG)" --local-root "$(AI_LOCAL_ROOT)"
+
+.PHONY: nb3-run-slug nb3-sweep
+
+# Run NB3 (DL) for a specific slug under AI_LOCAL_ROOT
+nb3-run-slug: check-nb2-entry
+> @test -n "$(SLUG)" || (echo "ERROR: SLUG must be provided. e.g. SLUG=p000001-s20250929-nb2v303-r1" && exit 1)
+> @test -f "$(AI_LOCAL_ROOT)/$(SLUG)/features_daily_labeled.csv" || (echo "ERROR: features file not found for slug: $(AI_LOCAL_ROOT)/$(SLUG)/features_daily_labeled.csv" && exit 1)
+> @echo "[NB3] Run slug=$(SLUG) -> $(AI_LOCAL_ROOT)/$(SLUG)/features_daily_labeled.csv"
+> $(PY) "$(NB3_ENTRY)" --slug "$(SLUG)" $(ARGS)
+
+# Run NB3 sweep
+nb3-sweep: check-nb2-entry
+> @test -n "$(SLUG)" || (echo "ERROR: SLUG must be provided. e.g. SLUG=p000001-s20250929-nb2v303-r1" && exit 1)
+> @echo "[NB3] Sweep slug=$(SLUG) -> $(AI_LOCAL_ROOT)/$(SLUG)/features_daily_labeled.csv"
+> $(PY) "$(NB3_ENTRY)" --slug "$(SLUG)" --sweep $(ARGS)
 
 # Run NB2 for a slug letting the script autodetect environment (no --local-root needed)
 nb2-run-auto: check-nb2-entry
@@ -1186,7 +1201,8 @@ clean-legacy:
 #   make nb2-batch LOCAL_DATASETS_ROOT=./data/ai/local LIMIT=5
 AI_LOCAL_ROOT ?= ./data/ai/local
 LOCAL_DATASETS_ROOT ?= $(AI_LOCAL_ROOT)
-NB2_ENTRY ?= notebooks/NB2_Baseline_and_LSTM.py
+NB2_ENTRY ?= notebooks/NB2_Baseline.py
+NB3_ENTRY ?= notebooks/NB3_DeepLearning.py
 LIMIT ?= 1
 
 
