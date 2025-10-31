@@ -19,3 +19,15 @@ if SRC_PATH.exists():
         globals()[_name] = getattr(_mod, _name)
 else:
     raise ImportError('notebooks/NB-01_EDA-ANY-DAILY-overview.py not found')
+
+# If executed as a script, forward to the notebook module's main() if present
+if __name__ == '__main__':
+    if 'main' in globals():
+        try:
+            sys.exit(globals()['main']())
+        except SystemExit:
+            raise
+        except Exception:
+            raise
+    else:
+        raise SystemExit('eda entrypoint: no main() found in loaded module')

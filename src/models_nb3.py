@@ -16,3 +16,16 @@ if SRC_PATH.exists():
         globals()[_name] = getattr(_mod, _name)
 else:
     raise ImportError('notebooks/NB3_DeepLearning.py not found')
+ 
+# When executed as a script, forward execution to the loaded notebook module's main()
+if __name__ == '__main__':
+    # prefer the notebook's main() if available
+    if 'main' in globals():
+        try:
+            sys.exit(globals()['main']())
+        except SystemExit as e:
+            raise
+        except Exception as e:
+            raise
+    else:
+        raise SystemExit('nb3 entrypoint: no main() found in loaded module')

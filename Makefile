@@ -1355,3 +1355,30 @@ labels:
 > @echo ">>> labels: running src.make_labels (adjust FEATURES_PATH before running)"
 > $(PYTHON) -m src.make_labels --rules config/label_rules.yaml --in data/etl/FEATURES_PATH/features_daily.csv --out data/etl/FEATURES_PATH/features_daily_labeled.csv
 
+# Create a kaggle-style package containing the features and small provenance
+# Outputs: dist/assets/<PARTICIPANT>_<SNAPSHOT>_ai.zip
+# Files included (if present): data/etl/<pid>/snapshots/<snapshot>/joined/features_daily*.csv,
+#                               data/etl/<pid>/snapshots/<snapshot>/joined/version_log_enriched.csv,
+#                               README.md
+pack-kaggle:
+> @echo ">>> pack-kaggle: packaging kaggle zip for $(PARTICIPANT) snapshot=$(SNAPSHOT)"
+> @$(PY) - <<'PY'
+> import zipfile, pathlib, sys
+> p = pathlib.Path('$(ETL_JOINED_DIR)')
+> files = list(p.glob('features_daily*.csv'))
+> v = p / 'version_log_enriched.csv'
+> if v.exists(): files.append(v)
+> readme = pathlib.Path('README.md')
+> if readme.exists(): files.append(readme)
+> if not files:
+>     print('No files found to package from', p)
+>     sys.exit(1)
+> outdir = pathlib.Path('dist/assets')
+> outdir.mkdir(parents=True, exist_ok=True)
+> zipfn = outdir / f"{ '$(PARTICIPANT)' }_{ '$(SNAPSHOT)' }_ai.zip"
+> with zipfile.ZipFile(zipfn, 'w', compression=zipfile.ZIP_DEFLATED) as z:
+>     for f in files:
+>         z.write(f, arcname=f.name)
+> print('Wrote', zipfn)
+> PY
+
