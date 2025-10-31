@@ -7,6 +7,12 @@ from pathlib import Path
 import importlib.util
 import sys
 
+# Safe default ENV guard for notebooks expecting ENV
+try:
+    ENV  # noqa: F821
+except NameError:
+    ENV = {}
+
 def _load_notebook_module():
     """Load the original notebook-based EDA module and expose its names.
 
@@ -19,6 +25,7 @@ def _load_notebook_module():
         spec = importlib.util.spec_from_file_location('nb1_eda_orig', str(SRC_PATH))
         _mod = importlib.util.module_from_spec(spec)
         sys.modules['nb1_eda_orig'] = _mod
+        # Execute module in its own namespace; notebook may reference ENV from here
         spec.loader.exec_module(_mod)
         names = [n for n in dir(_mod) if not n.startswith('_')]
         for _name in names:
