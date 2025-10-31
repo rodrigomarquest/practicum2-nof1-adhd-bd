@@ -171,6 +171,14 @@ release-publish:
 release-final: release-verify release-summary release-draft release-freeze release-tag
 > @echo "[ok] local release finalized: $(RELEASE_TAG)"
 
+release-assets:
+> @echo ">>> Assembling release package for $(RELEASE_VERSION)"
+> @mkdir -p dist/assets/$(RELEASE_VERSION)
+> @cp docs/release_notes/release_notes_v$(RELEASE_VERSION).md dist/assets/$(RELEASE_VERSION)/
+> @cp dist/changelog/CHANGELOG.dryrun.md dist/assets/$(RELEASE_VERSION)/CHANGELOG.md || true
+> @cp provenance/etl_provenance_report.csv dist/assets/$(RELEASE_VERSION)/ || true
+> @echo "[OK] Assembled assets for v$(RELEASE_VERSION)"
+
 help-release:
 > echo "Release targets:"
 > echo "  make release-verify    # tree clean, tag livre, SemVer"

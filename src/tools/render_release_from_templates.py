@@ -34,20 +34,30 @@ def get_changes_since(tag: str) -> str:
     return sh("git log --pretty=oneline || true")
 
 
+def get_changes_detailed(tag: str) -> str:
+    """Return git log lines with short-sha, author, and subject separated by TAB."""
+    if tag:
+        return sh(f"git log --pretty=format:%h%x09%an%x09%s {tag}..HEAD || true")
+    return sh("git log --pretty=format:%h%x09%an%x09%s || true")
+
+
 def parse_commits(changes_text: str):
-    """Return list of (sha, message) tuples from git log --pretty=oneline output."""
+    """Return list of (sha, author, message) tuples from git log with TAB-separated fields."""
     commits = []
     for line in changes_text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        parts = line.split(" ", 1)
-        if len(parts) == 2:
-            sha, msg = parts
-        else:
-            sha = parts[0]
+        parts = line.split("\t")
+        if len(parts) >= 3:
+            sha, author, msg = parts[0].strip(), parts[1].strip(), parts[2].strip()
+        elif len(parts) == 2:
+            sha, author = parts[0].strip(), parts[1].strip()
             msg = ""
-        commits.append((sha, msg))
+        elif parts:
+            sha = parts[0].strip()
+            author = "(unknown)"
+            msg = ""
+        else:
+            continue
+        commits.append((sha, author, msg))
     return commits
 
 
@@ -146,15 +156,40 @@ def main() -> int:
     p.add_argument("--tag", required=True)
     p.add_argument("--title", default=None)
     p.add_argument("--summary", default=None)
+    p.add_argument("--last-tag", dest="last_tag", default=None,
+                   help="Explicit last tag to compute changelog range (optional).")
     p.add_argument("--branch", default=None)
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--out", default=None)
     args = p.parse_args()
 
-    now = datetime.datetime.utcnow().isoformat() + "Z"
-    last_tag = get_last_tag()
-    changes = get_changes_since(last_tag)
-    commits = parse_commits(changes)
+    now = datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+
+    # compute last_tag: if explicit provided use it; otherwise pick the newest tag
+    # that is not the target tag (args.tag). This avoids using the target tag as base
+    # when the tag already exists locally.
+    def compute_last_tag(explicit_last_tag, target_tag):
+        if explicit_last_tag:
+            return explicit_last_tag
+        try:
+            tags_out = sh("git tag --sort=-creatordate || true")
+        except Exception:
+            tags_out = ""
+        tags = [t.strip() for t in tags_out.splitlines() if t.strip()]
+        for t in tags:
+            if t != target_tag:
+                return t
+        # fallback to git describe --tags
+        lt = get_last_tag()
+        if lt and lt != target_tag:
+            return lt
+        return ""
+
+    last_tag = compute_last_tag(args.last_tag, args.tag)
+
+    # get detailed commits (sha, author, subject)
+    changes_detailed = get_changes_detailed(last_tag)
+    commits = parse_commits(changes_detailed)
     commit_count = len(commits)
 
     rn_dir = pathlib.Path("docs/release_notes")
@@ -165,46 +200,128 @@ def main() -> int:
     title = args.title or f"Release {args.tag}"
     summary_arg = args.summary or "Auto-generated draft."
     branch = args.branch or sh("git rev-parse --abbrev-ref HEAD")
+    git_user = sh("git config user.name || true") or "(unknown)"
 
     # Group commits and prepare highlights
-    groups = group_commits(commits)
-    # prepare a short summary paragraph
+    # group_commits expects list of (sha, author, msg)
+    groups = defaultdict(list)
+    for sha, author, msg in commits:
+        low = msg.lower()
+        found = None
+        display = msg
+        for p in KNOWN_PREFIXES:
+            if low.startswith(p):
+                found = p.rstrip(":")
+                display = msg[len(p) :].strip()
+                break
+        if not found:
+            found = "other"
+        groups[found].append((sha, author, display))
+
     if last_tag:
         commit_range = f"{last_tag}..HEAD"
     else:
         commit_range = "HEAD (no previous tag)"
 
-    group_counts = ", ".join([f"{k}:{len(v)}" for k, v in groups.items()])
+    # counts by group
+    group_counts = ", ".join([f"{k}:{len(v)}" for k, v in groups.items() if len(v) > 0]) or "none"
+    # compute unique authors count
+    unique_authors = len(set([a for _, a, _ in commits]))
     summary_paragraph = (
-        f"{summary_arg}\n\nSummary of commits since {last_tag or 'start'}: {group_counts}."
+        f"{summary_arg}\n\n**Since {last_tag or 'start'}:** {commit_count} commits · {group_counts} · {unique_authors} authors."
     )
 
     # build highlights: 2-3 bullets per group
     highlights_sections = []
     for k in sorted(groups.keys(), key=lambda x: (x != "feat", x)):
-        sec = summarize_group(k, groups[k], max_bullets=3)
+        # summarize_group expects items as (sha, display) pairs
+        items = [(sha, disp) for sha, _, disp in groups[k]]
+        sec = summarize_group(k, items, max_bullets=3)
         highlights_sections.append(sec)
     highlights_text = "\n\n".join(highlights_sections)
 
-    # changelog snippet: raw git log truncated to reasonable length
-    changelog_snippet = "```text\n" + changes.strip() + "\n```" if changes.strip() else "(no commits)"
+    # prepare full changelog block (oneline format) for appendix
+    full_changelog = get_changes_since(last_tag)
+    changelog_snippet = "```text\n" + full_changelog.strip() + "\n```" if full_changelog.strip() else "(no commits)"
 
-    rendered = TEMPLATE.format(
-        VERSION=args.version,
-        TITLE=title,
-        DATE=now,
-        BRANCH=branch,
-        SUMMARY_PARAGRAPH=summary_paragraph,
-        HIGHLIGHTS=highlights_text,
-        COMMIT_RANGE=commit_range,
-        TAG=args.tag,
-        CHANGELOG_SNIPPET=changelog_snippet,
-    )
+    # metrics: counts by type and top authors
+    by_type_items = sorted(((k, len(v)) for k, v in groups.items() if len(v) > 0), key=lambda x: -x[1])
+    by_type_inline = ", ".join([f"{k}:{cnt}" for k, cnt in by_type_items]) or "none"
+    by_type_multiline = "\n".join([f"- {k}: {cnt}" for k, cnt in by_type_items]) or "- none"
 
-    # write dry-run changelog for review
+    # top authors
+    authors = defaultdict(int)
+    for sha, author, _ in commits:
+        authors[author] += 1
+    top_authors = sorted(authors.items(), key=lambda x: -x[1])[:5]
+    top_authors_text = ", ".join([f"{n} ({c})" for n, c in top_authors]) or "(none)"
+
+    # Prepare context for template rendering
+    template_path = pathlib.Path(__file__).parent / "templates" / "release_canonical.md.j2"
+
+    stats_block = textwrap.dedent(
+        """
+    - Total: {total}
+    {by_type}
+    - Top authors: {top_authors}
+    """
+    ).format(total=commit_count, by_type=by_type_multiline, top_authors=top_authors_text)
+
+    next_steps = "\n".join([
+        "- Integrate Zepp ETL",
+        "- Add CI release tests",
+        "- Retrain multi-snapshot models",
+    ])
+
+    context = {
+        "VERSION": args.version,
+        "TITLE": title,
+        "DATE": now,
+        "BRANCH": branch,
+        "LAST_TAG": last_tag or "",
+        "COMMIT_COUNT": commit_count,
+        "BY_TYPE_LINE": by_type_inline,
+        "AUTHOR_COUNT": unique_authors,
+        "TOP_AUTHORS": top_authors_text,
+        "HIGHLIGHTS_BLOCKS": highlights_text,
+        "STATS_BLOCK": stats_block,
+        "NEXT_STEPS": next_steps,
+        "TAG": args.tag,
+        "CHANGELOG_SNIPPET": changelog_snippet,
+        "SUMMARY_PARAGRAPH": summary_paragraph,
+    }
+
+    if template_path.exists():
+        try:
+            import jinja2
+
+            tpl = jinja2.Template(template_path.read_text(encoding="utf-8"))
+            rendered = tpl.render(**context)
+        except Exception:
+            # Fallback: naive placeholder replacement for {{ VAR }} patterns
+            tpl_text = template_path.read_text(encoding="utf-8")
+            rendered = tpl_text
+            for k, v in context.items():
+                rendered = rendered.replace("{{ %s }}" % k, str(v))
+                rendered = rendered.replace("{{%s}}" % k, str(v))
+    else:
+        # fallback to the built-in TEMPLATE
+        rendered = TEMPLATE.format(
+            VERSION=args.version,
+            TITLE=title,
+            DATE=now,
+            BRANCH=branch,
+            SUMMARY_PARAGRAPH=summary_paragraph,
+            HIGHLIGHTS=highlights_text,
+            COMMIT_RANGE=commit_range,
+            TAG=args.tag,
+            CHANGELOG_SNIPPET=changelog_snippet,
+        )
+
+    # write dry-run changelog for review (full oneline log)
     rn_file = rn_dir / f"release_notes_v{args.version}.md"
     (out_dir / "CHANGELOG.dryrun.md").write_text(
-        f"Wrote {rn_file.as_posix()}\n\n{changes}\n", encoding="utf-8"
+        f"Range: {commit_range}\n\n{full_changelog}\n", encoding="utf-8"
     )
 
     if args.dry_run:
@@ -215,7 +332,7 @@ def main() -> int:
     rn_file.write_text(rendered, encoding="utf-8")
     if args.out:
         pathlib.Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-        pathlib.Path(args.out).write_text(rendered, encoding="utf-8")
+        pathlib.Path(args.out).write_text(full_changelog + "\n", encoding="utf-8")
 
     print(f"[OK] Wrote {rn_file.as_posix()} (canonical template)")
     print(f"[OK] Summarized {commit_count} commits since {last_tag or 'initial commit'}")

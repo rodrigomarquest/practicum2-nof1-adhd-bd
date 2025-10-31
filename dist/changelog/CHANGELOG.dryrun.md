@@ -1,5 +1,6 @@
-Wrote docs/release_notes/release_notes_v4.0.2.md
+Range: v4.0.1..HEAD
 
+293df0eac23f8a8ec600bffdb4bd302f7b9930c0 docs(release): regenerate canonical v4.0.2 notes (from v3.9.9)
 e9a67967b105eb58d92d221402a2192ef8f8f7e7 feat(release): canonical release-note template + commit grouping in renderer
 b99b4b1035c5c5627708cabe4971e8e62be1d7cb chore(release): finalize artifacts for v4.0.2
 331c1263a0e005da639cddbd80caee6687ba66fa docs(release): add v4.0.2 release notes and changelog (dry-run)
