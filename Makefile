@@ -15,6 +15,8 @@
 # GNU make "wildcard" returns empty if path doesn't exist.
 PYTHON := $(if $(wildcard .venv/Scripts/python.exe),.venv/Scripts/python.exe,$(if $(wildcard .venv/bin/python),.venv/bin/python,python))
 VENV_DIR := .venv
+PID ?= P000001
+SNAPSHOT ?= 2025-09-29
 
 # -------- Installation (centralized requirements/) --------
 .PHONY: install-base install-dev install-kaggle install-local
@@ -76,10 +78,15 @@ etl:
 > echo ">>> etl: running src.etl_pipeline"
 > $(PYTHON) -m src.etl_pipeline
 
-# Adjust FEATURES_PATH/PID/SNAPSHOT via env or config/settings.yaml as needed.
+# Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
 labels:
-> echo ">>> labels: running src.make_labels"
-> $(PYTHON) -m src.make_labels --rules config/label_rules.yaml --in data/etl/FEATURES_PATH/features_daily.csv --out data/etl/FEATURES_PATH/features_daily_labeled.csv
+> echo ">>> labels: running src.make_labels for $(PARTICIPANT) @ $(SNAPSHOT)"
+> $(PYTHON) -m src.make_labels \
+>   --rules config/label_rules.yaml \
+>   --in  data/etl/$(PARTICIPANT)/snapshots/$(SNAPSHOT)/joined/features_daily.csv \
+>   --out data/etl/$(PARTICIPANT)/snapshots/$(SNAPSHOT)/joined/features_daily_labeled.csv
+
+
 
 # ----------------------------------------------------------------------
 # Release pipeline (v4-friendly helpers)
@@ -94,8 +101,8 @@ RELEASE_BRANCH ?= v4-main
 .PHONY: release-verify release-summary release-draft release-freeze release-tag release-push release-publish release-final help-release
 
 release-verify:
-> echo ">>> verify: tree clean, tag free, semver"
-> @test -z "$$((git status --porcelain))" || (echo "Working tree not clean" && exit 1)
+> @echo ">>> verify: tree clean, tag free, semver"
+> @test -z "$$(git status --porcelain)" || (echo "Working tree not clean" && exit 1)
 > @test -z "$$(git tag -l $(RELEASE_TAG))" || (echo "Tag $(RELEASE_TAG) already exists" && exit 1)
 > @echo "$(RELEASE_VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$' || (echo "Invalid SemVer: $(RELEASE_VERSION)" && exit 1)
 > @echo "[ok] verification passed"
@@ -169,15 +176,11 @@ qc:
 > echo ">>> qc: running src.eda"
 > $(PYTHON) -m src.eda
 
-# Minimal pack-kaggle: bundles features + version log. Edit PID/SNAPSHOT if needed.
-# Reads from data/etl/P000001/snapshots/2025-09-29/joined by default.
-PID ?= P000001
-SNAPSHOT ?= 2025-09-29
 PACK_OUT := dist/assets
 
 pack-kaggle:
-> echo ">>> pack-kaggle: packaging Kaggle dataset snapshot for $(PID) $(SNAPSHOT)"
-> $(PYTHON) - <<'PY'
+> @echo ">>> pack-kaggle: packaging Kaggle dataset snapshot for $(PARTICIPANT) $(SNAPSHOT)"
+> @PID=$(PARTICIPANT) SNAPSHOT=$(SNAPSHOT) $(PYTHON) - <<'PY'
 > import zipfile, pathlib, sys, os
 > pid = os.environ.get("PID", "$(PID)")
 > snap = os.environ.get("SNAPSHOT", "$(SNAPSHOT)")

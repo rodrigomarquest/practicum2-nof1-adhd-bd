@@ -45,7 +45,7 @@ def main() -> int:
     p.add_argument("--out", default=None, help="Optional extra path to write combined output")
     args = p.parse_args()
 
-    now = datetime.datetime.datetime.utcnow().isoformat() + "Z"
+    now = datetime.datetime.utcnow().isoformat() + "Z"
     last_tag = get_last_tag()
     changes = get_changes_since(last_tag)
 
