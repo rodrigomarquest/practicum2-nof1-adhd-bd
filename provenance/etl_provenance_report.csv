@@ -1,0 +1,5 @@
+file_name,path,sha256,rows,cols,updated_at
+features_daily.csv,data_ai/P000001/snapshots/2025-10-22/features_daily.csv,unknown,1296,7,2025-10-22T00:00:00Z
+version_log_enriched.csv,data/etl/P000001/snapshots/2025-10-22/version_log_enriched.csv,unknown,1976,8,2025-10-14T00:00:00Z
+etl_qc_summary_manifest.json,data/etl/P000001/snapshots/2025-10-22/processed/apple/etl_qc_summary_manifest.json,unknown,, ,2025-10-22T00:00:00Z
+nb1_eda_summary.md,notebooks/NB-01_EDA-ANY-DAILY-overview.ipynb,unknown,, ,2025-10-22T00:00:00Z

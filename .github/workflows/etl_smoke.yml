@@ -1,0 +1,110 @@
+name: ETL smoke tests
+
+on:
+  pull_request:
+    paths:
+      - "etl_modules/**"
+      - "make_scripts/**"
+      - "Makefile"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      QC_MODE: "fail"
+      NAN_THRESHOLD_PCT: "5"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements_etl.txt','**/requirements_lock.txt') }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal deps
+        run: |
+          python -m pip install --upgrade pip
+          # Prefer the development ETL requirements, fall back to pinned lock if install fails
+          if [ -f requirements_etl.txt ]; then pip install -r requirements_etl.txt || pip install -r requirements_lock.txt; \
+          elif [ -f requirements_lock.txt ]; then pip install -r requirements_lock.txt; fi
+
+      - name: Validate workflow YAML
+        run: |
+          python - <<'PY'
+          import sys, subprocess
+          try:
+              import yaml
+          except Exception:
+              subprocess.check_call([sys.executable, "-m", "pip", "install", "PyYAML"])
+              import yaml
+          yaml.safe_load(open('.github/workflows/etl_smoke.yml'))
+          print("YAML OK")
+          PY
+
+      - name: Prepare fixture
+        run: |
+          # ensure path exists and list files for debugging
+          ls -la tests/fixtures/a6_a7_small || true
+
+      - name: Run A6 (normalize) on fixture (dry-run)
+        id: run_a6
+        run: |
+          set -euo pipefail
+          python make_scripts/apple/run_a6_apple.py --participant P000001 --snapshot 2025-09-29 --dry-run || exit 10
+
+      - name: Run A6 (normalize) on fixture (real)
+        id: run_a6_real
+        run: |
+          set -euo pipefail
+          python make_scripts/apple/run_a6_apple.py --participant P000001 --snapshot 2025-09-29 || exit 11
+
+      - name: Run A7 (aggregate & join)
+        id: run_a7
+        run: |
+          set -euo pipefail
+          python make_scripts/apple/run_a7_apple.py --participant P000001 --snapshot 2025-09-29 || exit 12
+
+      - name: Check outputs presence
+        id: check_outputs
+        run: |
+          set -euo pipefail
+          base=data/etl/P000001/snapshots/2025-09-29/processed/apple
+          files=("health_hr_daily.csv" "health_hrv_sdnn_daily.csv" "health_hrv_rmssd_daily.csv" "health_sleep_daily.csv")
+          missing=0
+          for f in "${files[@]}"; do
+            if [ ! -f "$base/$f" ]; then echo "MISSING $base/$f"; missing=1; fi
+          done
+          if [ "$missing" -ne 0 ]; then exit 20; fi
+
+      - name: Run idempotence check (A6,A7)
+        id: idemp
+        run: |
+          set -euo pipefail
+          python tests/idempotence_a6_a7_a8.py --stages A6,A7 || exit 30
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: etl-smoke-artifacts
+          path: |
+            data/etl/P000001/snapshots/2025-09-29/processed/**
+            data/etl/P000001/snapshots/2025-09-29/normalized/**
+            data/etl/P000001/snapshots/2025-09-29/joined/**
+            data/etl/P000001/snapshots/2025-09-29/**/manifests/**
+            data/ai/P000001/snapshots/2025-09-29/**
+            tests/fixtures/a6_a7_small/**
+
+      - name: Success notice
+        if: success()
+        run: echo "ETL smoke finished successfully"

@@ -1,6 +1,6 @@
 # ================================
-# Practicum2 — N-of-1 ADHD + BD (v4.2)
-# Canonical ignore rules — local ETL + Kaggle
+# Practicum2 — N-of-1 ADHD + BD
+# Canonical .gitignore (2025-11) for v4-series
 # ================================
 
 # --- OS / IDE
