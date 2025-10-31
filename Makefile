@@ -1324,14 +1324,14 @@ clean:
 > - find . -name ".ipynb_checkpoints" -type d -prune -exec rm -rf {} + 2>/dev/null || true
 > - find . -name "*.pyc" -delete 2>/dev/null || true
 > - find . -name "*.log" -delete 2>/dev/null || true
-> @echo "✔ caches/logs removed"
+> @echo "[ok] caches/logs removed"
 
 # Remove dataset outputs (but keep source code and configs)
 clean-data:
 > @echo ">>> clean-data: ETL/AI outputs and reports"
 > - rm -rf notebooks/outputs dist/assets logs backups processed 2>/dev/null || true
 > - rm -rf data/etl data/ai 2>/dev/null || true
-> @echo "✔ data outputs removed"
+> @echo "[ok] data outputs removed"
 
 # Full sweep: clean + data + common leftovers introduced pre-v4
 
@@ -1340,7 +1340,21 @@ clean-all: clean
 > - rm -rf data_ai data_ai_legacy_* reports 2>/dev/null || true
 > - rm -rf etl_tools make_scripts processed apple_etl_cache 2>/dev/null || true
 > - rm -rf notebooks/eda_outputs 2>/dev/null || true
-> @echo "✔ everything swept (safe)"
+> @echo "[ok] everything swept (safe)"
+
+# ---------------------------------------------------------------------
+# Clean provenance artifacts (safe subset)
+# ---------------------------------------------------------------------
+.PHONY: clean-provenance
+clean-provenance:
+> echo ">>> clean-provenance: removing transient provenance artifacts (keep reports)"
+> find provenance -type f \( \
+>   -name "pip_freeze_*.txt" -o \
+>   -name "hash_snapshot_*.json" -o \
+>   -name "migrate_layout_*.json" -o \
+>   -name "cleanup_log_*.txt" \
+> \) -exec rm -f {} + 2>/dev/null || true
+> echo "[OK] provenance transient files removed"
 
 
 etl:
