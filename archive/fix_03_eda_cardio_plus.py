@@ -27,7 +27,7 @@ cells = []
 
 # 0) Título
 cells.append(md("# 03 — EDA Cardiovascular (Apple + Zepp)\n\n"
-                "Notebook com path robusto, gráficos e salvamento em `eda_outputs/.`"))
+                "Notebook com path robusto, gráficos e salvamento em `eda_outputs/`."))
 
 # 1) Imports e detecção de REPO_ROOT
 cells.append(code(r'''
@@ -84,7 +84,7 @@ cells.append(code(r'''
 fc_path = SNAPDIR/"features_cardiovascular.csv"
 if not fc_path.exists():
     print("⚠️  features_cardiovascular.csv não encontrado em", fc_path)
-    print("Sugestão: rode o stage cardio novamente, ex:")
+    print("Sugestão: rode o stage cardio novamente, ex.:")
     print("  python etl_pipeline.py cardio --participant", PID, "--snapshot", SNAP, "--zepp_dir <opcional>")
     fc = None
 else:
