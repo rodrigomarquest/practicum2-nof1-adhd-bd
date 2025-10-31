@@ -18,9 +18,10 @@ VENV_DIR := .venv
 PID ?= P000001
 SNAPSHOT ?= 2025-09-29
 ETL_CMD ?= full
-CUTOVER ?= 2025-10-01
-TZ_BEFORE ?= UTC
-TZ_AFTER ?= UTC
+# Fixed defaults requested
+CUTOVER ?= 2024-03-11
+TZ_BEFORE ?= America/Sao_Paulo
+TZ_AFTER  ?= Europe/Dublin
 
 # -------- Installation (centralized requirements/) --------
 .PHONY: install-base install-dev install-kaggle install-local
