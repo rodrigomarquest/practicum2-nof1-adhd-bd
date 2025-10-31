@@ -29,9 +29,9 @@ def join_hr(*dfs: pd.DataFrame) -> Optional[pd.DataFrame]:
     # média por timestamp
     out = (
         df.groupby("timestamp", as_index=False)["bpm"]
-          .mean()
-          .sort_values("timestamp")
-          .reset_index(drop=True)
+        .mean()
+        .sort_values("timestamp")
+        .reset_index(drop=True)
     )
     return out
 
@@ -56,5 +56,10 @@ def select_hrv(*dfs: pd.DataFrame) -> Optional[pd.DataFrame]:
         df = df.copy()
         df["metric"] = "hrv_ms"
         keep = ["timestamp", "val", "metric"]
-    out = df[keep].dropna(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
+    out = (
+        df[keep]
+        .dropna(subset=["timestamp"])
+        .sort_values("timestamp")
+        .reset_index(drop=True)
+    )
     return out

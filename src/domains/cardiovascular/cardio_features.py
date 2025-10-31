@@ -5,10 +5,13 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
-from typing import Dict, Optional, Iterable, Tuple
+from typing import Dict, Optional, Iterable
 
 import numpy as np
 import pandas as pd
+
+from src.domains.common.io import joined_dir
+
 
 # ------------------------ optional progress ------------------------
 def _progress(iterable: Iterable, desc: str = "") -> Iterable:
@@ -17,6 +20,7 @@ def _progress(iterable: Iterable, desc: str = "") -> Iterable:
     """
     try:
         from tqdm import tqdm  # type: ignore
+
         # total may not be known; tqdm handles None
         return tqdm(iterable, desc=desc)
     except Exception:
@@ -31,7 +35,9 @@ def _write_atomic_csv(df: pd.DataFrame, out_path: str | os.PathLike[str]) -> Non
     try:
         df.to_csv(tmp, index=False)
         os.replace(tmp, out_path)
-        print(f"[atomic] wrote CSV -> {out_path} ({Path(out_path).stat().st_size} bytes)")
+        print(
+            f"[atomic] wrote CSV -> {out_path} ({Path(out_path).stat().st_size} bytes)"
+        )
     finally:
         if os.path.exists(tmp):
             try:
@@ -88,14 +94,16 @@ def _daily_from_hr(hr: pd.DataFrame) -> Optional[pd.DataFrame]:
         mean = float(np.mean(bpm)) if n else np.nan
         # ddof=1; se n <= 1, std=0.0
         std = float(np.std(bpm, ddof=1)) if n > 1 else 0.0
-        rows.append({
-            "date": date_key,
-            "hr_mean": mean,
-            "hr_std": std,
-            "hr_min": float(np.min(bpm)) if n else np.nan,
-            "hr_max": float(np.max(bpm)) if n else np.nan,
-            "n_hr": int(n),
-        })
+        rows.append(
+            {
+                "date": date_key,
+                "hr_mean": mean,
+                "hr_std": std,
+                "hr_min": float(np.min(bpm)) if n else np.nan,
+                "hr_max": float(np.max(bpm)) if n else np.nan,
+                "n_hr": int(n),
+            }
+        )
 
     out = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
     return out
@@ -128,19 +136,22 @@ def _daily_from_hrv(hrv: pd.DataFrame) -> Optional[pd.DataFrame]:
         n = v.size
         mean = float(np.mean(v)) if n else np.nan
         std = float(np.std(v, ddof=1)) if n > 1 else 0.0
-        rows.append({
-            "date": date_key,
-            "hrv_ms_mean": mean,
-            "hrv_ms_std": std,
-            "n_hrv": int(n),
-        })
+        rows.append(
+            {
+                "date": date_key,
+                "hrv_ms_mean": mean,
+                "hrv_ms_std": std,
+                "n_hrv": int(n),
+            }
+        )
 
     out = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
     return out
 
 
-def build_cardio_features(hr_daily: pd.DataFrame | None,
-                          hrv_daily: pd.DataFrame | None) -> pd.DataFrame:
+def build_cardio_features(
+    hr_daily: pd.DataFrame | None, hrv_daily: pd.DataFrame | None
+) -> pd.DataFrame:
     parts = []
     if hr_daily is not None and not hr_daily.empty:
         parts.append(hr_daily)
@@ -156,31 +167,49 @@ def build_cardio_features(hr_daily: pd.DataFrame | None,
     return out
 
 
-def write_cardio_outputs(snapshot_dir: str | os.PathLike[str],
-                         cardio_feat: pd.DataFrame) -> Dict[str, str]:
+def write_cardio_outputs(
+    snapshot_dir: str | os.PathLike[str], cardio_feat: pd.DataFrame
+) -> Dict[str, str]:
     snapdir = Path(snapshot_dir)
-    f_cardio = snapdir / "features_cardiovascular.csv"
+    jdir = joined_dir(snapdir.parts[-3], snapdir.parts[-1])
+
+    # write cardio features into joined/
+    f_cardio = jdir / "features_cardiovascular.csv"
     _write_atomic_csv(cardio_feat, f_cardio)
 
-    # atualiza features_daily.csv → features_daily_updated.csv
-    f_daily = snapdir / "features_daily.csv"
-    f_daily_upd = snapdir / "features_daily_updated.csv"
+    # Merge into canonical features_daily.csv (create/merge in joined/)
+    f_daily = jdir / "features_daily.csv"
     if f_daily.exists():
-        base = pd.read_csv(f_daily, parse_dates=["date"])
-        # tolera 'date' string -> converter e remover tz se houver
+        base = (
+            pd.read_csv(f_daily, parse_dates=["date"])
+            if f_daily.exists()
+            else pd.DataFrame(columns=["date"])
+        )
+        # normalize date column
         if "date" in base.columns:
-            base["date"] = pd.to_datetime(base["date"], errors="coerce", utc=True)
-            base["date"] = base["date"].dt.tz_convert("UTC").dt.tz_localize(None)
-            base["date"] = base["date"].dt.date
+            try:
+                base["date"] = pd.to_datetime(base["date"], errors="coerce", utc=True)
+                base["date"] = base["date"].dt.tz_convert("UTC").dt.tz_localize(None)
+                base["date"] = base["date"].dt.date
+            except Exception:
+                pass
     else:
         base = pd.DataFrame(columns=["date"])
 
     upd = cardio_feat.copy()
     if "date" in upd.columns:
-        upd["date"] = pd.to_datetime(upd["date"], errors="coerce")
-        upd["date"] = upd["date"].dt.date
+        try:
+            upd["date"] = pd.to_datetime(upd["date"], errors="coerce").dt.date
+        except Exception:
+            pass
 
-    merged = base.merge(upd, on="date", how="outer").sort_values("date").reset_index(drop=True)
-    _write_atomic_csv(merged, f_daily_upd)
+    merged = (
+        base.merge(upd, on="date", how="outer")
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
+    _write_atomic_csv(merged, f_daily)
 
-    return {"features_cardio": str(f_cardio), "features_daily_updated": str(f_daily_upd)}
+    # Do NOT produce legacy alias `features_daily_updated.csv` anymore.
+    # Consumers should read `joined/features_daily.csv`.
+    return {"features_cardio": str(f_cardio), "features_daily": str(f_daily)}

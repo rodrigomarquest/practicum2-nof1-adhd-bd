@@ -1,13 +1,21 @@
 from __future__ import annotations
 
-import io, zipfile, json, csv, fnmatch
+import io
+import zipfile
+import json
+import csv
+import fnmatch
 from pathlib import Path, PurePosixPath
 import pandas as pd
 import pyzipper
 
+
 # ---------------- Exceptions ----------------
 class ZipOpenError(RuntimeError): ...
+
+
 class CsvReadError(RuntimeError): ...
+
 
 # ---------------- Helpers ----------------
 def _open_zip_any(zip_path: Path, password: str | None):
@@ -27,19 +35,22 @@ def _open_zip_any(zip_path: Path, password: str | None):
         except Exception as e_zip:
             raise ZipOpenError(f"Failed to open ZIP '{zp}': {e_py!r} / {e_zip!r}")
 
+
 def _norm_posix_lower(name: str) -> str:
     """Normaliza separador e caixa para matching robusto."""
     return str(PurePosixPath(name)).lower()
 
+
 def _find_member_any(names: list[str], patterns: list[str]) -> str | None:
     """Retorna o primeiro membro que casar com qualquer padrão (case-insensitive)."""
     names_n = [_norm_posix_lower(n) for n in names]
-    pats_n  = [_norm_posix_lower(p) for p in patterns]
+    pats_n = [_norm_posix_lower(p) for p in patterns]
     for pat in pats_n:
         for n, nn in zip(names, names_n):
             if fnmatch.fnmatch(nn, pat):
                 return n
     return None
+
 
 def read_tabular_text(text: str, **read_csv_kwargs) -> pd.DataFrame:
     """Lê CSV/TSV a partir de texto, tentando sniffer de delimitador."""
@@ -52,6 +63,7 @@ def read_tabular_text(text: str, **read_csv_kwargs) -> pd.DataFrame:
             pass
     return pd.read_csv(io.StringIO(text), **read_csv_kwargs)
 
+
 def zip_list_members(container: Path, password: str | None):
     """Lista membros de um ZIP (útil para depuração)."""
     zf = _open_zip_any(container, password)
@@ -60,11 +72,12 @@ def zip_list_members(container: Path, password: str | None):
     finally:
         zf.close()
 
+
 # ---------------- Main API ----------------
 def read_csv_sniff(
-    container: str | Path,                 # caminho ZIP/diretório/arquivo
-    member_glob: str | list[str],          # padrão(ões) para buscar dentro do ZIP/dir
-    password: str | None = None,           # senha do ZIP, se houver
+    container: str | Path,  # caminho ZIP/diretório/arquivo
+    member_glob: str | list[str],  # padrão(ões) para buscar dentro do ZIP/dir
+    password: str | None = None,  # senha do ZIP, se houver
     *,
     encoding: str | None = "utf-8",
     **read_csv_kwargs,
@@ -112,7 +125,9 @@ def read_csv_sniff(
                 with zf.open(target, "r") as fh:
                     data = fh.read()
             except TypeError:
-                with zf.open(target, "r", pwd=(password.encode("utf-8") if password else None)) as fh:
+                with zf.open(
+                    target, "r", pwd=(password.encode("utf-8") if password else None)
+                ) as fh:
                     data = fh.read()
         finally:
             zf.close()

@@ -16,7 +16,6 @@ import argparse
 import json
 import os
 import pathlib
-import stat
 import sys
 from typing import Dict, List
 
@@ -65,7 +64,12 @@ def make_move_plan(files: List[pathlib.Path]) -> List[Dict]:
     for fp in files:
         rel = fp.relative_to(REPO_ROOT)
         rel_str = str(rel).replace("\\", "/")
-        entry = {"src_path": rel_str, "dst_path": None, "action": "keep", "reason": "default: keep"}
+        entry = {
+            "src_path": rel_str,
+            "dst_path": None,
+            "action": "keep",
+            "reason": "default: keep",
+        }
 
         # Heuristics for make_scripts reorg
         if rel.parts[0] == "make_scripts":
@@ -73,27 +77,76 @@ def make_move_plan(files: List[pathlib.Path]) -> List[Dict]:
             # map by filename patterns
             if any(x in name for x in ("zepp", "zepp_", "zepp-")):
                 dst = pathlib.Path("make_scripts/zepp") / fp.name
-                entry.update({"dst_path": str(dst), "action": "move", "reason": "zepp domain"})
-            elif any(x in name for x in ("ios", "ios_", "ios-", "manifest_probe", "backup_probe")):
+                entry.update(
+                    {"dst_path": str(dst), "action": "move", "reason": "zepp domain"}
+                )
+            elif any(
+                x in name
+                for x in ("ios", "ios_", "ios-", "manifest_probe", "backup_probe")
+            ):
                 dst = pathlib.Path("make_scripts/ios") / fp.name
-                entry.update({"dst_path": str(dst), "action": "move", "reason": "ios domain"})
-            elif any(x in name for x in ("apple", "a6_", "a7_", "a8_", "apple-", "run_a6", "run_a7", "run_a8")):
+                entry.update(
+                    {"dst_path": str(dst), "action": "move", "reason": "ios domain"}
+                )
+            elif any(
+                x in name
+                for x in (
+                    "apple",
+                    "a6_",
+                    "a7_",
+                    "a8_",
+                    "apple-",
+                    "run_a6",
+                    "run_a7",
+                    "run_a8",
+                )
+            ):
                 dst = pathlib.Path("make_scripts/apple") / fp.name
-                entry.update({"dst_path": str(dst), "action": "move", "reason": "apple domain"})
-            elif any(x in name for x in ("progress", "atomic", "snapshot_lock", "hash", "manifest", "manifests")):
+                entry.update(
+                    {"dst_path": str(dst), "action": "move", "reason": "apple domain"}
+                )
+            elif any(
+                x in name
+                for x in (
+                    "progress",
+                    "atomic",
+                    "snapshot_lock",
+                    "hash",
+                    "manifest",
+                    "manifests",
+                )
+            ):
                 dst = pathlib.Path("make_scripts/utils") / fp.name
-                entry.update({"dst_path": str(dst), "action": "move", "reason": "utils domain"})
+                entry.update(
+                    {"dst_path": str(dst), "action": "move", "reason": "utils domain"}
+                )
             elif name.endswith(".py") and fp.name in ("__init__.py",):
                 entry.update({"action": "keep", "reason": "package init"})
             else:
                 # candidate for legacy
                 dst = pathlib.Path("make_scripts/legacy") / fp.name
-                entry.update({"dst_path": str(dst), "action": "archive", "reason": "legacy/one-off candidate"})
+                entry.update(
+                    {
+                        "dst_path": str(dst),
+                        "action": "archive",
+                        "reason": "legacy/one-off candidate",
+                    }
+                )
 
         # root-level archive candidates
-        elif rel.parts[0] in ("etl_pipeline_legacy.py", "etl_pipeline.py.bak", "fix_cardio_files.sh") or rel.suffix in (".bak",):
+        elif rel.parts[0] in (
+            "etl_pipeline_legacy.py",
+            "etl_pipeline.py.bak",
+            "fix_cardio_files.sh",
+        ) or rel.suffix in (".bak",):
             dst = pathlib.Path("archive") / rel
-            entry.update({"dst_path": str(dst), "action": "archive", "reason": "root legacy file"})
+            entry.update(
+                {
+                    "dst_path": str(dst),
+                    "action": "archive",
+                    "reason": "root legacy file",
+                }
+            )
 
         plan.append(entry)
 
@@ -113,13 +166,21 @@ def print_table(plan: List[Dict]) -> None:
     # terse table: src -> action -> dst
     print("src_path,action,dst_path,reason")
     for e in plan:
-        print(f"{e['src_path']},{e['action']},{e.get('dst_path') or ''},{e.get('reason','')}")
+        print(
+            f"{e['src_path']},{e['action']},{e.get('dst_path') or ''},{e.get('reason','')}"
+        )
 
 
 def main(argv: List[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dry-run", action="store_true", help="Only write plan; do not move files")
-    parser.add_argument("--out", default="tools/audit/reorg_plan.json", help="Output plan path (repo-relative)")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Only write plan; do not move files"
+    )
+    parser.add_argument(
+        "--out",
+        default="tools/audit/reorg_plan.json",
+        help="Output plan path (repo-relative)",
+    )
     args = parser.parse_args(argv or sys.argv[1:])
 
     dry_run_env = os.environ.get("DRY_RUN", "0") == "1"
@@ -139,7 +200,9 @@ def main(argv: List[str] | None = None) -> int:
         return 0
 
     # Not dry-run: as a safety we still only write the plan; actual move step is manual
-    print(f"Not dry-run. Writing plan to {out_path} (no automatic moves performed by this tool).")
+    print(
+        f"Not dry-run. Writing plan to {out_path} (no automatic moves performed by this tool)."
+    )
     write_plan(plan, out_path)
     return 0
 

@@ -2,10 +2,10 @@
 
 Contains simple IO helpers and z-score utilities used by v4 refactor skeletons.
 """
+
 from pathlib import Path
 import json
 import pandas as pd
-import numpy as np
 from datetime import datetime
 
 
@@ -38,5 +38,5 @@ def write_manifest(outdir: str, meta_dict: dict):
     p = Path(outdir)
     p.mkdir(parents=True, exist_ok=True)
     fname = p / f"run_manifest_{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}.json"
-    fname.write_text(json.dumps(meta_dict, indent=2), encoding='utf-8')
+    fname.write_text(json.dumps(meta_dict, indent=2), encoding="utf-8")
     return fname

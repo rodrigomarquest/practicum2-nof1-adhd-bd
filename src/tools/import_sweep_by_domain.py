@@ -26,20 +26,22 @@ results = {}
 total_ok = 0
 total_err = 0
 
-for finder, name, ispkg in pkgutil.walk_packages(make_scripts.__path__, prefix=make_scripts.__name__ + '.'):
+for finder, name, ispkg in pkgutil.walk_packages(
+    make_scripts.__path__, prefix=make_scripts.__name__ + "."
+):
     # name is full like 'make_scripts.apple.foo'
-    parts = name.split('.')
-    domain = parts[1] if len(parts) > 1 else 'root'
-    results.setdefault(domain, {'ok': 0, 'err': 0, 'errors': {}})
+    parts = name.split(".")
+    domain = parts[1] if len(parts) > 1 else "root"
+    results.setdefault(domain, {"ok": 0, "err": 0, "errors": {}})
     try:
         importlib.import_module(name)
-        results[domain]['ok'] += 1
+        results[domain]["ok"] += 1
         total_ok += 1
     except Exception:
         tb = traceback.format_exc()
-        results[domain]['err'] += 1
-        results[domain]['errors'][name] = tb
+        results[domain]["err"] += 1
+        results[domain]["errors"][name] = tb
         total_err += 1
 
-summary = {'total_ok': total_ok, 'total_err': total_err, 'by_domain': results}
+summary = {"total_ok": total_ok, "total_err": total_err, "by_domain": results}
 print(json.dumps(summary, indent=2))

@@ -8,15 +8,21 @@ def apply_rolling(df: pd.DataFrame, windows=[7, 14, 28]):
     """
     df2 = df.copy()
     exclude = {"label", "label_source", "label_notes", "date"}
-    num_cols = [c for c in df2.select_dtypes(include=[np.number]).columns if c not in exclude]
+    num_cols = [
+        c for c in df2.select_dtypes(include=[np.number]).columns if c not in exclude
+    ]
     for w in windows:
         for c in num_cols:
             mname = f"{c}_r{w}_mean"
             sname = f"{c}_r{w}_std"
             dname = f"{c}_r{w}_delta"
             try:
-                rolled_mean = df2[c].shift(1).rolling(window=w, min_periods=1).mean().fillna(0)
-                rolled_std = df2[c].shift(1).rolling(window=w, min_periods=1).std().fillna(0)
+                rolled_mean = (
+                    df2[c].shift(1).rolling(window=w, min_periods=1).mean().fillna(0)
+                )
+                rolled_std = (
+                    df2[c].shift(1).rolling(window=w, min_periods=1).std().fillna(0)
+                )
                 df2[mname] = rolled_mean
                 df2[sname] = rolled_std
                 df2[dname] = (rolled_mean - rolled_mean.shift(1)).fillna(0)

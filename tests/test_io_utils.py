@@ -1,5 +1,6 @@
 from pathlib import Path
-import io, zipfile, pyzipper, pandas as pd
+import zipfile
+import pyzipper
 from etl_modules.io_utils import read_csv_sniff
 
 def test_read_csv_zipcrypto(tmp_path: Path):

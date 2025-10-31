@@ -8,10 +8,12 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures" / "snapshot_demo"
 
 
 def _prepare_snap(tmp_path: Path, copy_features=True, copy_labels=False):
-    snap = tmp_path / "data_ai" / "PTEST" / "snapshots" / "2020-01-01"
+    # use canonical data/etl layout for snapshots in tests
+    snap = tmp_path / "data" / "etl" / "PTEST" / "snapshots" / "2020-01-01"
     snap.mkdir(parents=True, exist_ok=True)
     if copy_features:
-        shutil.copy(FIXTURES_DIR / "features_daily_updated.csv", snap / "features_daily_updated.csv")
+        # tests expect canonical filename
+        shutil.copy(FIXTURES_DIR / "features_daily.csv", snap / "features_daily.csv")
     if copy_labels:
         shutil.copy(FIXTURES_DIR / "state_of_mind_synthetic.csv", snap / "state_of_mind_synthetic.csv")
     return snap

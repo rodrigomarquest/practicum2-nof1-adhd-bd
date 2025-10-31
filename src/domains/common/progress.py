@@ -1,6 +1,8 @@
 # etl_modules/common/progress.py
 from __future__ import annotations
-import io, os, time
+import io
+import os
+import time
 from contextlib import contextmanager
 from typing import Optional, IO
 
@@ -9,34 +11,46 @@ try:
 except Exception:
     tqdm = None  # fallback sem dependência
 
+
 class Timer:
     def __init__(self, label: str = "task"):
         self.label = label
         self.start = 0.0
         self.elapsed = 0.0
+
     def __enter__(self):
         self.start = time.perf_counter()
-        print(f"▶ {self.label} ...")
+        # ASCII-only prefix
+        print(f">>> {self.label} ...")
         return self
+
     def __exit__(self, exc_type, exc, tb):
         self.elapsed = time.perf_counter() - self.start
         status = "OK" if exc is None else "ERROR"
-        print(f"⏱ {self.label}: {self.elapsed:.2f}s [{status}]")
+        # ASCII-only summary
+        print(f"[OK] {self.label}: {self.elapsed:.2f}s [{status}]")
+
 
 class _NoOpBar:
     def __init__(self, total: Optional[int], desc: str):
-        self.total = total; self.desc = desc
+        self.total = total
+        self.desc = desc
+
     def update(self, _n: int):
         # intentionally a no-op when tqdm is not available
         return None
+
     def close(self):
         # intentionally a no-op when tqdm is not available
         return None
+
     def __enter__(self):
         return self
+
     def __exit__(self, *args):
         # no cleanup required for the no-op bar
         return None
+
 
 @contextmanager
 def progress_bar(total: Optional[int], desc: str = "", unit: str = "B"):
@@ -59,26 +73,32 @@ def progress_bar(total: Optional[int], desc: str = "", unit: str = "B"):
             with tqdm(total=total, desc=desc, unit=unit, unit_scale=False) as bar:
                 yield bar
 
+
 class ProgressFile(io.BufferedReader):
     """File-like que atualiza a barra a cada leitura."""
+
     def __init__(self, raw: IO[bytes], bar):
         super().__init__(raw)  # type: ignore
         self._bar = bar
+
     def read(self, size: int = -1) -> bytes:  # type: ignore[override]
         b = super().read(size)
         if b:
             self._bar.update(len(b))
         return b
+
     def readline(self, size: int = -1) -> bytes:  # type: ignore[override]
         b = super().readline(size)
         if b:
             self._bar.update(len(b))
         return b
+
     def readinto(self, b) -> int:  # type: ignore[override]
         n = super().readinto(b)
         if n and n > 0:
             self._bar.update(n)
         return n
+
 
 @contextmanager
 def progress_open(path: str | os.PathLike[str], desc: str = "Reading file"):

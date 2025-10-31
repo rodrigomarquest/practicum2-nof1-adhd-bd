@@ -21,7 +21,9 @@ except ImportError:
     HASH_FNS = {"sha1": Crypto.Hash.SHA1, "sha256": Crypto.Hash.SHA256}
 
     def pbkdf2_hmac(hash_name, password, salt, iterations, dklen=None):
-        return Crypto.Protocol.KDF.PBKDF2(password, salt, dklen, iterations, hmac_hash_module=HASH_FNS[hash_name])
+        return Crypto.Protocol.KDF.PBKDF2(
+            password, salt, dklen, iterations, hmac_hash_module=HASH_FNS[hash_name]
+        )
 
 
 __all__ = ["Keybag", "AESdecryptCBC", "removePadding"]
@@ -64,8 +66,12 @@ class Keybag:
             self.classKeys[currentClassKey[b"CLAS"]] = currentClassKey
 
     def unlockWithPassphrase(self, passphrase):
-        passphrase_round1 = pbkdf2_hmac('sha256', passphrase, self.attrs[b"DPSL"], self.attrs[b"DPIC"], 32)
-        passphrase_key = pbkdf2_hmac('sha1', passphrase_round1, self.attrs[b"SALT"], self.attrs[b"ITER"], 32)
+        passphrase_round1 = pbkdf2_hmac(
+            "sha256", passphrase, self.attrs[b"DPSL"], self.attrs[b"DPIC"], 32
+        )
+        passphrase_key = pbkdf2_hmac(
+            "sha1", passphrase_round1, self.attrs[b"SALT"], self.attrs[b"ITER"], 32
+        )
         for classkey in self.classKeys.values():
             if b"WPKY" not in classkey:
                 continue
@@ -87,9 +93,9 @@ class Keybag:
 def _loopTLVBlocks(blob):
     i = 0
     while i + 8 <= len(blob):
-        tag = blob[i:i+4]
-        length = struct.unpack(">L", blob[i+4:i+8])[0]
-        data = blob[i+8:i+8+length]
+        tag = blob[i : i + 4]
+        length = struct.unpack(">L", blob[i + 4 : i + 8])[0]
+        data = blob[i + 8 : i + 8 + length]
         yield (tag, data)
         i += 8 + length
 
@@ -104,24 +110,24 @@ def _pack64bit(s):
 
 def _AESUnwrap(kek, wrapped):
     C = []
-    for i in range(len(wrapped)//8):
-        C.append(_unpack64bit(wrapped[i * 8:i * 8 + 8]))
+    for i in range(len(wrapped) // 8):
+        C.append(_unpack64bit(wrapped[i * 8 : i * 8 + 8]))
     n = len(C) - 1
-    R = [0] * (n+1)
+    R = [0] * (n + 1)
     A = C[0]
 
-    for i in range(1, n+1):
+    for i in range(1, n + 1):
         R[i] = C[i]
 
     for j in reversed(range(0, 6)):
-        for i in reversed(range(1, n+1)):
+        for i in reversed(range(1, n + 1)):
             todec = _pack64bit(A ^ (n * j + i))
             todec += _pack64bit(R[i])
             B = Crypto.Cipher.AES.new(kek, Crypto.Cipher.AES.MODE_ECB).decrypt(todec)
             A = _unpack64bit(B[:8])
             R[i] = _unpack64bit(B[8:])
 
-    if A != 0xa6a6a6a6a6a6a6a6:
+    if A != 0xA6A6A6A6A6A6A6A6:
         return None
     res = b"".join(map(_pack64bit, R[1:]))
     return res
@@ -130,7 +136,7 @@ def _AESUnwrap(kek, wrapped):
 def AESdecryptCBC(data, key, iv=b"\x00" * 16):
     if len(data) % 16:
         print("WARN: AESdecryptCBC: data length not /16, truncating")
-        data = data[0:(len(data)/16) * 16]
+        data = data[0 : (len(data) / 16) * 16]
     data = Crypto.Cipher.AES.new(key, Crypto.Cipher.AES.MODE_CBC, iv).decrypt(data)
     return data
 
@@ -138,5 +144,5 @@ def AESdecryptCBC(data, key, iv=b"\x00" * 16):
 def removePadding(data, blocksize=16):
     n = int(data[-1])  # RFC 1423: last byte contains number of padding bytes.
     if n > blocksize or n > len(data):
-        raise Exception('Invalid CBC padding')
+        raise Exception("Invalid CBC padding")
     return data[:-n]

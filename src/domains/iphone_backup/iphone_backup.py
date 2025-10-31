@@ -39,16 +39,22 @@ class EncryptedBackup:
         self.decrypted = False
         # Keep track of the backup directory, and more dangerously, keep the backup passphrase as bytes until used:
         self._backup_directory = os.path.expandvars(backup_directory)
-        self._passphrase = passphrase if isinstance(passphrase, bytes) else passphrase.encode("utf-8")
+        self._passphrase = (
+            passphrase if isinstance(passphrase, bytes) else passphrase.encode("utf-8")
+        )
         # Internals for unlocking the Keybag:
-        self._manifest_plist_path = os.path.join(self._backup_directory, 'Manifest.plist')
+        self._manifest_plist_path = os.path.join(
+            self._backup_directory, "Manifest.plist"
+        )
         self._manifest_plist = None
-        self._manifest_db_path = os.path.join(self._backup_directory, 'Manifest.db')
+        self._manifest_db_path = os.path.join(self._backup_directory, "Manifest.db")
         self._keybag = None
         self._unlocked = False
         # We need a temporary file for the decrypted database, because SQLite can't open bytes in memory as a database:
         self._temporary_folder = tempfile.mkdtemp()
-        self._temp_decrypted_manifest_db_path = os.path.join(self._temporary_folder, 'Manifest.db')
+        self._temp_decrypted_manifest_db_path = os.path.join(
+            self._temporary_folder, "Manifest.db"
+        )
         # We can keep a connection to the index SQLite database open:
         self._temp_manifest_db_conn = None
 
@@ -61,7 +67,9 @@ class EncryptedBackup:
                 self._temp_manifest_db_conn.close()
             shutil.rmtree(self._temporary_folder)
         except Exception:
-            print("WARN: Cleanup failed. You may want to delete the decrypted temporary file found at:")
+            print(
+                "WARN: Cleanup failed. You may want to delete the decrypted temporary file found at:"
+            )
             print(f"    '{self._temp_decrypted_manifest_db_path}'")
             raise
 
@@ -69,9 +77,11 @@ class EncryptedBackup:
         if self._unlocked:
             return self._unlocked
         # Open the Manifest.plist file to access the Keybag:
-        with open(self._manifest_plist_path, 'rb') as infile:
+        with open(self._manifest_plist_path, "rb") as infile:
             self._manifest_plist = plistlib.load(infile)
-        self._keybag = google_iphone_dataprotection.Keybag(self._manifest_plist['BackupKeyBag'])
+        self._keybag = google_iphone_dataprotection.Keybag(
+            self._manifest_plist["BackupKeyBag"]
+        )
         # Attempt to unlock the Keybag:
         self._unlocked = self._keybag.unlockWithPassphrase(self._passphrase)
         if not self._unlocked:
@@ -87,7 +97,9 @@ class EncryptedBackup:
         try:
             # Connect to the decrypted Manifest.db database if necessary:
             if self._temp_manifest_db_conn is None:
-                self._temp_manifest_db_conn = sqlite3.connect(self._temp_decrypted_manifest_db_path)
+                self._temp_manifest_db_conn = sqlite3.connect(
+                    self._temp_decrypted_manifest_db_path
+                )
             # Check that it has the expected table structure and a list of files:
             cur = self._temp_manifest_db_conn.cursor()
             cur.execute("SELECT count(*) FROM Files;")
@@ -103,18 +115,22 @@ class EncryptedBackup:
         # Ensure we've already unlocked the Keybag:
         self._read_and_unlock_keybag()
         # Decrypt the Manifest.db index database:
-        manifest_key = self._manifest_plist['ManifestKey'][4:]
-        with open(self._manifest_db_path, 'rb') as encrypted_db_filehandle:
+        manifest_key = self._manifest_plist["ManifestKey"][4:]
+        with open(self._manifest_db_path, "rb") as encrypted_db_filehandle:
             encrypted_db = encrypted_db_filehandle.read()
-        manifest_class = struct.unpack('<l', self._manifest_plist['ManifestKey'][:4])[0]
+        manifest_class = struct.unpack("<l", self._manifest_plist["ManifestKey"][:4])[0]
         key = self._keybag.unwrapKeyForClass(manifest_class, manifest_key)
         decrypted_data = google_iphone_dataprotection.AESdecryptCBC(encrypted_db, key)
         # Write the decrypted Manifest.db temporarily to disk:
-        with open(self._temp_decrypted_manifest_db_path, 'wb') as decrypted_db_filehandle:
+        with open(
+            self._temp_decrypted_manifest_db_path, "wb"
+        ) as decrypted_db_filehandle:
             decrypted_db_filehandle.write(decrypted_data)
         # Open the temporary database to verify decryption success:
         if not self._open_temp_database():
-            raise ConnectionError("Manifest.db file does not seem to be the right format!")
+            raise ConnectionError(
+                "Manifest.db file does not seem to be the right format!"
+            )
 
     def _file_metadata_from_manifest(self, relative_path, domain_like=None):
         # Check arguments:
@@ -154,26 +170,39 @@ class EncryptedBackup:
         file_plist = utils.FilePlist(file_bplist)
         # Extract the decryption key from the PList data:
         if file_plist.encryption_key is None:
-            raise ValueError("Path is not an encrypted file.")  # File is not encrypted; either a directory or empty.
-        inner_key = self._keybag.unwrapKeyForClass(file_plist.protection_class, file_plist.encryption_key)
+            raise ValueError(
+                "Path is not an encrypted file."
+            )  # File is not encrypted; either a directory or empty.
+        inner_key = self._keybag.unwrapKeyForClass(
+            file_plist.protection_class, file_plist.encryption_key
+        )
         # Find the encrypted version of the file on disk and decrypt it:
         filename_in_backup = os.path.join(self._backup_directory, file_id[:2], file_id)
-        with open(filename_in_backup, 'rb') as encrypted_file_filehandle:
+        with open(filename_in_backup, "rb") as encrypted_file_filehandle:
             encrypted_data = encrypted_file_filehandle.read()
         # Decrypt the file contents:
-        decrypted_data = google_iphone_dataprotection.AESdecryptCBC(encrypted_data, inner_key)
+        decrypted_data = google_iphone_dataprotection.AESdecryptCBC(
+            encrypted_data, inner_key
+        )
         # Remove any padding introduced by the CBC encryption:
         file_bytes = google_iphone_dataprotection.removePadding(decrypted_data)
         # Check the data is as expected and return it:
         if len(file_bytes) != file_plist.filesize:
-            raise AssertionError(f"Expected file size of {file_plist.filesize} bytes, decrypted {len(file_bytes)} bytes!")
+            raise AssertionError(
+                f"Expected file size of {file_plist.filesize} bytes, decrypted {len(file_bytes)} bytes!"
+            )
         return file_bytes
 
     def _decrypt_file_to_disk(self, *, file_id, key, file_plist, output_filepath):
         # Find the name of the file on disk:
         filename_in_backup = os.path.join(self._backup_directory, file_id[:2], file_id)
         # Decrypt it to the output location:
-        utils.aes_decrypt_chunked(in_filename=filename_in_backup, out_filepath=output_filepath, key=key, file_plist=file_plist)
+        utils.aes_decrypt_chunked(
+            in_filename=filename_in_backup,
+            out_filepath=output_filepath,
+            key=key,
+            file_plist=file_plist,
+        )
 
     def test_decryption(self):
         """Validate that the backup can be decrypted successfully."""
@@ -236,7 +265,9 @@ class EncryptedBackup:
         :return: decrypted bytes of the file.
         """
         # Extract the required metadata:
-        file_id, file_bplist = self._file_metadata_from_manifest(relative_path, domain_like)
+        file_id, file_bplist = self._file_metadata_from_manifest(
+            relative_path, domain_like
+        )
         # Decrypt the requested file:
         file_bytes = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
         return file_bytes
@@ -261,15 +292,32 @@ class EncryptedBackup:
             The filename to write the decrypted file contents to.
         """
         # Extract the required metadata:
-        file_id, file_bplist = self._file_metadata_from_manifest(relative_path, domain_like)
+        file_id, file_bplist = self._file_metadata_from_manifest(
+            relative_path, domain_like
+        )
         file_plist = utils.FilePlist(file_bplist)
-        inner_key = self._keybag.unwrapKeyForClass(file_plist.protection_class, file_plist.encryption_key)
+        inner_key = self._keybag.unwrapKeyForClass(
+            file_plist.protection_class, file_plist.encryption_key
+        )
         # Decrypt the requested file:
-        self._decrypt_file_to_disk(file_id=file_id, file_plist=file_plist, key=inner_key, output_filepath=output_filename)
+        self._decrypt_file_to_disk(
+            file_id=file_id,
+            file_plist=file_plist,
+            key=inner_key,
+            output_filepath=output_filename,
+        )
 
-    def extract_files(self, *, relative_paths_like=None, domain_like=None, output_folder,
-                      preserve_folders=False, domain_subfolders=False, incremental=False,
-                      filter_callback=None):
+    def extract_files(
+        self,
+        *,
+        relative_paths_like=None,
+        domain_like=None,
+        output_folder,
+        preserve_folders=False,
+        domain_subfolders=False,
+        incremental=False,
+        filter_callback=None,
+    ):
         """
         Decrypt files matching a relative path query and output them to a folder.
 
@@ -335,13 +383,17 @@ class EncryptedBackup:
         # Check the provided arguments and replace missing ones with wildcards:
         if relative_paths_like is None and domain_like is None:
             # If someone _really_ wants to try and extract everything, then setting both to '%' should be enough.
-            raise ValueError("At least one of 'relative_paths_like' or 'domain_like' must be specified!")
+            raise ValueError(
+                "At least one of 'relative_paths_like' or 'domain_like' must be specified!"
+            )
         elif relative_paths_like is None and domain_like is not None:
             relative_paths_like = "%"
         elif relative_paths_like is not None and domain_like is None:
             domain_like = "%"
         # If the filter function is not provided, default to including everything:
-        _include_fn = filter_callback if callable(filter_callback) else (lambda **kwargs: True)
+        _include_fn = (
+            filter_callback if callable(filter_callback) else (lambda **kwargs: True)
+        )
         # Use Manifest.db to find the on-disk filename(s) and file metadata, including the keys, for the file(s).
         # The metadata is contained in the 'file' column, as a binary PList file.
         try:
@@ -362,10 +414,17 @@ class EncryptedBackup:
         os.makedirs(output_folder, exist_ok=True)
         n_files = 0
         total_files = len(results)
-        for n, (file_id, domain, matched_relative_path, file_bplist) in enumerate(results):
+        for n, (file_id, domain, matched_relative_path, file_bplist) in enumerate(
+            results
+        ):
             # Include this file?
-            if not _include_fn(file_id=file_id, domain=domain, relative_path=matched_relative_path,
-                               n=n, total_files=total_files):
+            if not _include_fn(
+                file_id=file_id,
+                domain=domain,
+                relative_path=matched_relative_path,
+                n=n,
+                total_files=total_files,
+            ):
                 continue
             # Build the output file path:
             _output_path = [output_folder]
@@ -384,8 +443,15 @@ class EncryptedBackup:
                     # Skip re-writing this file to disk since it has not changed.
                     continue
             # Decrypt the file:
-            inner_key = self._keybag.unwrapKeyForClass(file_plist.protection_class, file_plist.encryption_key)
-            self._decrypt_file_to_disk(file_id=file_id, key=inner_key, file_plist=file_plist, output_filepath=output_filepath)
+            inner_key = self._keybag.unwrapKeyForClass(
+                file_plist.protection_class, file_plist.encryption_key
+            )
+            self._decrypt_file_to_disk(
+                file_id=file_id,
+                key=inner_key,
+                file_plist=file_plist,
+                output_filepath=output_filepath,
+            )
             n_files += 1
         # Return how many files were extracted:
         return n_files

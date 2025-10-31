@@ -1,4 +1,3 @@
-from pathlib import Path
 import os
 
 
@@ -7,7 +6,9 @@ def detect_env():
 
     Returns dict: {is_kaggle, data_root, out_root, backend, tf_available, torch_available}
     """
-    is_kaggle = os.path.exists("/kaggle/input") or bool(os.environ.get("KAGGLE_KERNEL_RUN_TYPE"))
+    is_kaggle = os.path.exists("/kaggle/input") or bool(
+        os.environ.get("KAGGLE_KERNEL_RUN_TYPE")
+    )
     data_root = "/kaggle/input" if is_kaggle else "./data/ai/local"
     out_root = "/kaggle/working/outputs/NB2" if is_kaggle else "notebooks/outputs/NB2"
 
@@ -15,11 +16,13 @@ def detect_env():
     torch_available = False
     try:
         import tensorflow as _tf  # noqa
+
         tf_available = True
     except Exception:
         tf_available = False
     try:
         import torch  # noqa
+
         torch_available = True
     except Exception:
         torch_available = False

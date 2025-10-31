@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-import os, sqlite3, getpass, traceback, sys
+import os
+import sqlite3
+import getpass
+import traceback
+import sys
 from iphone_backup_decrypt import EncryptedBackup
 
-BACKUP_DIR  = r"C:\Users\Administrador\Apple\MobileSync\Backup\00008120-000E18E21144A01E"
-OUT_DIR     = os.path.abspath("decrypted_output")
-DST_DIR     = os.path.join(OUT_DIR, "usage_extract")
+BACKUP_DIR = r"C:\Users\Administrador\Apple\MobileSync\Backup\00008120-000E18E21144A01E"
+OUT_DIR = os.path.abspath("decrypted_output")
+DST_DIR = os.path.join(OUT_DIR, "usage_extract")
 MANIFEST_DB = os.path.join(OUT_DIR, "Manifest_decrypted.db")
 
 QUERIES = {
@@ -36,8 +40,10 @@ QUERIES = {
     """,
 }
 
+
 def blob_path(backup_dir, file_id):
     return os.path.join(backup_dir, file_id[:2], file_id)
+
 
 def extract_set(b, name, rows):
     ok = fail = 0
@@ -54,9 +60,12 @@ def extract_set(b, name, rows):
             ok += 1
         except Exception:
             fail += 1
-            with open(os.path.join(DST_DIR, "_extract_errors.log"), "a", encoding="utf-8") as f:
+            with open(
+                os.path.join(DST_DIR, "_extract_errors.log"), "a", encoding="utf-8"
+            ) as f:
                 f.write(f"[{name}] FAIL {fid} {dom} {rel}\n")
     return ok, fail
+
 
 def main():
     if not os.path.isfile(MANIFEST_DB):
@@ -84,13 +93,17 @@ def main():
         print(f"🔎 {name}: {len(rows)} candidatos no manifest")
         ok, fail = extract_set(b, name, rows)
         print(f"   → extraídos: {ok} | falhas: {fail}")
-        total_ok += ok; total_fail += fail
+        total_ok += ok
+        total_fail += fail
 
     con.close()
     print(f"\n✅ Extração finalizada: OK={total_ok} | FAIL={total_fail}")
     print(f"📂 Saída em: {DST_DIR}")
-    print("   • Se houver 'KnowledgeC.db', é o caminho mais sólido p/ Screen Time diário.")
+    print(
+        "   • Se houver 'KnowledgeC.db', é o caminho mais sólido p/ Screen Time diário."
+    )
     print("   • Prefs do Screen Time (plist) podem estar em 'screentime_prefs'.")
+
 
 if __name__ == "__main__":
     main()

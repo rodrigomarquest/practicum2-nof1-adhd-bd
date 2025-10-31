@@ -29,6 +29,7 @@ class ProviderContext:
 # ----------------------------------------------------------------------
 class CardioProvider:
     """Contrato mínimo para provedores do domínio 'cardio'."""
+
     name: str = "base"
 
     def load_hr(self, ctx: ProviderContext) -> Optional[pd.DataFrame]:
@@ -64,6 +65,7 @@ def get_providers(domain: str) -> Dict[str, CardioProvider]:
         # Apple (per-metric)
         try:
             from etl_modules.cardiovascular.apple.loader import AppleCardioProvider
+
             providers["apple"] = AppleCardioProvider()
         except Exception as e:
             print(f"[providers] Apple provider unavailable: {e}")
@@ -71,6 +73,7 @@ def get_providers(domain: str) -> Dict[str, CardioProvider]:
         # Zepp (opcional)
         try:
             from etl_modules.cardiovascular.zepp.loader import ZeppCardioProvider
+
             providers["zepp"] = ZeppCardioProvider()
         except Exception as e:
             print(f"[providers] Zepp provider unavailable: {e}")

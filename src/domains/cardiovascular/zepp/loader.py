@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import os, glob
+import os
+import glob
 from pathlib import Path
 from typing import Optional
 import pandas as pd

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Extrai per-metric Apple (HR minuto-a-minuto, HRV SDNN) a partir do export.xml,
 reutilizando funções do pipeline legado: iter_health_records, make_tz_selector.
@@ -12,14 +13,21 @@ import pandas as pd
 from typing import Dict
 import importlib
 
-def export_per_metric(export_xml: Path, out_snapshot_dir: Path,
-                      cutover: str, tz_before: str, tz_after: str) -> Dict[str,str]:
+
+def export_per_metric(
+    export_xml: Path,
+    out_snapshot_dir: Path,
+    cutover: str,
+    tz_before: str,
+    tz_after: str,
+) -> Dict[str, str]:
     legacy = importlib.import_module("etl_pipeline_legacy")
     out_pm = out_snapshot_dir / "per-metric"
     out_pm.mkdir(parents=True, exist_ok=True)
 
     # TZ selector
     from datetime import date
+
     y, m, d = map(int, cutover.split("-"))
     tz_selector = legacy.make_tz_selector(date(y, m, d), tz_before, tz_after)
 
@@ -27,17 +35,33 @@ def export_per_metric(export_xml: Path, out_snapshot_dir: Path,
     recs = legacy.iter_health_records(export_xml, tz_selector)
 
     hr_rows, hrv_rows, sleep_rows = [], [], []
-    HR_ID   = "HKQuantityTypeIdentifierHeartRate"
-    HRV_ID  = "HKQuantityTypeIdentifierHeartRateVariabilitySDNN"
-    SLEEP_ID= "HKCategoryTypeIdentifierSleepAnalysis"
+    HR_ID = "HKQuantityTypeIdentifierHeartRate"
+    HRV_ID = "HKQuantityTypeIdentifierHeartRateVariabilitySDNN"
+    SLEEP_ID = "HKCategoryTypeIdentifierSleepAnalysis"
 
-    for (type_id, value, s_local, e_local, unit, device, tz_name, src_ver, src_name) in recs:
+    for (
+        type_id,
+        value,
+        s_local,
+        e_local,
+        unit,
+        device,
+        tz_name,
+        src_ver,
+        src_name,
+    ) in recs:
         if type_id == HR_ID and value is not None:
             hr_rows.append({"timestamp": s_local.isoformat(), "bpm": float(value)})
         elif type_id == HRV_ID and value is not None:
             hrv_rows.append({"timestamp": s_local.isoformat(), "sdnn_ms": float(value)})
         elif type_id == SLEEP_ID and e_local is not None:
-            sleep_rows.append({"start": s_local.isoformat(), "end": e_local.isoformat(), "raw_value": value})
+            sleep_rows.append(
+                {
+                    "start": s_local.isoformat(),
+                    "end": e_local.isoformat(),
+                    "raw_value": value,
+                }
+            )
 
     written = {}
     if hr_rows:

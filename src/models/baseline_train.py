@@ -14,13 +14,11 @@ import json
 import logging
 import math
 import os
-import statistics
-import sys
 import tempfile
 import time
-from collections import Counter, defaultdict
-from dataclasses import asdict, dataclass
+from collections import Counter
 from pathlib import Path
+from src.domains.common.io import etl_snapshot_root
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -74,7 +72,8 @@ def atomic_write(path: Path, content: bytes):
 
 
 def infer_snapshot_dir(participant: str, snapshot: str) -> Path:
-    return Path("data_ai") / participant / "snapshots" / snapshot
+    # Prefer canonical ETL snapshot root
+    return etl_snapshot_root(participant, snapshot)
 
 
 def load_inputs(snapshot_dir: Path, use_agg: str = "auto") -> pd.DataFrame:
@@ -94,23 +93,33 @@ def load_inputs(snapshot_dir: Path, use_agg: str = "auto") -> pd.DataFrame:
     chosen = ""
     if use_agg == "yes":
         if cand_a.exists():
-            df = pd.read_csv(cand_a, parse_dates=["date"]) ; chosen = cand_a.name
+            df = pd.read_csv(cand_a, parse_dates=["date"])
+            chosen = cand_a.name
         elif cand_c_feat.exists() and cand_c_lab.exists():
-            f = pd.read_csv(cand_c_feat, parse_dates=["date"]) ; l = pd.read_csv(cand_c_lab, parse_dates=["date"]) ; df = f.merge(l, on="date", how="left") ; chosen = f.name + "+" + l.name
+            f = pd.read_csv(cand_c_feat, parse_dates=["date"])
+            l = pd.read_csv(cand_c_lab, parse_dates=["date"])
+            df = f.merge(l, on="date", how="left")
+            chosen = f.name + "+" + l.name
         else:
             raise FileNotFoundError("Aggregated inputs requested but not found")
     elif use_agg == "no":
         if cand_b.exists():
-            df = pd.read_csv(cand_b, parse_dates=["date"]) ; chosen = cand_b.name
+            df = pd.read_csv(cand_b, parse_dates=["date"])
+            chosen = cand_b.name
         else:
             raise FileNotFoundError("Non-aggregated labeled features not found")
     else:  # auto
         if cand_a.exists():
-            df = pd.read_csv(cand_a, parse_dates=["date"]) ; chosen = cand_a.name
+            df = pd.read_csv(cand_a, parse_dates=["date"])
+            chosen = cand_a.name
         elif cand_b.exists():
-            df = pd.read_csv(cand_b, parse_dates=["date"]) ; chosen = cand_b.name
+            df = pd.read_csv(cand_b, parse_dates=["date"])
+            chosen = cand_b.name
         elif cand_c_feat.exists() and cand_c_lab.exists():
-            f = pd.read_csv(cand_c_feat, parse_dates=["date"]) ; l = pd.read_csv(cand_c_lab, parse_dates=["date"]) ; df = f.merge(l, on="date", how="left") ; chosen = f.name + "+" + l.name
+            f = pd.read_csv(cand_c_feat, parse_dates=["date"])
+            l = pd.read_csv(cand_c_lab, parse_dates=["date"])
+            df = f.merge(l, on="date", how="left")
+            chosen = f.name + "+" + l.name
         else:
             raise FileNotFoundError("No candidate input files found in snapshot")
 
@@ -124,7 +133,9 @@ def load_inputs(snapshot_dir: Path, use_agg: str = "auto") -> pd.DataFrame:
     return df
 
 
-def map_labels(series: pd.Series, target_col: str = "label") -> Tuple[pd.Series, LabelEncoder]:
+def map_labels(
+    series: pd.Series, target_col: str = "label"
+) -> Tuple[pd.Series, LabelEncoder]:
     # Accept values like 'negative','neutral','positive' or numeric already
     s = series.fillna("neutral").astype(str)
     # Normalize common variants
@@ -144,7 +155,9 @@ def map_labels(series: pd.Series, target_col: str = "label") -> Tuple[pd.Series,
     return pd.Series(y, index=series.index), le
 
 
-def build_month_windows(dates: pd.Series, n_folds: int = 6) -> List[Tuple[pd.DatetimeIndex, pd.DatetimeIndex]]:
+def build_month_windows(
+    dates: pd.Series, n_folds: int = 6
+) -> List[Tuple[pd.DatetimeIndex, pd.DatetimeIndex]]:
     """Create list of (train_idx_mask, val_idx_mask) by 4-month train + 2-month val sliding windows.
 
     Returns list of tuples of boolean masks (train_idx, val_idx) relative to dates index.
@@ -182,15 +195,21 @@ def get_numeric_features(df: pd.DataFrame) -> List[str]:
     return numeric
 
 
-def evaluate_predictions(y_true: np.ndarray, y_pred: np.ndarray, y_proba: Optional[np.ndarray] = None) -> Dict[str, float]:
+def evaluate_predictions(
+    y_true: np.ndarray, y_pred: np.ndarray, y_proba: Optional[np.ndarray] = None
+) -> Dict[str, float]:
     res = {}
     res["f1_macro"] = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
-    res["f1_weighted"] = float(f1_score(y_true, y_pred, average="weighted", zero_division=0))
+    res["f1_weighted"] = float(
+        f1_score(y_true, y_pred, average="weighted", zero_division=0)
+    )
     try:
         if y_proba is not None:
             res["auroc_ovr"] = float(roc_auc_score(y_true, y_proba, multi_class="ovr"))
         else:
-            res["auroc_ovr"] = float(roc_auc_score(y_true, pd.get_dummies(y_pred), multi_class="ovr"))
+            res["auroc_ovr"] = float(
+                roc_auc_score(y_true, pd.get_dummies(y_pred), multi_class="ovr")
+            )
     except Exception:
         res["auroc_ovr"] = float("nan")
     res["balanced_accuracy"] = float(balanced_accuracy_score(y_true, y_pred))
@@ -221,7 +240,11 @@ def baseline_moving_average(series_labels: pd.Series, k: int) -> np.ndarray:
         start = max(0, i - k)
         window = vals[start:i]
         if len(window) == 0:
-            preds[i] = int(series_labels.mode().iloc[0]) if not series_labels.mode().empty else 1
+            preds[i] = (
+                int(series_labels.mode().iloc[0])
+                if not series_labels.mode().empty
+                else 1
+            )
         else:
             preds[i] = int(Counter(window).most_common(1)[0][0])
     return preds
@@ -253,11 +276,19 @@ def baseline_rule_based(df: pd.DataFrame) -> np.ndarray:
     return out
 
 
-def train_logistic(X_train: np.ndarray, y_train: np.ndarray, C_grid=(0.1, 1.0, 3.0), seed=42):
+def train_logistic(
+    X_train: np.ndarray, y_train: np.ndarray, C_grid=(0.1, 1.0, 3.0), seed=42
+):
     best = None
     best_score = -1
     for C in C_grid:
-        clf = LogisticRegression(C=C, class_weight="balanced", multi_class="ovr", max_iter=1000, random_state=seed)
+        clf = LogisticRegression(
+            C=C,
+            class_weight="balanced",
+            multi_class="ovr",
+            max_iter=1000,
+            random_state=seed,
+        )
         clf.fit(X_train, y_train)
         preds = clf.predict(X_train)
         score = f1_score(y_train, preds, average="macro", zero_division=0)
@@ -267,7 +298,9 @@ def train_logistic(X_train: np.ndarray, y_train: np.ndarray, C_grid=(0.1, 1.0, 3
     return best
 
 
-def predict_logistic(clf: LogisticRegression, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def predict_logistic(
+    clf: LogisticRegression, X: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
     proba = clf.predict_proba(X)
     preds = np.argmax(proba, axis=1)
     return preds, proba
@@ -307,8 +340,13 @@ def run(args):
 
     # labels
     if args.target_col not in df.columns:
-        LOG.warning("target column %s not present; expecting synthetic labels to exist", args.target_col)
-    y_ser, _ = map_labels(df.get(args.target_col, pd.Series(["neutral"] * len(df))), args.target_col)
+        LOG.warning(
+            "target column %s not present; expecting synthetic labels to exist",
+            args.target_col,
+        )
+    y_ser, _ = map_labels(
+        df.get(args.target_col, pd.Series(["neutral"] * len(df))), args.target_col
+    )
     df["_y"] = y_ser
 
     # numeric features
@@ -323,7 +361,9 @@ def run(args):
     preds_store = {}
     # placeholders for best non-param baseline chosen later
     for fi, (train_mask, val_mask) in enumerate(folds):
-        LOG.info(f"fold {fi+1}/{len(folds)}: train {train_mask.sum()} rows, val {val_mask.sum()} rows")
+        LOG.info(
+            f"fold {fi+1}/{len(folds)}: train {train_mask.sum()} rows, val {val_mask.sum()} rows"
+        )
         train_idx = np.nonzero(train_mask)[0]
         val_idx = np.nonzero(val_mask)[0]
 
@@ -346,11 +386,18 @@ def run(args):
         y_val = y[val_idx]
         best_baseline_name = None
         baseline_results = {}
-        for name, arr in (("naive", naive_preds_all), ("ma3", ma3_all), ("ma7", ma7_all), ("rule", rule_all)):
+        for name, arr in (
+            ("naive", naive_preds_all),
+            ("ma3", ma3_all),
+            ("ma7", ma7_all),
+            ("rule", rule_all),
+        ):
             res = evaluate_predictions(y_val, arr[val_idx])
             baseline_results[name] = res
         # pick best baseline by f1_macro
-        best_baseline_name = max(baseline_results.items(), key=lambda kv: kv[1]["f1_macro"])[0]
+        best_baseline_name = max(
+            baseline_results.items(), key=lambda kv: kv[1]["f1_macro"]
+        )[0]
 
         # logistic
         clf = train_logistic(X_train, y[train_idx], seed=args.seed)
@@ -371,7 +418,9 @@ def run(args):
         preds_store[f"fold_{fi}"] = {
             "y_val": y_val.tolist(),
             "clf_preds": clf_preds_val.tolist(),
-            "clf_proba": (clf_proba_val.tolist() if clf_proba_val is not None else None),
+            "clf_proba": (
+                clf_proba_val.tolist() if clf_proba_val is not None else None
+            ),
         }
 
         # mc nemar between logistic and best baseline if statsmodels available
@@ -400,6 +449,7 @@ def run(args):
 
     # summarize
     summary = {"folds": per_fold}
+
     # compute means
     def agg_metric(metric):
         vals = [f["logistic"].get(metric, float("nan")) for f in per_fold]
@@ -408,16 +458,27 @@ def run(args):
             return {"mean": None, "std": None}
         return {"mean": float(np.mean(vals)), "std": float(np.std(vals))}
 
-    summary["summary"] = {m: agg_metric(m) for m in ("f1_macro", "f1_weighted", "auroc_ovr", "balanced_accuracy", "cohen_kappa")}
+    summary["summary"] = {
+        m: agg_metric(m)
+        for m in (
+            "f1_macro",
+            "f1_weighted",
+            "auroc_ovr",
+            "balanced_accuracy",
+            "cohen_kappa",
+        )
+    }
 
     # save cv splits (date ranges)
     cv_splits = []
-    for (train_mask, val_mask) in folds:
+    for train_mask, val_mask in folds:
         train_dates = df.loc[train_mask, "date"]
         val_dates = df.loc[val_mask, "date"]
         cv_splits.append(
             {
-                "train_start": str(train_dates.min()) if not train_dates.empty else None,
+                "train_start": (
+                    str(train_dates.min()) if not train_dates.empty else None
+                ),
                 "train_end": str(train_dates.max()) if not train_dates.empty else None,
                 "val_start": str(val_dates.min()) if not val_dates.empty else None,
                 "val_end": str(val_dates.max()) if not val_dates.empty else None,
@@ -440,7 +501,12 @@ def run(args):
         # build tiny keras model and copy weights
         n_features = X_all_s.shape[1]
         n_classes = len(final_clf.classes_)
-        model = tf.keras.Sequential([tf.keras.layers.Input(shape=(n_features,)), tf.keras.layers.Dense(n_classes, activation="softmax")])
+        model = tf.keras.Sequential(
+            [
+                tf.keras.layers.Input(shape=(n_features,)),
+                tf.keras.layers.Dense(n_classes, activation="softmax"),
+            ]
+        )
         # set weights
         coef = final_clf.coef_.astype(np.float32)  # shape (n_classes, n_features)
         intercept = final_clf.intercept_.astype(np.float32)
@@ -450,14 +516,26 @@ def run(args):
         converter = tf.lite.TFLiteConverter.from_keras_model(model)
         tflite_model = converter.convert()
         atomic_write(outdir / "best_model.tflite", tflite_model)
-        save_json(outdir / "model_card.json", {"type": "logistic_keras_tflite", "n_features": n_features, "n_classes": int(n_classes)})
+        save_json(
+            outdir / "model_card.json",
+            {
+                "type": "logistic_keras_tflite",
+                "n_features": n_features,
+                "n_classes": int(n_classes),
+            },
+        )
     else:
-        save_json(outdir / "model_card.json", {"type": "baseline_collection", "note": "tflite skipped (tensorflow missing or logistic not selected)"})
+        save_json(
+            outdir / "model_card.json",
+            {
+                "type": "baseline_collection",
+                "note": "tflite skipped (tensorflow missing or logistic not selected)",
+            },
+        )
 
     # measure latency using logistic predict if available, else a baseline
     if _HAS_TF and (outdir / "best_model.tflite").exists():
         # use tf lite interpreter
-        import time
 
         interpreter = tf.lite.Interpreter(model_path=str(outdir / "best_model.tflite"))
         interpreter.allocate_tensors()
@@ -480,7 +558,12 @@ def run(args):
         def predict_fn(Xarr: np.ndarray):
             return np.zeros((Xarr.shape[0], 3), dtype=np.float32)
 
-        latency = {f"n_{n}": measure_latency(predict_fn, np.zeros((n, len(numeric)), dtype=np.float32), repeats=20) for n in (1, 32, 128)}
+        latency = {
+            f"n_{n}": measure_latency(
+                predict_fn, np.zeros((n, len(numeric)), dtype=np.float32), repeats=20
+            )
+            for n in (1, 32, 128)
+        }
 
     save_json(outdir / "inference_latency.json", latency)
     save_json(outdir / "predictions_store.json", preds_store)

@@ -16,7 +16,7 @@
 PYTHON := $(if $(wildcard .venv/Scripts/python.exe),.venv/Scripts/python.exe,$(if $(wildcard .venv/bin/python),.venv/bin/python,python))
 VENV_DIR := .venv
 PID ?= P000001
-SNAPSHOT ?= 2025-09-29
+SNAPSHOT ?= auto
 ETL_CMD ?= full
 # Fixed defaults requested
 CUTOVER ?= 2024-03-11

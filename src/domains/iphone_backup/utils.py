@@ -3,7 +3,14 @@ import plistlib
 
 import Crypto.Cipher.AES
 
-__all__ = ["RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "FilePlist", "aes_decrypt_chunked"]
+__all__ = [
+    "RelativePath",
+    "RelativePathsLike",
+    "DomainLike",
+    "MatchFiles",
+    "FilePlist",
+    "aes_decrypt_chunked",
+]
 
 
 _CBC_BLOCK_SIZE = 16  # bytes.
@@ -59,23 +66,42 @@ class DomainLike:
     FILES_ON_IPHONE = "AppDomainGroup-group.com.apple.FileProvider.LocalStorage"
 
     # Third party apps:
-    WHATSAPP = "%net.whatsapp.%"  # WhatsApp has several domains, all with this common section.
+    WHATSAPP = (
+        "%net.whatsapp.%"  # WhatsApp has several domains, all with this common section.
+    )
 
 
 class MatchFiles:
     """Paired relative paths and domains for more complex matching.
 
-       Use items from this class with EncryptedBackup.extract_files, e.g:
-           backup.extract_files(**MatchFiles.CAMERA_ROLL, output_folder="./output")
+    Use items from this class with EncryptedBackup.extract_files, e.g:
+        backup.extract_files(**MatchFiles.CAMERA_ROLL, output_folder="./output")
     """
 
-    CAMERA_ROLL = {"relative_paths_like": RelativePathsLike.CAMERA_ROLL, "domain_like": DomainLike.CAMERA_ROLL}
-    ICLOUD_PHOTOS = {"relative_paths_like": RelativePathsLike.ICLOUD_PHOTOS, "domain_like": DomainLike.CAMERA_ROLL}
-    CHROME_DOWNLOADS = {"relative_paths_like": "Documents/%", "domain_like": "AppDomain-com.google.chrome.ios"}
-    STRAVA_WORKOUTS = {"relative_paths_like": "Documents/%.fit", "domain_like": "AppDomain-com.strava.stravaride"}
-    WHATSAPP_ATTACHMENTS = {"relative_paths_like": RelativePathsLike.WHATSAPP_ATTACHMENTS,
-                            "domain_like": DomainLike.WHATSAPP}
-    WHATSAPP_CONTACT_PHOTOS = {"relative_paths_like": "Media/Profile/%.jpg", "domain_like": DomainLike.WHATSAPP}
+    CAMERA_ROLL = {
+        "relative_paths_like": RelativePathsLike.CAMERA_ROLL,
+        "domain_like": DomainLike.CAMERA_ROLL,
+    }
+    ICLOUD_PHOTOS = {
+        "relative_paths_like": RelativePathsLike.ICLOUD_PHOTOS,
+        "domain_like": DomainLike.CAMERA_ROLL,
+    }
+    CHROME_DOWNLOADS = {
+        "relative_paths_like": "Documents/%",
+        "domain_like": "AppDomain-com.google.chrome.ios",
+    }
+    STRAVA_WORKOUTS = {
+        "relative_paths_like": "Documents/%.fit",
+        "domain_like": "AppDomain-com.strava.stravaride",
+    }
+    WHATSAPP_ATTACHMENTS = {
+        "relative_paths_like": RelativePathsLike.WHATSAPP_ATTACHMENTS,
+        "domain_like": DomainLike.WHATSAPP,
+    }
+    WHATSAPP_CONTACT_PHOTOS = {
+        "relative_paths_like": "Media/Profile/%.jpg",
+        "domain_like": DomainLike.WHATSAPP,
+    }
 
 
 class FilePlist:
@@ -90,11 +116,15 @@ class FilePlist:
         # Parse the actual binary PList object:
         self.plist = plistlib.loads(bplist_bytes)
         # Common and useful attributes:
-        self.data = self.plist['$objects'][self.plist['$top']['root'].data]
+        self.data = self.plist["$objects"][self.plist["$top"]["root"].data]
         self.mtime = self.data.get("LastModified")
         self.filesize = int(self.data.get("Size"))
-        self.protection_class = self.data['ProtectionClass']
-        self.encryption_key = self.plist['$objects'][self.data['EncryptionKey'].data]['NS.data'][4:] if 'EncryptionKey' in self.data else None
+        self.protection_class = self.data["ProtectionClass"]
+        self.encryption_key = (
+            self.plist["$objects"][self.data["EncryptionKey"].data]["NS.data"][4:]
+            if "EncryptionKey" in self.data
+            else None
+        )
 
 
 def aes_decrypt_chunked(*, in_filename, file_plist, key, out_filepath):
@@ -116,8 +146,8 @@ def aes_decrypt_chunked(*, in_filename, file_plist, key, out_filepath):
     output_directory = os.path.dirname(out_filepath)
     if output_directory:
         os.makedirs(output_directory, exist_ok=True)
-    enc_filehandle = open(in_filename, 'rb')
-    dec_filehandle = open(out_filepath, 'wb')
+    enc_filehandle = open(in_filename, "rb")
+    dec_filehandle = open(out_filepath, "wb")
     # Check total size of file is correct, padded to multiple of 16:
     enc_filehandle.seek(0, os.SEEK_END)
     enc_size = enc_filehandle.tell()
@@ -130,14 +160,18 @@ def aes_decrypt_chunked(*, in_filename, file_plist, key, out_filepath):
         dec_data = aes_cipher.decrypt(enc_data)
         if enc_filehandle.tell() == enc_size:
             # This is the last chunk, remove any padding (c.f. google_iphone_dataprotection.removePadding):
-            n = int(dec_data[-1])  # RFC 1423, final byte contains number of padding bytes.
+            n = int(
+                dec_data[-1]
+            )  # RFC 1423, final byte contains number of padding bytes.
             if n > _CBC_BLOCK_SIZE or n > len(dec_data):
-                raise ValueError('AES decrypt: invalid CBC padding')
+                raise ValueError("AES decrypt: invalid CBC padding")
             dec_data = dec_data[:-n]
         dec_filehandle.write(dec_data)
     # Check output size:
     if dec_filehandle.tell() != file_plist.filesize:
-        print(f"WARN: decrypted {dec_filehandle.tell()} bytes of '{out_filepath}', expected {file_plist.filesize} bytes!")
+        print(
+            f"WARN: decrypted {dec_filehandle.tell()} bytes of '{out_filepath}', expected {file_plist.filesize} bytes!"
+        )
     # Close filehandles:
     enc_filehandle.close()
     dec_filehandle.close()

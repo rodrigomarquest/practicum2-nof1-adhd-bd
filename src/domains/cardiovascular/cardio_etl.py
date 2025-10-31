@@ -51,7 +51,7 @@ def run_stage_cardio(input_dir: str | Path,
       2) Join simples de HR e seleção de HRV
       3) Agregações diárias e escrita atômica:
          - features_cardiovascular.csv
-         - features_daily_updated.csv  (merge com features_daily.csv, se existir)
+            - features_daily.csv  (merge with existing features_daily.csv if present)
     """
     snapdir = Path(input_dir)
     if output_dir is None:
@@ -104,7 +104,7 @@ def run_stage_cardio(input_dir: str | Path,
             print(f"  cardio features shape: {_shape(cardio_feat)}")
 
         # 5) Escritas
-        with Timer("write: features_cardiovascular.csv + features_daily_updated.csv"):
+        with Timer("write: features_cardiovascular.csv + features_daily.csv"):
             outputs = write_cardio_outputs(snapdir, cardio_feat)
 
     return outputs

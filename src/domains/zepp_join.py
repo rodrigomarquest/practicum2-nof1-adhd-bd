@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 from typing import Iterable
 
+
 def _read_csv_safe(p: Path, usecols: Iterable[str] | None = None) -> pd.DataFrame:
     """Lê CSV garantindo dtype consistente para 'date' e filtrando colunas quando útil."""
     if not p.exists():
@@ -13,6 +14,7 @@ def _read_csv_safe(p: Path, usecols: Iterable[str] | None = None) -> pd.DataFram
         if keep:
             df = df[keep]
     return df
+
 
 def _merge_on_date(dfs: list[pd.DataFrame]) -> pd.DataFrame:
     """Merge progressivo por 'date' (outer), ordena e de-duplica."""
@@ -25,22 +27,30 @@ def _merge_on_date(dfs: list[pd.DataFrame]) -> pd.DataFrame:
         base = base.merge(d, on="date", how="outer")
     base = base.sort_values("date").drop_duplicates(subset=["date"], keep="last")
     return base
+
+
 def load_daily(outdir: Path) -> pd.DataFrame:
     outdir = Path(outdir)  # passe .../zepp_processed/_latest
     dfs = []
     for name, cols in [
-        ("zepp_emotion_daily.csv", ["date","emotion_score"]),
-        ("zepp_stress_daily.csv",  ["date","stress_score"]),
-        ("zepp_temp_daily.csv",    ["date","skin_temp_c"]),
-        ("zepp_sleep_daily.csv",   ["date","zepp_sleep_minutes"]),
-        ("zepp_hr_daily.csv",      ["date","zepp_hr_mean","zepp_hr_median","zepp_hr_p95"]),
-        ("zepp_health_daily.csv",  ["date","zepp_spo2_mean","zepp_temp_mean","zepp_stress_mean"]),
-        ("zepp_body_daily.csv",    ["date","zepp_weight_kg"]),
-        ("zepp_activity_daily.csv",["date","zepp_steps","zepp_calories"]),
+        ("zepp_emotion_daily.csv", ["date", "emotion_score"]),
+        ("zepp_stress_daily.csv", ["date", "stress_score"]),
+        ("zepp_temp_daily.csv", ["date", "skin_temp_c"]),
+        ("zepp_sleep_daily.csv", ["date", "zepp_sleep_minutes"]),
+        (
+            "zepp_hr_daily.csv",
+            ["date", "zepp_hr_mean", "zepp_hr_median", "zepp_hr_p95"],
+        ),
+        (
+            "zepp_health_daily.csv",
+            ["date", "zepp_spo2_mean", "zepp_temp_mean", "zepp_stress_mean"],
+        ),
+        ("zepp_body_daily.csv", ["date", "zepp_weight_kg"]),
+        ("zepp_activity_daily.csv", ["date", "zepp_steps", "zepp_calories"]),
     ]:
         p = outdir / name
         if p.exists():
-            df = pd.read_csv(p, dtype={"date":"string"})
+            df = pd.read_csv(p, dtype={"date": "string"})
             keep = [c for c in cols if c in df.columns]
             dfs.append(df[keep])
     if not dfs:
@@ -50,6 +60,7 @@ def load_daily(outdir: Path) -> pd.DataFrame:
         base = base.merge(df, on="date", how="outer")
     base = base.sort_values("date").drop_duplicates(subset=["date"], keep="last")
     return base
+
 
 def join_into_features(
     features_daily_path: str | Path,

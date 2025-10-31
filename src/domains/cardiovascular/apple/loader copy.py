@@ -4,6 +4,7 @@ Aceita apenas per-metric no snapshot:
   - per-metric/apple_heart_rate.csv   (timestamp,bpm)
   - per-metric/apple_hrv_sdnn.csv     (timestamp,sdnn_ms)
 """
+
 from typing import Optional
 import os
 import numpy as np
@@ -11,9 +12,11 @@ import pandas as pd
 from etl_modules.common.io import read_csv_if_exists, to_local_dt
 from etl_modules.common.adapters import ProviderContext, HRProvider, register_provider
 
+
 def _date_col(series) -> pd.Series:
     s = pd.to_datetime(series)
     return s.dt.date if hasattr(s, "dt") else pd.to_datetime(series).dt.date
+
 
 class AppleCardio(HRProvider):
     def load_hr(self, ctx: ProviderContext) -> Optional[pd.DataFrame]:
@@ -47,5 +50,6 @@ class AppleCardio(HRProvider):
         df["date"] = _date_col(df["timestamp"])
         df["metric"] = "sdnn_ms"
         return df
+
 
 register_provider("cardio", "apple", AppleCardio())
