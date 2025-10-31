@@ -18,6 +18,9 @@ VENV_DIR := .venv
 PID ?= P000001
 SNAPSHOT ?= 2025-09-29
 ETL_CMD ?= full
+CUTOVER ?= 2025-10-01
+TZ_BEFORE ?= UTC
+TZ_AFTER ?= UTC
 
 # -------- Installation (centralized requirements/) --------
 .PHONY: install-base install-dev install-kaggle install-local
@@ -77,7 +80,12 @@ clean-all: clean clean-data clean-provenance
 
 etl:
 > echo ">>> etl: running src.etl_pipeline"
-> PYTHONPATH="$$PWD" $(PYTHON) -m src.etl_pipeline $(ETL_CMD) PID=$(PID) SNAPSHOT=$(SNAPSHOT)
+> PYTHONPATH="$$PWD" $(PYTHON) -m src.etl_pipeline $(ETL_CMD) \
+>   --participant $(PID) \
+>   --snapshot $(SNAPSHOT) \
+>   --cutover $(CUTOVER) \
+>   --tz_before $(TZ_BEFORE) \
+>   --tz_after $(TZ_AFTER)
 
 # Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
 labels:
