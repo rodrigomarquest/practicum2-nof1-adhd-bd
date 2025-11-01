@@ -18,6 +18,9 @@ import xml.etree.ElementTree as ET
 import traceback
 import zipfile
 import shutil
+import time
+import os
+import math
 
 # third-party
 import pandas as pd
@@ -213,6 +216,296 @@ def snapshot_from_zip_file_date(zip_path: Path) -> str:
     except Exception:
         # last-resort: today's date
         return date.today().isoformat()
+
+
+# ----------------------------------------------------------------------
+# New: snapshot resolution, discovery and unified extract_run
+# ----------------------------------------------------------------------
+def resolve_snapshot(snapshot_arg: str, pid: str) -> str:
+    """Resolve the canonical snapshot id for a run.
+
+    - If snapshot_arg != 'auto' -> return canonicalized snapshot
+    - If 'auto' -> read data/config/<PID>_profile.json for home_tz and use
+      local today() in that timezone. Fallback to UTC.
+    """
+    if snapshot_arg and snapshot_arg != "auto":
+        return canon_snap_id(snapshot_arg)
+
+    # auto: inspect profile
+    profile_path = Path("data") / "config" / f"{pid}_profile.json"
+    tz_name = None
+    try:
+        if profile_path.exists():
+            d = json.loads(profile_path.read_text(encoding="utf-8"))
+            tz_name = d.get("home_tz")
+    except Exception:
+        tz_name = None
+
+    if tz_name:
+        try:
+            tz = get_tz(tz_name)
+            snap = datetime.now(tz).date().isoformat()
+            return snap
+        except Exception:
+            pass
+
+    # fallback to UTC
+    return datetime.utcnow().date().isoformat()
+
+
+def discover_sources(pid: str, auto_zip: bool = True) -> list[dict]:
+    """Discover latest candidate zips for apple (variants) and zepp.
+
+    Returns list of dicts: {vendor, variant, zip_path}
+    """
+    results: list[dict] = []
+    base = RAW_ARCHIVE / pid
+    if not base.exists():
+        return results
+
+    # Apple: search under data/raw/<pid>/apple/export or data/raw/<pid>/apple/**
+    apple_root = base / "apple"
+    apple_candidates = []
+    if apple_root.exists():
+        # first prefer export subfolder
+        exp = apple_root / "export"
+        search_root = exp if exp.exists() else apple_root
+        for p in search_root.rglob("*.zip"):
+            apple_candidates.append(p)
+
+    # classify apple zips into variants
+    variants = {"inapp": [], "itunes": [], "autoextract": []}
+    for z in apple_candidates:
+        try:
+            if zip_contains(z, ["apple_health_export/export.xml"]):
+                variants["inapp"].append(z)
+                continue
+            if zip_contains(z, ["manifest.db"]):
+                variants["itunes"].append(z)
+                continue
+            if zip_contains(z, ["autoexport", "auto-extract", "autoextract"]):
+                variants["autoextract"].append(z)
+                continue
+            # fallback: if a zip contains export.xml anywhere, treat as inapp
+            if zip_contains(z, ["export.xml"]):
+                variants["inapp"].append(z)
+        except Exception:
+            continue
+
+    def pick_latest(lst: list[Path]) -> Optional[Path]:
+        if not lst:
+            return None
+        lst.sort(key=lambda p: (p.stat().st_mtime, p.stat().st_size), reverse=True)
+        return lst[0]
+
+    for var, lst in variants.items():
+        z = pick_latest(lst)
+        if z:
+            results.append({"vendor": "apple", "variant": var, "zip_path": z})
+        else:
+            # no candidate -> skip entry
+            pass
+
+    # Zepp: any zip under data/raw/<pid>/zepp/export or zepp/**
+    zepp_root = base / "zepp"
+    zepp_candidates = []
+    if zepp_root.exists():
+        exp = zepp_root / "export"
+        search_root = exp if exp.exists() else zepp_root
+        for p in search_root.rglob("*.zip"):
+            zepp_candidates.append(p)
+    z = pick_latest(zepp_candidates)
+    if z:
+        results.append({"vendor": "zepp", "variant": "cloud", "zip_path": z})
+
+    return results
+
+
+def _ensure_outdir(pid: str, snapshot: str, vendor: str, variant: str) -> Path:
+    snap_iso = canon_snap_id(snapshot)
+    out = etl_snapshot_root(pid, snap_iso) / "extracted" / vendor / variant
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def _write_qc_rows(qc_rows: list[dict], qc_dir: Path) -> None:
+    qc_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = qc_dir / "extract_qc.csv"
+    # ensure deterministic column order
+    cols = ["vendor", "variant", "found_zip", "parsed_xml", "parsed_cda", "rows_out", "seconds", "status"]
+    # convert to DataFrame (pandas available)
+    try:
+        df = pd.DataFrame(qc_rows)
+        # ensure columns
+        for c in cols:
+            if c not in df.columns:
+                df[c] = None
+        _write_atomic_csv(df[cols], str(csv_path))
+    except Exception:
+        # fallback simple CSV
+        with open(csv_path, "w", encoding="utf-8") as f:
+            f.write(",".join(cols) + "\n")
+            for r in qc_rows:
+                f.write(",".join(str(r.get(c, "")) for c in cols) + "\n")
+
+
+def _write_manifest(manifest: dict, qc_dir: Path) -> None:
+    qc_dir.mkdir(parents=True, exist_ok=True)
+    path = qc_dir / "extract_manifest.json"
+    _write_atomic_json(manifest, str(path))
+
+
+class CDAParseWarning(Exception):
+    pass
+
+
+def _parse_export_xml(xml_path: Path) -> int:
+    """Lightweight parse of export.xml that counts top-level Record/Workout nodes.
+
+    Returns number of records found (approximation)."""
+    try:
+        # use a streaming iterparse to avoid loading whole file
+        count = 0
+        for event, elem in ET.iterparse(str(xml_path), events=("end",)):
+            if elem.tag.endswith("Record") or elem.tag.endswith("Workout"):
+                count += 1
+            # free memory
+            elem.clear()
+        return count
+    except Exception:
+        return 0
+
+
+def _parse_export_cda(xml_path: Path) -> tuple[int, list[str]]:
+    """Attempt a tolerant streaming parse of export_cda.xml.
+
+    Returns (rows_out, warnings)
+    """
+    warnings: list[str] = []
+    rows = 0
+    try:
+        # iterparse but guard against very large files
+        for event, elem in ET.iterparse(str(xml_path), events=("end",)):
+            if elem.tag.endswith("entry") or elem.tag.endswith("Section"):
+                rows += 1
+            elem.clear()
+            # yield time slice to avoid blocking UI
+        return rows, warnings
+    except Exception as e:
+        warnings.append(f"failed to parse CDA XML: {xml_path}")
+        return 0, warnings
+
+
+def extract_run(pid: str, snapshot_arg: str = "auto", auto_zip: bool = True, dry_run: bool = False) -> int:
+    """Unified extract run that processes Apple variants and Zepp under one canonical snapshot.
+
+    Returns exit code: 0 if any source produced artifacts (ok or warn), 2 if all failed/skipped.
+    """
+    started_at = datetime.utcnow().isoformat() + "Z"
+    snapshot = resolve_snapshot(snapshot_arg, pid)
+    sources = discover_sources(pid, auto_zip=auto_zip)
+    qc_rows: list[dict] = []
+    manifest: dict = {"pid": pid, "snapshot": snapshot, "home_tz": None, "started_at": started_at, "ended_at": None, "sources": [], "warnings": []}
+
+    if dry_run:
+        print(f"DRY RUN: discovered {len(sources)} sources for {pid} -> snapshot {snapshot}")
+        for s in sources:
+            print(f" - {s['vendor']}/{s['variant']}: {s['zip_path']}")
+        return 0 if sources else 2
+
+    any_ok = False
+    for s in sources:
+        vendor = s.get("vendor")
+        variant = s.get("variant")
+        zip_path: Path = s.get("zip_path")
+        t0 = time.time()
+        parsed_xml = 0
+        parsed_cda = 0
+        rows_out = 0
+        status = "skip"
+        found_zip = 1 if zip_path and zip_path.exists() else 0
+
+        out_dir = _ensure_outdir(pid, snapshot, vendor, variant)
+        try:
+            if not found_zip:
+                status = "skip"
+                elapsed = 0.0
+            else:
+                # extract into variant out_dir (idempotent: overwrite files)
+                with zipfile.ZipFile(zip_path, "r") as zf:
+                    # Zepp may be password-protected
+                    if vendor == "zepp":
+                        pwd = os.environ.get("ZEPP_ZIP_PASSWORD")
+                        if pwd:
+                            try:
+                                zf.extractall(path=str(out_dir), pwd=pwd.encode("utf-8"))
+                            except RuntimeError:
+                                print(f"WARNING: Zepp zip appears encrypted or bad password: {zip_path}; skipping")
+                                manifest["warnings"].append(f"Zepp bad password: {zip_path}")
+                                status = "skip"
+                                elapsed = time.time() - t0
+                                qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": 0, "parsed_cda": 0, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
+                                continue
+                        else:
+                            print(f"WARNING: ZEPP_ZIP_PASSWORD not set; skipping Zepp {zip_path}")
+                            manifest["warnings"].append(f"Zepp skipped (no password): {zip_path}")
+                            status = "skip"
+                            elapsed = time.time() - t0
+                            qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": 0, "parsed_cda": 0, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
+                            continue
+                    else:
+                        # regular zip extraction for Apple variants
+                        zf.extractall(path=str(out_dir))
+
+                # attempt to find export.xml and export_cda.xml inside out_dir
+                export_xml = None
+                cda_xml = None
+                cand1 = out_dir / EXPORT_XML
+                cand2 = out_dir / "apple_health_export" / EXPORT_XML
+                if cand1.exists():
+                    export_xml = cand1
+                elif cand2.exists():
+                    export_xml = cand2
+                else:
+                    found_any = list(out_dir.rglob(EXPORT_XML))
+                    if found_any:
+                        export_xml = found_any[0]
+
+                if export_xml:
+                    parsed_xml = _parse_export_xml(export_xml)
+                    print(f"extract: [{vendor}/{variant}] parse export.xml: {parsed_xml} records")
+                else:
+                    print(f"extract: [{vendor}/{variant}] no export.xml found in {out_dir}")
+
+                # check cda
+                cda_cand = out_dir / "apple_health_export" / "export_cda.xml"
+                if cda_cand.exists():
+                    rows_cda, warns = _parse_export_cda(cda_cand)
+                    parsed_cda = rows_cda
+                    for w in warns:
+                        print(f"WARNING: {w}")
+                        manifest["warnings"].append(w)
+
+                rows_out = parsed_xml + parsed_cda
+                status = "ok"
+                elapsed = time.time() - t0
+                any_ok = True
+
+            qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": parsed_xml, "parsed_cda": parsed_cda, "rows_out": rows_out, "seconds": round(elapsed, 2), "status": status})
+            manifest["sources"].append({"vendor": vendor, "variant": variant, "zip_path": str(zip_path), "out_dir": str(out_dir), "seconds": round(time.time() - t0, 2), "status": status})
+        except Exception as e:
+            elapsed = time.time() - t0
+            status = "fail"
+            qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": parsed_xml, "parsed_cda": parsed_cda, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
+            manifest.setdefault("warnings", []).append(f"extract failure {vendor}/{variant}: {e}")
+
+    # write QC & manifest
+    qc_dir = etl_snapshot_root(pid, canon_snap_id(snapshot)) / "qc"
+    _write_qc_rows(qc_rows, qc_dir)
+    manifest["ended_at"] = datetime.utcnow().isoformat() + "Z"
+    _write_manifest(manifest, qc_dir)
+
+    return 0 if any_ok else 2
 
 
 def ensure_extracted(pid: str, snapshot: str, zip_path: Path) -> Path:
