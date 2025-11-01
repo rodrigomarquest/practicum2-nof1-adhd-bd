@@ -25,32 +25,6 @@ TZ_AFTER  ?= Europe/Dublin
 
 # -------- Installation (centralized requirements/) --------
 .PHONY: install-base install-dev install-kaggle install-local
-
-etl:
-> echo ">>> etl: running src.etl_pipeline ($(ETL_CMD))"
-> if [ "$(ETL_CMD)" = "extract" ]; then \
->   # Run extract under our Timer wrapper so the terminal shows the standard header/footer
->   PYTHONPATH="$$PWD" $(PYTHON) scripts/run_etl_with_timer.py extract \
->     --participant $(PID) \
->     --snapshot $(SNAPSHOT) \
->     --cutover $(CUTOVER) \
->     --tz_before $(TZ_BEFORE) \
->     --tz_after $(TZ_AFTER); \
-> else \
->   # For full runs ensure extracted data exists before proceeding
->   if [ "$(ETL_CMD)" = "full" ]; then \
->     if [ ! -d "data/etl/$(PID)/$(SNAPSHOT)/extracted" ]; then \
->       echo "ERROR: extracted data not found for $(PID)/$(SNAPSHOT). Run 'make etl ETL_CMD=extract PID=$(PID) SNAPSHOT=$(SNAPSHOT)' first."; \
->       exit 1; \
->     fi; \
->   fi; \
->   PYTHONPATH="$$PWD" $(PYTHON) -m src.etl_pipeline $(ETL_CMD) \
->     --participant $(PID) \
->     --snapshot $(SNAPSHOT) \
->     --cutover $(CUTOVER) \
->     --tz_before $(TZ_BEFORE) \
->     --tz_after $(TZ_AFTER); \
-> fi
 clean-data:
 > echo ">>> clean-data: removing ETL outputs and AI results"
 > rm -rf notebooks/outputs dist/assets logs backups processed 2>/dev/null || true
@@ -74,36 +48,13 @@ clean-all: clean clean-data clean-provenance
 .PHONY: etl labels qc pack-kaggle
 
 etl:
-> echo ">>> etl: running src.etl_pipeline"
-> PYTHONPATH="$$PWD" $(PYTHON) -m src.etl_pipeline $(ETL_CMD) \
+> echo ">>> etl: running src.etl_pipeline ($(ETL_CMD))"
+> PYTHONPATH="$$PWD" $(PYTHON) scripts/etl_runner.py $(ETL_CMD) \
 >   --participant $(PID) \
 >   --snapshot $(SNAPSHOT) \
 >   --cutover $(CUTOVER) \
 >   --tz_before $(TZ_BEFORE) \
 >   --tz_after $(TZ_AFTER)
-> if [ "$(ETL_CMD)" = "extract" ]; then \
->   # Run extract under our Timer wrapper so the terminal shows the standard header/footer
->   PYTHONPATH="$$PWD" $(PYTHON) scripts/run_etl_with_timer.py extract \
->     --participant $(PID) \
->     --snapshot $(SNAPSHOT) \
->     --cutover $(CUTOVER) \
->     --tz_before $(TZ_BEFORE) \
->     --tz_after $(TZ_AFTER); \
-> else \
->   # For full runs ensure extracted data exists before proceeding
->   if [ "$(ETL_CMD)" = "full" ]; then \
->     if [ ! -d "data/etl/$(PID)/$(SNAPSHOT)/extracted" ]; then \
->       echo "ERROR: extracted data not found for $(PID)/$(SNAPSHOT). Run 'make etl ETL_CMD=extract PID=$(PID) SNAPSHOT=$(SNAPSHOT)' first."; \
->       exit 1; \
->     fi; \
->   fi; \
->   PYTHONPATH="$$PWD" $(PYTHON) -m src.etl_pipeline $(ETL_CMD) \
->     --participant $(PID) \
->     --snapshot $(SNAPSHOT) \
->     --cutover $(CUTOVER) \
->     --tz_before $(TZ_BEFORE) \
->     --tz_after $(TZ_AFTER); \
-> fi
 
 # Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
 labels:
@@ -210,59 +161,37 @@ release-pr:
 >   echo "Example: make release-pr RELEASE_VERSION=4.1.0 RELEASE_TITLE=\"My title\" ISSUES=\"1 4\""; \
 >   exit 1; \
 > fi; \
-> @set -e; \
-BR=release/v$(RELEASE_VERSION); \
-if ! git rev-parse --verify --quiet $$BR >/dev/null; then \
-	git switch -c $$BR; \
-else \
-	git switch $$BR; \
-fi; \
-	git add docs/release_notes/release_notes_v$(RELEASE_VERSION).md || true; \
-	git commit -m "chore(release): add release notes for v$(RELEASE_VERSION)" || true; \
-	git push -u origin $$BR || true; \
-	mkdir -p dist; \
-	cat docs/release_notes/release_notes_v$(RELEASE_VERSION).md > dist/release_pr_body_$(RELEASE_VERSION).md; \
-	echo "\nCloses #1\nCloses #2" >> dist/release_pr_body_$(RELEASE_VERSION).md; \
-	if gh auth status >/dev/null 2>&1; then \
-		gh pr create --base main --head $$BR --title "Release v$(RELEASE_VERSION) – $(RELEASE_TITLE)" --body-file dist/release_pr_body_$(RELEASE_VERSION).md || echo "gh pr create failed; you can open a PR manually"; \
-	else \
-		echo "gh CLI not authenticated or not available. Create PR manually using: https://github.com/$(shell git config --get remote.origin.url | sed -e 's/.*:\/\///' -e 's/\.git$$//')/compare/main...$$BR"; \
-	fi
-
-help-release:
-> echo "Release targets:"
-> echo "  make release-verify    # tree clean, tag livre, SemVer"
-> echo "  make release-summary   # gera CHANGES_SINCE_LAST_TAG.txt"
-> echo "  make release-draft     # gera release_notes + changelog draft"
-> echo "  make release-freeze    # pip freeze -> dist/provenance"
-> echo "  make release-tag       # commit + tag local"
-> echo "  make release-push      # push branch + tags"
-> echo "  make release-publish   # cria GitHub Release (gh CLI)"
-> echo "  make release-final     # encadeado local (sem push/publish)"
-> echo "  make release-pr        # create a release PR targeting main (gh CLI)"
+etl:
+> echo ">>> etl: running src.etl_pipeline ($(ETL_CMD))"
+> if [ "$(ETL_CMD)" = "extract" ]; then \
+>   # Run extract under our Timer wrapper so the terminal shows the standard header/footer
+>   PYTHONPATH="$$PWD" $(PYTHON) scripts/run_etl_with_timer.py extract \
+>     --participant $(PID) \
+>     --snapshot $(SNAPSHOT) \
+>     --cutover $(CUTOVER) \
+>     --tz_before $(TZ_BEFORE) \
+>     --tz_after $(TZ_AFTER); \
+> else \
+>   # For full runs ensure extracted data exists before proceeding
+>   if [ "$(ETL_CMD)" = "full" ]; then \
+>     if [ ! -d "data/etl/$(PID)/$(SNAPSHOT)/extracted" ]; then \
+>       echo "ERROR: extracted data not found for $(PID)/$(SNAPSHOT). Run 'make etl ETL_CMD=extract PID=$(PID) SNAPSHOT=$(SNAPSHOT)' first."; \
+>       exit 1; \
+>     fi; \
+>   fi; \
+>   PYTHONPATH="$$PWD" $(PYTHON) -m src.etl_pipeline $(ETL_CMD) \
+>     --participant $(PID) \
+>     --snapshot $(SNAPSHOT) \
+>     --cutover $(CUTOVER) \
+>     --tz_before $(TZ_BEFORE) \
+>     --tz_after $(TZ_AFTER); \
+> fi
 > echo "Note: release-draft and release-pr require RELEASE_TITLE to be set (see issue #7)."
-
-qc:
-> echo ">>> qc: running src.eda"
-> $(PYTHON) -m src.eda
-
-PACK_OUT := dist/assets
-
-pack-kaggle:
-> @echo ">>> pack-kaggle: packaging Kaggle dataset snapshot for $(PID) $(SNAPSHOT)"
-> @PYTHONPATH="$$PWD" $(PYTHON) -m src.tools.pack_kaggle
-
 # -------- Help --------
 .PHONY: help
-help:
-> echo "Available targets:"
-> echo "  install-base       - Install base requirements"
-> echo "  install-dev        - Install development requirements"
-> echo "  install-kaggle     - Install Kaggle requirements"
-> echo "  install-local      - Install local env requirements"
-> echo "  clean              - Remove cache/logs"
-> echo "  clean-data         - Remove ETL/AI outputs"
-> echo "  clean-provenance   - Remove transient provenance artifacts"
+etl:
+> echo ">>> etl: running src.etl_pipeline ($(ETL_CMD))"
+> if [ "$(ETL_CMD)" = "extract" ]; then \
 > echo "  clean-all          - Run all clean targets"
 > echo "  etl                - Run ETL pipeline (src.etl_pipeline)"
 > echo "  labels             - Generate heuristic labels (src.make_labels)"
