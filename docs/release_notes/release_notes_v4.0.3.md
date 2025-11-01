@@ -1,6 +1,6 @@
 # 🚀 4.0.3 – Release v4.0.3
 
-**Release date:** 2025-11-01T00:01:34Z  
+**Release date:** 2025-11-01T00:13:16Z  
 **Branch:** v4-main  
 **Author:** Rodrigo Marques Teixeira  
 **Project:** MSc AI for Business – Practicum Part 2 (N-of-1 ADHD + BD)
@@ -10,44 +10,34 @@
 ## 🧩 Summary
 Auto-generated draft. See CHANGES_SINCE_LAST_TAG.txt.
 
-**Since v4.0.1:** 35 commits · other:33, ci:1, chore:1 · 1 authors.
+**Since v4.0.2:** 1 commits · other:1 · 1 authors.
 
-**Since v4.0.1:** 35 commits  
-other:33, ci:1, chore:1  
+**Since v4.0.2:** 1 commits  
+other:1  
 **Authors:** 1 total  
-Rodrigo Teixeira (35)
+Rodrigo Teixeira (1)
 
 ---
 
 ## 🌿 Highlights
-### Chore (1)
-- remove zep_zip_filelist from root, create DEV_GUIDE.md, create release_notes_v4.0.2.md
-
-### Ci (1)
-- keep single valid release dry-run workflow (release_check.yml)
-
-### Other (33)
-- chore(release): finalize canonical v4.0.2 template, renderer, and assets
-- docs(release): regenerate canonical v4.0.2 notes (from v3.9.9)
-- feat(release): canonical release-note template + commit grouping in renderer
+### Other (1)
+- chore(release): prepare release v4.0.3
 
 ---
 
 ## 🧱 Build & Provenance
-* Commit range: v4.0.1..v4.0.3
+* Commit range: v4.0.2..v4.0.3
 * Tag: v4.0.3
 * Renderer: `render_release_from_templates.py`
-* Generated: 2025-11-01T00:01:34Z
+* Generated: 2025-11-01T00:13:16Z
 
 ---
 
 ## 📈 Stats
 
-- Total: 35
-- other: 33
-- ci: 1
-- chore: 1
-- Top authors: Rodrigo Teixeira (35)
+- Total: 1
+- other: 1
+- Top authors: Rodrigo Teixeira (1)
 
 
 ---
