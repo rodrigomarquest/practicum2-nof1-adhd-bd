@@ -2,12 +2,13 @@ import sys
 import os
 import zipfile
 import pathlib
+from src.tools.etl_paths import etl_snapshot_dir
 
 
 def main():
     pid = os.environ.get("PID") or os.environ.get("PARTICIPANT") or "P000001"
     snap = os.environ.get("SNAPSHOT") or "2025-09-29"
-    base = pathlib.Path(f"data/etl/{pid}/snapshots/{snap}/joined")
+    base = etl_snapshot_dir(pid, snap) / "joined"
     files = list(base.glob("features_daily*.csv"))
     v = base / "version_log_enriched.csv"
     if v.exists():
