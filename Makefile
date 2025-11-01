@@ -126,17 +126,22 @@ release-summary:
 > else \
 >   git log --pretty=oneline > dist/changelog/CHANGES_SINCE_LAST_TAG.txt; \
 > fi; \
-> @echo "[ok] wrote dist/changelog/CHANGES_SINCE_LAST_TAG.txt"
-
-release-draft:
-> echo ">>> draft: release notes + changelog (dry-run)"
-> @mkdir -p docs/release_notes dist/changelog
-> $(PYTHON) -m src.tools.render_release_from_templates \
->   --version $(RELEASE_VERSION) \
->   --tag $(RELEASE_TAG) \
->   --title "Release $(RELEASE_TAG)" \
->   --summary "Auto-generated draft. See CHANGES_SINCE_LAST_TAG.txt." \
->   --branch $(RELEASE_BRANCH)
+	git add docs/release_notes/release_notes_v$(RELEASE_VERSION).md || true; \
+	git commit -m "chore(release): add release notes for v$(RELEASE_VERSION)" || true; \
+	git push -u origin $$BR || true; \
+	mkdir -p dist; \
+	PR_BODY=dist/release_pr_body_$(RELEASE_VERSION).md; \
+	cat docs/release_notes/release_notes_v$(RELEASE_VERSION).md > $$PR_BODY; \
+	if [ -n "$(ISSUES)" ]; then \
+	  for i in $(ISSUES); do echo "\nCloses #$$i" >> $$PR_BODY; done; \
+	else \
+	  echo "\nCloses #1\nCloses #2" >> $$PR_BODY; \
+	fi; \
+	if gh auth status >/dev/null 2>&1; then \
+		gh pr create --base main --head $$BR --title "Release v$(RELEASE_VERSION) – $(RELEASE_TITLE)" --body-file $$PR_BODY || echo "gh pr create failed; you can open a PR manually"; \
+	else \
+		echo "gh CLI not authenticated or not available. Create PR manually using: https://github.com/$(shell git config --get remote.origin.url | sed -e 's/.*:\/\///' -e 's/\.git$$//')/compare/main...$$BR"; \
+	fi
 > @echo "[ok] draft prepared under docs/release_notes and dist/changelog"
 
 release-freeze:
@@ -152,15 +157,21 @@ release-tag:
 > @git tag -a $(RELEASE_TAG) -m "Release $(RELEASE_TAG)"
 > @echo "[ok] commit+tag created"
 
-release-push:
-> echo ">>> pushing branch + tags"
-> @git push origin $$(git rev-parse --abbrev-ref HEAD)
-> @git push origin --tags
-> @echo "[ok] pushed"
-
 release-publish:
 > echo ">>> gh release create $(RELEASE_TAG)"
 > echo "(gh CLI optional)"
+> mkdir -p dist
+> PUBLISH_NOTES=dist/release_notes_for_publish_$(RELEASE_VERSION).md; \
+> cat docs/release_notes/release_notes_v$(RELEASE_VERSION).md > $$PUBLISH_NOTES; \
+> if [ -n "$(ISSUES)" ]; then \
+>   for i in $(ISSUES); do echo "\nCloses #$$i" >> $$PUBLISH_NOTES; done; \
+> fi; \
+> gh release create $(RELEASE_TAG) \
+>   --title "$(RELEASE_TAG)" \
+>   --notes-file "$$PUBLISH_NOTES" \
+>   dist/changelog/CHANGELOG.dryrun.md \
+>   dist/provenance/pip_freeze_$$(date -u +%F).txt dist/assets/$(RELEASE_VERSION)/* || true
+> echo "[ok] GitHub Release created (or gh not available)"
 > gh release create $(RELEASE_TAG) \
 >   --title "$(RELEASE_TAG)" \
 >   --notes-file "docs/release_notes/release_notes_$(RELEASE_VERSION).md" \
