@@ -20,7 +20,9 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="cmd")
 
     p = sub.add_parser("extract", help="Extract Apple/Zepp sources")
-    p.add_argument("--pid", required=True, help="Participant id (Pxxxxxx)")
+    # Support both --pid and legacy --participant used by Makefile
+    p.add_argument("--pid", required=False, help="Participant id (Pxxxxxx)")
+    p.add_argument("--participant", dest="pid", required=False, help="(legacy) participant id")
     p.add_argument("--snapshot", default="auto", help="Snapshot id YYYY-MM-DD or 'auto' (default)")
     p.add_argument("--auto-zip", action="store_true", dest="auto_zip", help="Auto-discover zips")
     p.add_argument("--dry-run", type=int, default=0, help="If 1 do a dry-run discovery only")
