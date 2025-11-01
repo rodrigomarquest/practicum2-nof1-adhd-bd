@@ -18,6 +18,8 @@ VENV_DIR := .venv
 PID ?= P000001
 SNAPSHOT ?= auto
 ETL_CMD ?= full
+DRY_RUN ?= 0
+REPO_ROOT ?= .
 # Fixed defaults requested
 CUTOVER ?= 2024-03-11
 TZ_BEFORE ?= America/Sao_Paulo
@@ -79,14 +81,49 @@ clean-all: clean clean-data clean-provenance
 # -------- Core workflows (ETL, labels, QC, packaging) --------
 .PHONY: etl labels qc pack-kaggle
 
+# Defaults (mantém compatibilidade)
+PID ?= P000001
+SNAPSHOT ?= auto
+DRY_RUN ?= 0
+REPO_ROOT ?= .
+
+# Namespace 'etl' para estilo: make etl <subcomando>
+.PHONY: etl
 etl:
-> echo ">>> etl: running src.etl_pipeline ($(ETL_CMD))"
-> PYTHONPATH="$$PWD" $(PYTHON) scripts/etl_runner.py $(ETL_CMD) \
->   --participant $(PID) \
+> @echo "[ETL] namespace loaded (use: make etl extract|sleep|cardio|activity|full)"
+
+# Subcomandos (nível 2) -----------------------------
+
+# 1) extract (já existente no projeto – manter apenas eco aqui)
+.PHONY: extract
+extract:
+> @echo "[ETL] extract"
+> # TODO: chama seu script de extração real (já existente)
+
+# 2) sleep (stub provisório)
+.PHONY: sleep
+sleep:
+> @echo "[ETL] sleep (stub) — será implementado em prompt separado"
+
+# 3) cardio (stub provisório)
+.PHONY: cardio
+cardio:
+> @echo "[ETL] cardio (stub) — será implementado em prompt separado"
+
+# 4) activity (NOVO: chama o módulo de features)
+.PHONY: activity
+activity:
+> PYTHONPATH=src \
+> python -m domains.activity.activity_features \
+>   --pid $(PID) \
+>   --repo-root $(REPO_ROOT) \
 >   --snapshot $(SNAPSHOT) \
->   --cutover $(CUTOVER) \
->   --tz_before $(TZ_BEFORE) \
->   --tz_after $(TZ_AFTER)
+>   --dry-run $(DRY_RUN)
+
+# 5) full — encadeia extract → cardio → activity
+.PHONY: full
+full: extract cardio activity
+> @echo "[OK] FULL ETL completed for PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
 
 # Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
 labels:
