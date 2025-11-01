@@ -1,6 +1,6 @@
 # 🚀 4.0.3 – Release v4.0.3
 
-**Release date:** 2025-11-01T00:13:16Z  
+**Release date:** 2025-11-01T00:30:20Z  
 **Branch:** v4-main  
 **Author:** Rodrigo Marques Teixeira  
 **Project:** MSc AI for Business – Practicum Part 2 (N-of-1 ADHD + BD)
@@ -10,17 +10,18 @@
 ## 🧩 Summary
 Auto-generated draft. See CHANGES_SINCE_LAST_TAG.txt.
 
-**Since v4.0.2:** 1 commits · other:1 · 1 authors.
+**Since v4.0.2:** 2 commits · other:2 · 1 authors.
 
-**Since v4.0.2:** 1 commits  
-other:1  
+**Since v4.0.2:** 2 commits  
+other:2  
 **Authors:** 1 total  
-Rodrigo Teixeira (1)
+Rodrigo Teixeira (2)
 
 ---
 
 ## 🌿 Highlights
-### Other (1)
+### Other (2)
+- chore(release): finalize artifacts for v4.0.3
 - chore(release): prepare release v4.0.3
 
 ---
@@ -29,15 +30,15 @@ Rodrigo Teixeira (1)
 * Commit range: v4.0.2..v4.0.3
 * Tag: v4.0.3
 * Renderer: `render_release_from_templates.py`
-* Generated: 2025-11-01T00:13:16Z
+* Generated: 2025-11-01T00:30:20Z
 
 ---
 
 ## 📈 Stats
 
-- Total: 1
-- other: 1
-- Top authors: Rodrigo Teixeira (1)
+- Total: 2
+- other: 2
+- Top authors: Rodrigo Teixeira (2)
 
 
 ---
