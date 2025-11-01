@@ -298,6 +298,6 @@ if __name__ == "__main__":
     ap.add_argument("--labels", choices=["none", "synthetic"], default="none")
     a = ap.parse_args()
     from pathlib import Path as _P
-    snap = _P(f"data/etl/{a.participant}/snapshots/{a.snapshot}")
+    snap = _P(f"data/etl/{a.participant}/{a.snapshot}")
     out = run(snap, labels=a.labels)
     print("✅ aggregate done:", out)

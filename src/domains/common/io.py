@@ -5,10 +5,17 @@ from typing import Tuple
 
 
 def etl_snapshot_root(pid: str, snapshot: str) -> Path:
-    """Return canonical snapshot root under data/etl/<PID>/snapshots/<SNAPSHOT>/"""
+    """Return canonical snapshot root under data/etl/<PID>/<SNAPSHOT>/.
+
+    Historically the layout used an intermediate 'snapshots' directory
+    (data/etl/<pid>/snapshots/<snapshot>/). The canonical v4 layout places
+    snapshots directly under the participant directory: data/etl/<pid>/<snapshot>/.
+    This helper centralizes that decision so callers don't need to hardcode the
+    intermediate component.
+    """
     pid = str(pid)
     snap = str(snapshot)
-    return Path("data") / "etl" / pid / "snapshots" / snap
+    return Path("data") / "etl" / pid / snap
 
 
 def per_metric_dir(pid: str, snapshot: str) -> Path:

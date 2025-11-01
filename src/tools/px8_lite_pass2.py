@@ -9,6 +9,7 @@ Rules:
 """
 
 from pathlib import Path
+from src.tools.etl_paths import etl_snapshot_dir
 import hashlib
 import csv
 import pandas as pd
@@ -110,7 +111,7 @@ def derive_daily_from_normalized(snapshot: Path) -> pd.DataFrame:
 
 def main():
     repo = Path(".")
-    snap = repo / "data" / "etl" / "P000001" / "snapshots" / "2025-10-22"
+    snap = etl_snapshot_dir("P000001", "2025-10-22")
     outdir = repo / "reports"
     outdir.mkdir(parents=True, exist_ok=True)
 

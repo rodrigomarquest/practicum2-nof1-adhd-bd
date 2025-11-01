@@ -1,8 +1,16 @@
 import os
 import re
 import sys
+from pathlib import Path
+from src.tools.etl_paths import etl_snapshot_dir
 
-path = "data/etl/P000001/snapshots/2025-09-29/extracted/apple/apple_health_export/export_cda.xml"
+path = str(
+    etl_snapshot_dir("P000001", "2025-09-29")
+    / "extracted"
+    / "apple"
+    / "apple_health_export"
+    / "export_cda.xml"
+)
 if not os.path.exists(path):
     print("ERROR: file not found:", path)
     sys.exit(1)

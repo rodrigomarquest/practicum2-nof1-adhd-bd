@@ -74,7 +74,7 @@ VERSION_RAW = "version_raw.csv"
 VERSION_LOG = "version_log_enriched.csv"
 
 # common help strings
-HELP_SNAPSHOT_DIR = "Caminho data/etl/<PID>/snapshots/<YYYY-MM-DD>"
+HELP_SNAPSHOT_DIR = "Path data/etl/<PID>/<YYYY-MM-DD>"
 HELP_PARTICIPANT = "PID (usar com --snapshot)"
 HELP_SNAPSHOT_ID = "Snapshot id (YYYY-MM-DD ou YYYYMMDD)"
 USAGE_SNAPSHOT_OR_PARTICIPANT = "Use --snapshot_dir OU (--participant e --snapshot)."
@@ -118,7 +118,7 @@ def ensure_ai_outdir(pid: str, snap: str) -> Path:
 
     Historically this returned a path under `data_ai/`. To preserve
     compatibility with existing callers we keep the function name but
-    make it return the canonical `data/etl/<pid>/snapshots/<snap>` using
+    make it return the canonical `data/etl/<pid>/<snap>` using
     `etl_snapshot_root` so callers receive the correct write location.
     """
     snap_iso = canon_snap_id(snap)
@@ -222,7 +222,7 @@ def ensure_extracted(pid: str, snapshot: str, zip_path: Path) -> Path:
     Returns the Path to the export.xml inside the extracted folder.
     """
     snap_iso = canon_snap_id(snapshot)
-    out = ETL_ROOT / pid / "snapshots" / snap_iso / "extracted" / "apple"
+    out = etl_snapshot_root(pid, snap_iso) / "extracted" / "apple"
     # Common layouts: either export.xml at out/ or under out/apple_health_export/export.xml
     candidate1 = out / EXPORT_XML
     candidate2 = out / "apple_health_export" / EXPORT_XML
@@ -2858,7 +2858,7 @@ def main():
         # Resolve snapshot directory and CDA path
         part = args.participant
         snap = args.snapshot
-        snap_dir = Path(f"data/etl/{part}/snapshots/{snap}")
+        snap_dir = etl_snapshot_root(part, snap)
         cda_path = (
             snap_dir / "extracted" / "apple" / "apple_health_export" / "export_cda.xml"
         )
@@ -3070,11 +3070,11 @@ def main():
                 print("DRY RUN: planned actions:")
                 if apple_candidate:
                     print(
-                        f" - apple: would extract {apple_candidate} -> {ETL_ROOT/ pid / 'snapshots' / canon_snap_id(snap) / 'extracted' / 'apple'}"
+                        f" - apple: would extract {apple_candidate} -> {etl_snapshot_root(pid, canon_snap_id(snap)) / 'extracted' / 'apple'}"
                     )
                 if zepp_candidate:
                     print(
-                        f" - zepp: would extract {zepp_candidate} -> {ETL_ROOT/ pid / 'snapshots' / canon_snap_id(snap) / 'extracted' / 'zepp'}"
+                        f" - zepp: would extract {zepp_candidate} -> {etl_snapshot_root(pid, canon_snap_id(snap)) / 'extracted' / 'zepp'}"
                     )
                 return 0
 
@@ -3084,9 +3084,7 @@ def main():
             for device, cand in (("apple", apple_candidate), ("zepp", zepp_candidate)):
                 if not cand:
                     continue
-                target_dir = (
-                    ETL_ROOT / pid / "snapshots" / snap_iso / "extracted" / device
-                )
+                target_dir = etl_snapshot_root(pid, snap_iso) / "extracted" / device
                 sha_file = target_dir / f"{device}_zip.sha256"
                 cur_hash = sha256_path(cand)
                 prev_hash = read_sha256(sha_file)
@@ -3182,7 +3180,7 @@ def main():
                 xmls = list(extracted_apple_dir.rglob("export.xml"))
                 if xmls:
                     xml_path = xmls[0]
-                    outdir = ETL_ROOT / pid / "snapshots" / snap_iso
+                    outdir = etl_snapshot_root(pid, snap_iso)
                     # ensure outdir exists
                     outdir.mkdir(parents=True, exist_ok=True)
                     with Timer(f"extract (parse export.xml) [{pid}/{snap}]"):
@@ -3415,7 +3413,7 @@ def main():
         # Otherwise run the full labels merger (Apple SoM + Zepp Emotion)
         # Prefer the ETL snapshot path (data/etl/...) as the canonical SNAP; pass it to the labels runner.
         etl_snapdir = (
-            ETL_ROOT / args.participant / "snapshots" / canon_snap_id(args.snapshot)
+            etl_snapshot_root(args.participant, canon_snap_id(args.snapshot))
             if args.participant and args.snapshot
             else snapdir
         )
@@ -3484,19 +3482,13 @@ def main():
         else:
             # explicit snapshot provided: look for export.xml under raw or fallback into data/etl extracted
             xml = find_export_xml(pid, snap)
-            # Fallback: some runs place the extracted Apple export under data/etl/<pid>/snapshots/<snap>/extracted/apple
+            # Fallback: some historic runs placed the extracted Apple export under
+            # data/etl/<pid>/snapshots/<snap>/extracted/apple. Prefer the canonical
+            # etl_snapshot_root (data/etl/<pid>/<snap>/...) but still tolerate the
+            # old layout via migrate_from_data_ai_if_present when appropriate.
             if xml is None:
-                alt_path = (
-                    ETL_ROOT
-                    / pid
-                    / "snapshots"
-                    / canon_snap_id(snap)
-                    / "extracted"
-                    / "apple"
-                )
-                xml_candidates = (
-                    list(alt_path.rglob("export.xml")) if alt_path.exists() else []
-                )
+                alt_path = etl_snapshot_root(pid, canon_snap_id(snap)) / "extracted" / "apple"
+                xml_candidates = list(alt_path.rglob("export.xml")) if alt_path.exists() else []
                 xml = xml_candidates[0] if xml_candidates else None
             if xml is None:
                 print("WARNING: export.xml não encontrado para:", pid, snap)
