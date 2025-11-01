@@ -87,14 +87,37 @@ etl:
 >   --cutover $(CUTOVER) \
 >   --tz_before $(TZ_BEFORE) \
 >   --tz_after $(TZ_AFTER)
+> if [ "$(ETL_CMD)" = "extract" ]; then \
+>   # Run extract under our Timer wrapper so the terminal shows the standard header/footer
+>   PYTHONPATH="$$PWD" $(PYTHON) scripts/run_etl_with_timer.py extract \
+>     --participant $(PID) \
+>     --snapshot $(SNAPSHOT) \
+>     --cutover $(CUTOVER) \
+>     --tz_before $(TZ_BEFORE) \
+>     --tz_after $(TZ_AFTER); \
+> else \
+>   # For full runs ensure extracted data exists before proceeding
+>   if [ "$(ETL_CMD)" = "full" ]; then \
+>     if [ ! -d "data/etl/$(PID)/$(SNAPSHOT)/extracted" ]; then \
+>       echo "ERROR: extracted data not found for $(PID)/$(SNAPSHOT). Run 'make etl ETL_CMD=extract PID=$(PID) SNAPSHOT=$(SNAPSHOT)' first."; \
+>       exit 1; \
+>     fi; \
+>   fi; \
+>   PYTHONPATH="$$PWD" $(PYTHON) -m src.etl_pipeline $(ETL_CMD) \
+>     --participant $(PID) \
+>     --snapshot $(SNAPSHOT) \
+>     --cutover $(CUTOVER) \
+>     --tz_before $(TZ_BEFORE) \
+>     --tz_after $(TZ_AFTER); \
+> fi
 
 # Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
 labels:
 > @echo ">>> labels: running src.make_labels for $(PID) @ $(SNAPSHOT)"
 > @PYTHONPATH="$$PWD" $(PYTHON) -m src.make_labels \
 >   --rules config/label_rules.yaml \
->   --in data/etl/$(PID)/snapshots/$(SNAPSHOT)/joined/features_daily.csv \
->   --out data/etl/$(PID)/snapshots/$(SNAPSHOT)/joined/features_daily_labeled.csv
+>   --in data/etl/$(PID)/$(SNAPSHOT)/joined/features_daily.csv \
+>   --out data/etl/$(PID)/$(SNAPSHOT)/joined/features_daily_labeled.csv
 
 
 
@@ -119,30 +142,30 @@ release-verify:
 
 release-summary:
 > echo ">>> summary: collect commits since last tag"
-> @mkdir -p dist/changelog
-> @LAST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo ""); \
+> mkdir -p dist/changelog
+> LAST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo ""); \
 > if [ -n "$$LAST_TAG" ]; then \
 >   git log --pretty=oneline $$LAST_TAG..HEAD > dist/changelog/CHANGES_SINCE_LAST_TAG.txt; \
 > else \
 >   git log --pretty=oneline > dist/changelog/CHANGES_SINCE_LAST_TAG.txt; \
 > fi; \
-	git add docs/release_notes/release_notes_v$(RELEASE_VERSION).md || true; \
-	git commit -m "chore(release): add release notes for v$(RELEASE_VERSION)" || true; \
-	git push -u origin $$BR || true; \
-	mkdir -p dist; \
-	PR_BODY=dist/release_pr_body_$(RELEASE_VERSION).md; \
-	cat docs/release_notes/release_notes_v$(RELEASE_VERSION).md > $$PR_BODY; \
-	if [ -n "$(ISSUES)" ]; then \
-	  for i in $(ISSUES); do echo "\nCloses #$$i" >> $$PR_BODY; done; \
-	else \
-	  echo "\nCloses #1\nCloses #2" >> $$PR_BODY; \
-	fi; \
-	if gh auth status >/dev/null 2>&1; then \
-		gh pr create --base main --head $$BR --title "Release v$(RELEASE_VERSION) – $(RELEASE_TITLE)" --body-file $$PR_BODY || echo "gh pr create failed; you can open a PR manually"; \
-	else \
-		echo "gh CLI not authenticated or not available. Create PR manually using: https://github.com/$(shell git config --get remote.origin.url | sed -e 's/.*:\/\///' -e 's/\.git$$//')/compare/main...$$BR"; \
-	fi
-> @echo "[ok] draft prepared under docs/release_notes and dist/changelog"
+> echo "[ok] wrote dist/changelog/CHANGES_SINCE_LAST_TAG.txt"
+
+release-draft:
+> echo ">>> draft: release notes + changelog (dry-run)"
+> mkdir -p docs/release_notes dist/changelog
+> if [ -z "$(RELEASE_TITLE)" ]; then \
+>   echo "ERROR: RELEASE_TITLE must be provided for a meaningful release (see issue #7)."; \
+>   echo "Example: make release-draft RELEASE_VERSION=4.1.0 LAST_TAG=v4.0.4 RELEASE_TITLE=\"My release title\""; \
+>   exit 1; \
+> fi
+> $(PYTHON) -m src.tools.render_release_from_templates \
+>   --version $(RELEASE_VERSION) \
+>   --tag $(RELEASE_TAG) \
+>   --title "Release $(RELEASE_TAG) – $(RELEASE_TITLE)" \
+>   --summary "Auto-generated draft. See CHANGES_SINCE_LAST_TAG.txt." \
+>   --branch $(RELEASE_BRANCH)
+> echo "[ok] draft prepared under docs/release_notes and dist/changelog"
 
 release-freeze:
 > echo ">>> freeze: pip freeze snapshot"
@@ -158,6 +181,7 @@ release-tag:
 > @echo "[ok] commit+tag created"
 
 release-publish:
+release-publish:
 > echo ">>> gh release create $(RELEASE_TAG)"
 > echo "(gh CLI optional)"
 > mkdir -p dist
@@ -166,18 +190,13 @@ release-publish:
 > if [ -n "$(ISSUES)" ]; then \
 >   for i in $(ISSUES); do echo "\nCloses #$$i" >> $$PUBLISH_NOTES; done; \
 > fi; \
+> if [ -n "$(RELEASE_TITLE)" ]; then TITLE="$(RELEASE_TAG) - $(RELEASE_TITLE)"; else TITLE="$(RELEASE_TAG)"; fi; \
 > gh release create $(RELEASE_TAG) \
->   --title "$(RELEASE_TAG)" \
+>   --title "$$TITLE" \
 >   --notes-file "$$PUBLISH_NOTES" \
 >   dist/changelog/CHANGELOG.dryrun.md \
 >   dist/provenance/pip_freeze_$$(date -u +%F).txt dist/assets/$(RELEASE_VERSION)/* || true
 > echo "[ok] GitHub Release created (or gh not available)"
-> gh release create $(RELEASE_TAG) \
->   --title "$(RELEASE_TAG)" \
->   --notes-file "docs/release_notes/release_notes_$(RELEASE_VERSION).md" \
->   dist/changelog/CHANGELOG.dryrun.md \
->   dist/provenance/pip_freeze_$$(date -u +%F).txt || true
-> @echo "[ok] GitHub Release created (or gh not available)"
 
 release-final: release-verify release-summary release-draft release-freeze release-tag
 > @echo "[ok] local release finalized: $(RELEASE_TAG)"
@@ -192,6 +211,11 @@ release-assets:
 
 release-pr:
 > @echo ">>> release-pr: create branch and open PR targeting main"
+> if [ -z "$(RELEASE_TITLE)" ]; then \
+>   echo "ERROR: RELEASE_TITLE is required for release-pr (see issue #7)."; \
+>   echo "Example: make release-pr RELEASE_VERSION=4.1.0 RELEASE_TITLE=\"My title\" ISSUES=\"1 4\""; \
+>   exit 1; \
+> fi; \
 > @set -e; \
 BR=release/v$(RELEASE_VERSION); \
 if ! git rev-parse --verify --quiet $$BR >/dev/null; then \
@@ -222,6 +246,7 @@ help-release:
 > echo "  make release-publish   # cria GitHub Release (gh CLI)"
 > echo "  make release-final     # encadeado local (sem push/publish)"
 > echo "  make release-pr        # create a release PR targeting main (gh CLI)"
+> echo "Note: release-draft and release-pr require RELEASE_TITLE to be set (see issue #7)."
 
 qc:
 > echo ">>> qc: running src.eda"
