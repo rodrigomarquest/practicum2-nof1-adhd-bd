@@ -1,0 +1,40 @@
+name: Close Issues from Release Body
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  issues: write
+
+jobs:
+  close-referenced-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close issues referenced in release body
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const body = context.payload.release.body || '';
+            core.info('Parsing release body for "Closes #N" patterns');
+            const regex = /Closes\s+#(\d+)/gi;
+            const matches = [];
+            for (const m of body.matchAll(regex)) {
+              matches.push(m[1]);
+            }
+            if (matches.length === 0) {
+              core.info('No issues to close found in release body.');
+            }
+            for (const issue of matches) {
+              try {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: Number(issue),
+                  state: 'closed'
+                });
+                core.info(`Closed issue #${issue}`);
+              } catch (err) {
+                core.warning(`Failed to close issue #${issue}: ${err}`);
+              }
+            }
