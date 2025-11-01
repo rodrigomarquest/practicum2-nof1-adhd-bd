@@ -2946,6 +2946,15 @@ def main():
 
     if args.cmd == "extract":
         pid, snap = args.participant, args.snapshot
+        # TEMP DEBUG: print incoming args and environment to help troubleshoot discovery
+        try:
+            print("DEBUG-TEMP: extract called with participant=", pid, "snapshot=", snap)
+            print("DEBUG-TEMP: flags: auto_zip=", getattr(args, 'auto_zip', False), "apple_zip=", getattr(args, 'apple_zip', None), "zepp_zip=", getattr(args, 'zepp_zip', None), "dry_run=", getattr(args, 'dry_run', False))
+            print("DEBUG-TEMP: PWD=", os.getcwd())
+            print("DEBUG-TEMP: RAW_ARCHIVE=", RAW_ARCHIVE)
+            print("DEBUG-TEMP: ETL_ROOT=", ETL_ROOT)
+        except Exception:
+            pass
         # If auto-zip discovery enabled, search under data/raw/<participant> only
         if args.auto_zip or args.apple_zip or args.zepp_zip:
             base_dir = RAW_ARCHIVE / pid

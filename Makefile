@@ -20,10 +20,21 @@ SNAPSHOT ?= auto
 ETL_CMD ?= full
 DRY_RUN ?= 0
 REPO_ROOT ?= .
+# Compute platform path separator via the chosen Python executable and build a
+# PYTHONPATH value that works on both POSIX (:) and Windows (;) hosts. This
+# ensures child processes can import `src` when Make spawns a new Python.
+PATHSEP := $(shell $(PYTHON) -c "import os; print(os.pathsep)")
+PYTHONPATH_ETL := $(REPO_ROOT)$(PATHSEP)$(REPO_ROOT)/src
 # Fixed defaults requested
 CUTOVER ?= 2024-03-11
 TZ_BEFORE ?= America/Sao_Paulo
 TZ_AFTER  ?= Europe/Dublin
+
+ifeq ($(DRY_RUN),1)
+DRY_FLAG := --dry-run
+else
+DRY_FLAG :=
+endif
 
 # -------- Installation (centralized requirements/) --------
 .PHONY: install-base install-dev install-kaggle install-local
@@ -97,8 +108,14 @@ etl:
 # 1) extract (já existente no projeto – manter apenas eco aqui)
 .PHONY: extract
 extract:
-> @echo "[ETL] extract"
-> # TODO: chama seu script de extração real (já existente)
+> PYTHONPATH="$(PYTHONPATH_ETL)" \
+> $(PYTHON) scripts/etl_runner.py extract \
+>   --participant "$(PID)" \
+>   --snapshot "$(SNAPSHOT)" \
+>   --cutover "$(CUTOVER)" \
+>   --tz_before "$(TZ_BEFORE)" \
+>   --tz_after "$(TZ_AFTER)" \
+>   $(DRY_FLAG)
 
 # 2) sleep (stub provisório)
 .PHONY: sleep
@@ -167,7 +184,7 @@ release-summary:
 	git commit -m "chore(release): add release notes for v$(RELEASE_VERSION)" || true; \
 	git push -u origin $$BR || true; \
 	mkdir -p dist; \
-	PR_BODY=dist/release_pr_body_$(RELEASE_VERSION).md; \
+	PR_BODY=dist/extra$(RELEASE_VERSION).md; \
 	cat docs/release_notes/release_notes_v$(RELEASE_VERSION).md > $$PR_BODY; \
 	if [ -n "$(ISSUES)" ]; then \
 	  for i in $(ISSUES); do echo "\nCloses #$$i" >> $$PR_BODY; done; \
