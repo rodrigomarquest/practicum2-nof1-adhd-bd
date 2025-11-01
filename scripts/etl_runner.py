@@ -26,6 +26,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--snapshot", default="auto", help="Snapshot id YYYY-MM-DD or 'auto' (default)")
     p.add_argument("--auto-zip", action="store_true", dest="auto_zip", help="Auto-discover zips")
     p.add_argument("--dry-run", type=int, default=0, help="If 1 do a dry-run discovery only")
+    # legacy/compat flags forwarded by Makefile; accept and ignore
+    p.add_argument("--cutover", required=False, help=argparse.SUPPRESS)
+    p.add_argument("--tz_before", required=False, help=argparse.SUPPRESS)
+    p.add_argument("--tz_after", required=False, help=argparse.SUPPRESS)
 
     p_full = sub.add_parser("full", help="Run full ETL (delegates to src.etl_pipeline.main)")
     p_full.add_argument("--pid", required=True)
