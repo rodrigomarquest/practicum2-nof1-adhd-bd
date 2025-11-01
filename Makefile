@@ -26,37 +26,31 @@ TZ_AFTER  ?= Europe/Dublin
 # -------- Installation (centralized requirements/) --------
 .PHONY: install-base install-dev install-kaggle install-local
 
-install-base:
-> echo ">>> install-base: requirements/base.txt"
-> $(PYTHON) -m pip install -U pip
-> $(PYTHON) -m pip install -r requirements/base.txt
-
-install-dev:
-> echo ">>> install-dev: requirements/dev.txt"
-> $(PYTHON) -m pip install -U pip
-> $(PYTHON) -m pip install -r requirements/dev.txt
-
-install-kaggle:
-> echo ">>> install-kaggle: requirements/kaggle.txt"
-> python -m pip install -U pip
-> python -m pip install -r requirements/kaggle.txt
-
-install-local:
-> echo ">>> install-local: requirements/local.txt"
-> $(PYTHON) -m pip install -U pip
-> $(PYTHON) -m pip install -r requirements/local.txt
-
-# -------- Clean-up (safe, portable) --------
-.PHONY: clean clean-data clean-provenance clean-all
-
-clean:
-> echo ">>> clean: removing caches and logs"
-> find . -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
-> find . -name ".ipynb_checkpoints" -type d -prune -exec rm -rf {} + 2>/dev/null || true
-> find . -name "*.pyc" -delete 2>/dev/null || true
-> find . -name "*.log" -delete 2>/dev/null || true
-> echo "[OK] caches/logs removed"
-
+etl:
+> echo ">>> etl: running src.etl_pipeline ($(ETL_CMD))"
+> if [ "$(ETL_CMD)" = "extract" ]; then \
+>   # Run extract under our Timer wrapper so the terminal shows the standard header/footer
+>   PYTHONPATH="$$PWD" $(PYTHON) scripts/run_etl_with_timer.py extract \
+>     --participant $(PID) \
+>     --snapshot $(SNAPSHOT) \
+>     --cutover $(CUTOVER) \
+>     --tz_before $(TZ_BEFORE) \
+>     --tz_after $(TZ_AFTER); \
+> else \
+>   # For full runs ensure extracted data exists before proceeding
+>   if [ "$(ETL_CMD)" = "full" ]; then \
+>     if [ ! -d "data/etl/$(PID)/$(SNAPSHOT)/extracted" ]; then \
+>       echo "ERROR: extracted data not found for $(PID)/$(SNAPSHOT). Run 'make etl ETL_CMD=extract PID=$(PID) SNAPSHOT=$(SNAPSHOT)' first."; \
+>       exit 1; \
+>     fi; \
+>   fi; \
+>   PYTHONPATH="$$PWD" $(PYTHON) -m src.etl_pipeline $(ETL_CMD) \
+>     --participant $(PID) \
+>     --snapshot $(SNAPSHOT) \
+>     --cutover $(CUTOVER) \
+>     --tz_before $(TZ_BEFORE) \
+>     --tz_after $(TZ_AFTER); \
+> fi
 clean-data:
 > echo ">>> clean-data: removing ETL outputs and AI results"
 > rm -rf notebooks/outputs dist/assets logs backups processed 2>/dev/null || true
