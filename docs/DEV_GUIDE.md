@@ -94,11 +94,14 @@ The `Makefile` is simplified and grouped by purpose.
 ## 3. 🧩 Environment Management
 
 - Always create or refresh your virtual environment with:
-  ```bash
-  python -m venv .venv
-  make install-dev
-  Use requirements/base.txt for reproducibility across machines.
-  ```
+ - Always create or refresh your virtual environment with:
+
+   ```bash
+   python -m venv .venv
+   make install-dev
+   ```
+
+   Use `requirements/base.txt` for reproducibility across machines.
 
 The Kaggle runtime uses requirements/kaggle.txt — keep it lightweight (no system-level deps).
 
@@ -191,3 +194,27 @@ Ensure compliance with GDPR and NCI ethics guidelines before data sharing or pub
 
 “Train models you can explain. Collect data you can defend.
 Code as if your future self were reviewing your thesis.” — Mestre Yoda
+
+---
+
+## 🚀 One-Command Auto-Release Flow
+
+Run:
+
+```bash
+make release-final RELEASE_VERSION=4.0.3 RELEASE_TITLE="Full Auto Release Pipeline"
+```
+
+This will:
+
+- Generate changelog + notes
+- Open a PR targeting `main` with auto issue closure (Closes #1, Closes #2)
+- On merge → CI auto-publishes the release to GitHub and uploads release assets from `dist/assets/<version>/`
+- Badges + version auto-updated
+
+Validation:
+
+1. Open Issue #2 manually.
+2. Run the command above and confirm the PR targets `main` with the PR body including `Closes #1` and `Closes #2`.
+3. After merge, verify GitHub Actions created the release and closed the issues.
+

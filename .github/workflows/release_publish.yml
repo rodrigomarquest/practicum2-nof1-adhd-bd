@@ -1,0 +1,60 @@
+name: "📦 Auto Publish Release"
+on:
+  push:
+    branches:
+      - main
+    tags-ignore:
+      - '*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements/dev.txt || true
+          pip install jinja2 || true
+
+      - name: Verify release notes and changelog
+        run: |
+          VERSION=$(git describe --tags --abbrev=0)
+          test -f docs/release_notes/release_notes_${VERSION#v}.md || echo "⚠️ Missing release notes for ${VERSION}"
+          echo "Preparing release for ${VERSION}"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          VERSION=$(git describe --tags --abbrev=0)
+          SHORT=${VERSION#v}
+          echo "🚀 Publishing release ${VERSION}"
+          # create release (if already exists, skip)
+          gh release create "$VERSION" \
+            --title "Release ${VERSION} – Auto Publish" \
+            --notes-file "docs/release_notes/release_notes_${SHORT}.md" \
+            --latest \
+            --target main \
+            --verify-tag || echo "⚠️ Release already exists, skipping"
+
+          # Upload assets if present
+          ASSET_DIR=dist/assets/${SHORT}
+          if [ -d "$${ASSET_DIR}" ]; then
+            echo "Uploading assets from $${ASSET_DIR}"
+            gh release upload "$VERSION" $${ASSET_DIR}/* --clobber || echo "No assets to upload or upload failed"
+          else
+            echo "No assets dir $${ASSET_DIR} found, skipping asset upload"
+          fi

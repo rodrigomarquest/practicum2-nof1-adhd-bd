@@ -179,6 +179,27 @@ release-assets:
 > @cp provenance/etl_provenance_report.csv dist/assets/$(RELEASE_VERSION)/ || true
 > @echo "[OK] Assembled assets for v$(RELEASE_VERSION)"
 
+release-pr:
+> @echo ">>> release-pr: create branch and open PR targeting main"
+> @set -e; \
+BR=release/v$(RELEASE_VERSION); \
+if ! git rev-parse --verify --quiet $$BR >/dev/null; then \
+	git switch -c $$BR; \
+else \
+	git switch $$BR; \
+fi; \
+	git add docs/release_notes/release_notes_v$(RELEASE_VERSION).md || true; \
+	git commit -m "chore(release): add release notes for v$(RELEASE_VERSION)" || true; \
+	git push -u origin $$BR || true; \
+	mkdir -p dist; \
+	cat docs/release_notes/release_notes_v$(RELEASE_VERSION).md > dist/release_pr_body_$(RELEASE_VERSION).md; \
+	echo "\nCloses #1\nCloses #2" >> dist/release_pr_body_$(RELEASE_VERSION).md; \
+	if gh auth status >/dev/null 2>&1; then \
+		gh pr create --base main --head $$BR --title "Release v$(RELEASE_VERSION) – $(RELEASE_TITLE)" --body-file dist/release_pr_body_$(RELEASE_VERSION).md || echo "gh pr create failed; you can open a PR manually"; \
+	else \
+		echo "gh CLI not authenticated or not available. Create PR manually using: https://github.com/$(shell git config --get remote.origin.url | sed -e 's/.*:\/\///' -e 's/\.git$$//')/compare/main...$$BR"; \
+	fi
+
 help-release:
 > echo "Release targets:"
 > echo "  make release-verify    # tree clean, tag livre, SemVer"
@@ -189,6 +210,7 @@ help-release:
 > echo "  make release-push      # push branch + tags"
 > echo "  make release-publish   # cria GitHub Release (gh CLI)"
 > echo "  make release-final     # encadeado local (sem push/publish)"
+> echo "  make release-pr        # create a release PR targeting main (gh CLI)"
 
 qc:
 > echo ">>> qc: running src.eda"

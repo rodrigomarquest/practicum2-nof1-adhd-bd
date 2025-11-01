@@ -2,3 +2,6 @@
 ruff>=0.6
 black>=24.8
 pytest>=8.0
+
+# Template rendering for release notes
+jinja2>=3.1.4
