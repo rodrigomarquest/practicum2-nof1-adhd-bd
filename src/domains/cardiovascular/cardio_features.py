@@ -171,7 +171,11 @@ def write_cardio_outputs(
     snapshot_dir: str | os.PathLike[str], cardio_feat: pd.DataFrame
 ) -> Dict[str, str]:
     snapdir = Path(snapshot_dir)
-    jdir = joined_dir(snapdir.parts[-3], snapdir.parts[-1])
+    # Expect snapdir like data/etl/<PID>/<SNAPSHOT>
+    # parts: ("data","etl","<PID>","<SNAPSHOT>") -> pid at -2, snap at -1
+    pid_part = snapdir.parts[-2] if len(snapdir.parts) >= 2 else ""
+    snap_part = snapdir.parts[-1] if len(snapdir.parts) >= 1 else ""
+    jdir = joined_dir(pid_part, snap_part)
 
     # write cardio features into joined/
     f_cardio = jdir / "features_cardiovascular.csv"
