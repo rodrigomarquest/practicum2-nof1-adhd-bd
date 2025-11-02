@@ -21,6 +21,7 @@ import shutil
 import time
 import os
 import math
+import warnings
 
 # third-party
 import pandas as pd
@@ -28,25 +29,34 @@ import pandas as pd
 # local
 from etl_modules.common.progress import Timer, progress_bar
 from src.domains.common.io import migrate_from_data_ai_if_present, etl_snapshot_root
+from lib.io_guards import ensure_joined_snapshot, write_joined_features
 
 
 # ----------------------------------------------------------------------
 # Atomic write helpers
 # ----------------------------------------------------------------------
 def _write_atomic_csv(df: "pd.DataFrame", out_path: str | os.PathLike[str]):
-    d = os.path.dirname(str(out_path)) or "."
-    fd, tmp = tempfile.mkstemp(prefix=".tmp_", dir=d, suffix=".csv")
-    os.close(fd)
+    """Prefer canonical atomic writer from lib.io_guards, fallback to local atomic rename."""
     try:
-        # Use pandas to write the DataFrame to the temporary file, then atomically replace
-        df.to_csv(tmp, index=False)
-        os.replace(tmp, str(out_path))
-    finally:
-        if os.path.exists(tmp):
-            try:
-                os.remove(tmp)
-            except Exception:
-                pass
+        from lib.io_guards import atomic_backup_write  # type: ignore
+
+        atomic_backup_write(df, Path(out_path))
+        return
+    except Exception:
+        # fallback
+        d = os.path.dirname(str(out_path)) or "."
+        fd, tmp = tempfile.mkstemp(prefix=".tmp_", dir=d, suffix=".csv")
+        os.close(fd)
+        try:
+            # Use pandas to write the DataFrame to the temporary file, then atomically replace
+            df.to_csv(tmp, index=False)
+            os.replace(tmp, str(out_path))
+        finally:
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except Exception:
+                    pass
 
 
 def _write_atomic_json(obj: dict, out_path: str | os.PathLike[str]):
@@ -1822,8 +1832,10 @@ def run_stage_labels_synthetic(
 
     Returns dict with output path and manifest path.
     """
-    # Prefer canonical ETL joined/features_daily.csv
-    features_path = snapshot_dir / "joined" / "features_daily.csv"
+    # Prefer canonical ETL new joined filename
+    # Resolve canonical joined features CSV (migrates legacy if present)
+    features_path = ensure_joined_snapshot(snapshot_dir)
+
     if not features_path.exists():
         # if data_ai has the snapshot content, attempt safe migration into data/etl
         pid = snapshot_dir.parts[-3] if len(snapshot_dir.parts) >= 3 else None
@@ -1835,7 +1847,7 @@ def run_stage_labels_synthetic(
         # re-evaluate
         if not features_path.exists():
             raise FileNotFoundError(
-                f"features_daily.csv not found in snapshot (joined): {features_path}"
+                f"joined_features_daily.csv not found in snapshot (joined): {features_path}"
             )
 
     synth_path = synthetic_path or (snapshot_dir / "state_of_mind_synthetic.csv")
@@ -2325,11 +2337,28 @@ def run_stage_labels(
     snapshot_dir: Path to data/etl/<PID>/snapshots/<SNAP>/
     Returns a manifest dict like the synthetic runner.
     """
-    # locate features base (prefer canonical ETL joined/features_daily.csv)
+    # locate features base (prefer canonical ETL joined filename)
     pid = snapshot_dir.parts[-3] if len(snapshot_dir.parts) >= 3 else None
     snap_iso = snapshot_dir.parts[-1] if len(snapshot_dir.parts) >= 1 else None
-    etl_joined = snapshot_dir / "joined" / "features_daily.csv"
+    joined_dir = snapshot_dir / "joined"
+    etl_joined = joined_dir / "joined_features_daily.csv"
+    old_joined = joined_dir / "features_daily.csv"
     ai_fallback = AI_ROOT / pid / "snapshots" / snap_iso / "features_daily_updated.csv"
+
+    # migrate old canonical name if present
+    if not etl_joined.exists() and old_joined.exists():
+        warnings.warn(
+            f"Found legacy joined/features_daily.csv at {old_joined}; migrating to {etl_joined}",
+            stacklevel=2,
+        )
+        try:
+            joined_dir.mkdir(parents=True, exist_ok=True)
+            old_joined.replace(etl_joined)
+        except Exception:
+            try:
+                shutil.copy2(old_joined, etl_joined)
+            except Exception:
+                pass
 
     if etl_joined.exists():
         features_path = etl_joined
@@ -2986,6 +3015,153 @@ def run_stage_labels(
     }
 
 
+def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
+    """Orchestrate a minimal join of per-domain features into canonical joined CSV.
+
+    Current behaviour (P8):
+    - Look for per-domain files under <snapshot_dir>/joined/:
+      - features_cardiovascular.csv
+      - features_activity.csv
+    - If both cardio and activity are present, read them, add provenance
+      columns (source_vendor, variant, domain), concat them, and merge
+      into the canonical joined features CSV.
+    - Use `ensure_joined_snapshot` and `write_joined_features` from
+      `lib.io_guards` to resolve and write the canonical joined path.
+
+    Returns 0 on success, 2 if no domain features found to merge.
+    """
+    snap = Path(snapshot_dir)
+    print(f"INFO: join_run start snapshot_dir={snap} dry_run={dry_run}")
+
+    jdir = snap / "joined"
+
+    # For each domain, prefer canonical layout under <snapshot>/features/<domain>/**/features_daily.csv
+    # otherwise fallback to interim joined/ per-domain files.
+    domains = {
+        "cardio": {
+            "canonical_glob": snap / "features" / "cardio" / "**" / "features_daily.csv",
+            "fallback": jdir / "features_cardiovascular.csv",
+        },
+        "activity": {
+            "canonical_glob": snap / "features" / "activity" / "**" / "features_daily.csv",
+            "fallback": jdir / "features_activity.csv",
+        },
+    }
+
+    found: list[tuple[str, Path, str]] = []  # (domain, path, chosen_kind)
+    for d, meta in domains.items():
+        # search canonical pattern
+        candidates = list(Path().glob(str(meta["canonical_glob"])))
+        # convert string patterns possibly; use rglob instead
+        if not candidates:
+            try:
+                candidates = list((snap / "features" / d).rglob("features_daily.csv"))
+            except Exception:
+                candidates = []
+
+        chosen = None
+        chosen_kind = "none"
+        if candidates:
+            # choose latest by mtime
+            candidates.sort(key=lambda p: (p.stat().st_mtime if p.exists() else 0), reverse=True)
+            chosen = candidates[0]
+            chosen_kind = "canonical"
+        else:
+            fb = Path(meta["fallback"])
+            if fb.exists():
+                chosen = fb
+                chosen_kind = "fallback"
+
+        if chosen is not None:
+            found.append((d, chosen, chosen_kind))
+
+    if not found:
+        # No per-domain files discovered
+        if dry_run:
+            print("[dry-run] nothing to join")
+            print("INFO: no per-domain feature files found (cardio/activity) -> nothing to join")
+            return 0
+        print("INFO: no per-domain feature files found (cardio/activity) -> nothing to join")
+        return 2
+
+    print("INFO: discovered domain feature files:")
+    for name, p, kind in found:
+        try:
+            df = pd.read_csv(p, parse_dates=["date"]) if p.exists() else pd.DataFrame()
+            print(f"  - {name}: {p} rows={len(df)} (chosen={kind})")
+        except Exception:
+            print(f"  - {name}: {p} (could not read) (chosen={kind})")
+
+    if dry_run:
+        out_path = ensure_joined_snapshot(snap)
+        print(f"DRY RUN: would write joined output -> {out_path}")
+        print("INFO: join_run end (dry-run)")
+        return 0
+
+    # read dataframes and add provenance
+    parts = []
+    for name, p, kind in found:
+        try:
+            df = pd.read_csv(p, parse_dates=["date"]) if p.exists() else pd.DataFrame()
+        except Exception:
+            df = pd.DataFrame()
+        if df.empty:
+            continue
+        # provenance columns
+        df = df.copy()
+        df["source_vendor"] = name
+        df["variant"] = kind
+        df["domain"] = name
+        parts.append(df)
+
+    if not parts:
+        print("INFO: no readable domain dataframes to merge")
+        return 2
+
+    # concat per-domain rows (provenance preserved)
+    concat_df = pd.concat(parts, ignore_index=True, sort=False)
+
+    # Normalize date column to date objects
+    if "date" in concat_df.columns:
+        try:
+            concat_df["date"] = pd.to_datetime(concat_df["date"]).dt.date
+        except Exception:
+            pass
+
+    # Merge into canonical joined features by outer merge on date
+    base_path = ensure_joined_snapshot(snap)
+    if base_path.exists():
+        try:
+            base = pd.read_csv(base_path, parse_dates=["date"]) if base_path.exists() else pd.DataFrame()
+            if "date" in base.columns:
+                base["date"] = pd.to_datetime(base["date"]).dt.date
+        except Exception:
+            base = pd.DataFrame()
+    else:
+        base = pd.DataFrame()
+
+    # Merge base and concat_df; concat_df columns may overlap with base; prefer base values where present
+    merged = base.merge(concat_df.drop(columns=[c for c in ["source_vendor", "variant", "domain"] if c in concat_df.columns], errors="ignore"), on="date", how="outer") if not base.empty else concat_df.copy()
+
+    # finalize: sort and reset index
+    if "date" in merged.columns:
+        try:
+            merged = merged.sort_values("date").reset_index(drop=True)
+        except Exception:
+            pass
+
+    # write using canonical helper (this creates backup named joined_features_daily_prev.csv)
+    try:
+        write_joined_features(merged, snap, dry_run=False)
+        print(f"INFO: wrote joined features -> {ensure_joined_snapshot(snap)}")
+    except Exception as e:
+        print(f"ERROR: failed to write joined features: {e}")
+        return 1
+
+    print("INFO: join_run end")
+    return 0
+
+
 # ----------------------------------------------------------------------
 # CLI
 # ----------------------------------------------------------------------
@@ -3089,6 +3265,18 @@ def main():
         "--dry-run",
         action="store_true",
         help="Do not write outputs; just report summary",
+    )
+
+    # join
+    p_join = sub.add_parser("join", help="Join per-domain features into canonical joined CSV")
+    g_join = p_join.add_mutually_exclusive_group(required=True)
+    g_join.add_argument("--snapshot_dir", help=HELP_SNAPSHOT_DIR)
+    g_join.add_argument("--participant", help=HELP_PARTICIPANT)
+    p_join.add_argument("--snapshot", help=HELP_SNAPSHOT_ID)
+    p_join.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Dry-run: print discovered domain features and output paths; do not write",
     )
 
     # aggregate
@@ -3815,6 +4003,21 @@ def main():
         print("[OK] cardio concluído")
         print(res)
         return 0
+
+    if args.cmd == "join":
+        # determine snapshot_dir
+        if getattr(args, "snapshot_dir", None):
+            snap_dir = Path(args.snapshot_dir)
+        else:
+            pid = args.participant
+            snap = args.snapshot or "auto"
+            snap = canon_snap_id(snap) if snap != "auto" else snap
+            if snap == "auto":
+                snap = resolve_snapshot(snap, pid)
+            snap_dir = etl_snapshot_root(pid, snap)
+
+        rc = join_run(snap_dir, dry_run=bool(getattr(args, "dry_run", False)))
+        return int(rc)
 
     return 0
 
