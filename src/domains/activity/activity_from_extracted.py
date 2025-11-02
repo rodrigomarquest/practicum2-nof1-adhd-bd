@@ -16,6 +16,7 @@ from typing import List
 
 import pandas as pd
 import numpy as np
+import xml.etree.ElementTree as ET
 
 try:
     # helpers for snapshot resolution
@@ -27,21 +28,49 @@ except Exception:
         etl = None
 
 from lib.io_guards import write_csv
+import json
+from collections import defaultdict
+from dateutil import parser as dt_parser
+from dateutil import tz as dateutil_tz
 
 
 logger = logging.getLogger("etl.activity")
 
 
-def discover_apple_csvs(snapshot_dir: Path) -> List[Path]:
+def discover_apple(snapshot_dir: Path) -> List[Path]:
+    """Discover Apple sources under extracted/apple/*/apple_health_export/.
+
+    Prefer export.xml files. If none, look for daily CSVs matching '*daily*.csv'
+    under each apple_health_export folder. Returns list of Paths (exports first).
+    """
     base = snapshot_dir / "extracted" / "apple"
     if not base.exists():
         return []
-    # prefer filenames containing 'daily' or 'apple'
-    candidates = list(base.rglob("*.csv"))
-    if not candidates:
-        return []
-    daily = [p for p in candidates if "daily" in p.name.lower() or "apple" in p.name.lower()]
-    return daily or candidates
+
+    export_xmls: List[Path] = []
+    daily_csvs: List[Path] = []
+
+    # look under each variant folder
+    for variant_dir in [p for p in base.iterdir() if p.is_dir()]:
+        ah_dir = variant_dir / "apple_health_export"
+        if not ah_dir.exists():
+            # also accept exports directly under variant_dir
+            ah_dir = variant_dir
+        # prefer explicit export.xml
+        ex = ah_dir / "export.xml"
+        if ex.exists():
+            export_xmls.append(ex)
+            continue
+        # otherwise collect any export.xml anywhere under this variant
+        for p in ah_dir.rglob("export.xml"):
+            export_xmls.append(p)
+        # fallback: any daily CSVs
+        for p in ah_dir.rglob("*daily*.csv"):
+            daily_csvs.append(p)
+
+    if export_xmls:
+        return export_xmls
+    return daily_csvs
 
 
 def discover_zepp_csvs(snapshot_dir: Path) -> List[Path]:
@@ -52,25 +81,148 @@ def discover_zepp_csvs(snapshot_dir: Path) -> List[Path]:
     return candidates
 
 
-def load_and_aggregate_apple(paths: List[Path]) -> pd.DataFrame:
+def load_apple_daily(paths: List[Path], home_tz: str) -> pd.DataFrame:
+    """Load daily apple activity from export.xml paths or fallback daily CSVs.
+
+    If export.xml paths are provided, parse them (streaming) and aggregate
+    per-day using home_tz for localization. If only CSVs are provided, read
+    and normalize them to the target schema.
+    """
+    if not paths:
+        return pd.DataFrame()
+
+    # detect whether these are export.xml files (check first path)
+    if any(p.name.lower() == "export.xml" for p in paths) or any(p.suffix.lower() == ".xml" for p in paths):
+        # parse export.xml streaming to collect ActivitySummary and Record nodes
+        daily = defaultdict(lambda: defaultdict(float))
+        # also track presence of goal/close fields (use last/max)
+        extras = defaultdict(dict)
+
+        for xml in paths:
+            try:
+                for event, elem in ET.iterparse(str(xml), events=("end",)):
+                    tag = elem.tag
+                    if tag.endswith("ActivitySummary"):
+                        # ActivitySummary often contains attributes like date, activeEnergyBurned, appleExerciseTime, appleStandHours, and goals
+                        attrs = elem.attrib
+                        date_str = attrs.get("date") or attrs.get("startDate")
+                        if date_str:
+                            # assume ISO date or YYYY-MM-DD
+                            try:
+                                d = str(pd.to_datetime(date_str).date())
+                            except Exception:
+                                d = date_str
+                            # map known attributes
+                            if "activeEnergyBurned" in attrs:
+                                daily[d]["apple_active_kcal"] = float(attrs.get("activeEnergyBurned", 0))
+                            if "appleExerciseTime" in attrs:
+                                daily[d]["apple_exercise_min"] = float(attrs.get("appleExerciseTime", 0))
+                            if "appleStandHours" in attrs:
+                                daily[d]["apple_stand_hours"] = float(attrs.get("appleStandHours", 0))
+                            # goals
+                            if "activeEnergyBurnedGoal" in attrs:
+                                extras[d]["apple_move_goal_kcal"] = float(attrs.get("activeEnergyBurnedGoal", 0))
+                            if "appleExerciseTimeGoal" in attrs:
+                                extras[d]["apple_exercise_goal_min"] = float(attrs.get("appleExerciseTimeGoal", 0))
+                            if "appleStandHoursGoal" in attrs:
+                                extras[d]["apple_stand_goal_hours"] = float(attrs.get("appleStandHoursGoal", 0))
+                            # rings close heuristics
+                            if "move" in attrs:
+                                extras[d]["apple_rings_close_move"] = int(attrs.get("move") in ("1", "true", "True"))
+                            if "exercise" in attrs:
+                                extras[d]["apple_rings_close_exercise"] = int(attrs.get("exercise") in ("1", "true", "True"))
+                            if "stand" in attrs:
+                                extras[d]["apple_rings_close_stand"] = int(attrs.get("stand") in ("1", "true", "True"))
+                    elif tag.endswith("Record") or tag.endswith("Workout"):
+                        attrs = elem.attrib
+                        t = attrs.get("type", "")
+                        v = attrs.get("value")
+                        sdt = attrs.get("startDate") or attrs.get("creationDate")
+                        if not (t and v and sdt):
+                            elem.clear(); continue
+                        try:
+                            dt = dt_parser.parse(sdt)
+                            # localize to home_tz then take date
+                            if dt.tzinfo is None:
+                                # assume UTC if no tz
+                                dt = dt.replace(tzinfo=dateutil_tz.gettz("UTC"))
+                            local_dt = dt.astimezone(dateutil_tz.gettz(home_tz or "UTC"))
+                            d = str(local_dt.date())
+                        except Exception:
+                            try:
+                                d = str(pd.to_datetime(sdt).date())
+                            except Exception:
+                                elem.clear(); continue
+
+                        # map type substrings to columns
+                        sval = None
+                        try:
+                            sval = float(v)
+                        except Exception:
+                            try:
+                                sval = int(v)
+                            except Exception:
+                                sval = None
+
+                        if sval is None:
+                            elem.clear(); continue
+
+                        if "StepCount" in t or "stepCount" in t or "Step" in t:
+                            daily[d]["apple_steps"] += int(sval)
+                        elif "Distance" in t:
+                            # preserve as meters if possible
+                            daily[d]["apple_distance_m"] += float(sval)
+                        elif "ActiveEnergy" in t:
+                            daily[d]["apple_active_kcal"] += float(sval)
+                        elif "ExerciseTime" in t or "AppleExerciseTime" in t:
+                            daily[d]["apple_exercise_min"] += float(sval)
+                        elif "StandHours" in t or "StandHour" in t or "Stand" in t:
+                            daily[d]["apple_stand_hours"] += float(sval)
+
+                    # free memory
+                    elem.clear()
+            except Exception:
+                logger.warning(f"failed to parse export.xml: {xml}")
+
+        # build DataFrame from daily dicts
+        rows = []
+        for d, metrics in sorted(daily.items()):
+            row = {"date": d}
+            row.update(metrics)
+            # merge extras
+            if d in extras:
+                row.update(extras[d])
+            rows.append(row)
+
+        if not rows:
+            return pd.DataFrame()
+        out = pd.DataFrame(rows)
+        # ensure canonical columns
+        return out
+
+    # fallback: CSVs
     parts = []
     for p in paths:
         try:
             df = pd.read_csv(p)
+            # normalize date column
+            if "date" not in df.columns:
+                for c in ("day", "local_date", "start_date"):
+                    if c in df.columns:
+                        df = df.rename(columns={c: "date"})
+                        break
             parts.append(df)
         except Exception:
             logger.warning(f"failed to read apple CSV: {p}")
     if not parts:
         return pd.DataFrame()
     df = pd.concat(parts, ignore_index=True, sort=False)
-    # attempt to normalize to required columns if present
-    # expect a date column (try common names)
-    if "date" not in df.columns:
-        # try other column hints
-        for c in ("day", "local_date", "start_date"):
-            if c in df.columns:
-                df = df.rename(columns={c: "date"})
-                break
+    # coerce date format
+    if "date" in df.columns:
+        try:
+            df["date"] = pd.to_datetime(df["date"]).dt.date.astype(str)
+        except Exception:
+            df["date"] = df["date"].astype(str)
     return df
 
 
@@ -199,10 +351,22 @@ def main(argv: List[str] | None = None) -> int:
 
     print(f"INFO: activity_from_extracted start snapshot={snapshot_dir} dry_run={dry_run}")
 
-    # Discover apple CSVs
-    apple_paths = discover_apple_csvs(snapshot_dir)
+    # Discover Apple exports (prefer export.xml under variant/apple_health_export/)
+    apple_paths = discover_apple(snapshot_dir)
     print(f"INFO: apple sources found: {len(apple_paths)}")
-    apple_df = load_and_aggregate_apple(apple_paths) if apple_paths else pd.DataFrame()
+
+    # determine home_tz from participant profile if present
+    home_tz = "UTC"
+    try:
+        profile_path = Path("data") / "config" / f"{pid}_profile.json"
+        if profile_path.exists():
+            with open(profile_path, "r", encoding="utf-8") as fh:
+                prof = json.load(fh)
+                home_tz = prof.get("home_tz", home_tz)
+    except Exception:
+        logger.info("could not read participant profile for home_tz; defaulting to UTC")
+
+    apple_df = load_apple_daily(apple_paths, home_tz) if apple_paths else pd.DataFrame()
 
     # Zepp: only consider if password set and files exist
     zepp_paths = discover_zepp_csvs(snapshot_dir)
