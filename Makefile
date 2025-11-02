@@ -109,56 +109,65 @@ DRY_RUN   ?= 1
 REPO_ROOT ?= .
 PYTHON    ?= python
 
+# =========================
+# ETL namespace (v4.1.0)
+# =========================
+
 .PHONY: etl
 etl:
-> @echo "[ETL] namespace loaded (use: make etl extract|cardio|activity|join|enrich|full)"
+>	@echo "[ETL] namespace loaded (use: make etl extract|activity|join|enrich|full)"
 
+# Vars padrão (não sobrescreva se já existirem no arquivo)
+PID        ?= P000001
+SNAPSHOT   ?= auto
+DRY_RUN    ?= 1
+REPO_ROOT  ?= .
+
+# -------- extract --------
 .PHONY: extract
 extract:
-> @echo "[ETL] extract"
-> PYTHONPATH=src \
-> $(PYTHON) -m cli.etl_runner extract \
->   --pid "$(PID)" \
->   --snapshot "$(SNAPSHOT)" \
->   --auto-zip \
->   --dry-run "$(DRY_RUN)"
+>	@echo "[ETL] extract PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m cli.etl_runner extract \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --auto-zip \
+>	  --dry-run $(DRY_RUN)
 
-.PHONY: cardio
-cardio:
-> @echo "[ETL] cardio (stub)"
-> @exit 0
-
+# -------- activity (seed per-domain) --------
 .PHONY: activity
 activity:
-> @echo "[ETL] activity"
-> PYTHONPATH=src \
-> $(PYTHON) -m domains.activity.activity_features \
->   --pid "$(PID)" \
->   --repo-root "$(REPO_ROOT)" \
->   --snapshot "$(SNAPSHOT)" \
->   --dry-run "$(DRY_RUN)"
+>	@echo "[ETL] activity (seed) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m domains.activity.activity_from_extracted \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN)
 
+# -------- join --------
 .PHONY: join
 join:
-> @echo "[ETL] join"
-> PYTHONPATH=src \
-> $(PYTHON) -m cli.etl_runner join \
->   --pid "$(PID)" \
->   --snapshot "$(SNAPSHOT)" \
->   --dry-run "$(DRY_RUN)"
+>	@echo "[ETL] join PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m cli.etl_runner join \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN)
 
+# -------- enrich --------
 .PHONY: enrich
 enrich:
-> @echo "[ETL] enrich"
-> PYTHONPATH=src \
-> $(PYTHON) -m cli.etl_runner enrich \
->   --pid "$(PID)" \
->   --snapshot "$(SNAPSHOT)" \
->   --dry-run "$(DRY_RUN)"
+>	@echo "[ETL] enrich PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m cli.etl_runner enrich \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN)
 
+# -------- full --------
 .PHONY: full
-full: extract cardio activity join enrich
-> @echo "[OK] FULL ETL completed for PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
+full: extract activity join enrich
+>	@echo "[ETL] FULL completed for PID=$(PID) SNAPSHOT=$(SNAPSHOT) (DRY_RUN=$(DRY_RUN))"
 
 # Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
 labels:
