@@ -9,7 +9,7 @@
 # ================================
 
 .RECIPEPREFIX := >
-SHELL := /bin/bash
+SHELL := /usr/bin/env bash
 
 # -------- Environment --------
 # Auto-detect venv Python (Windows vs POSIX); fallback to "python" if venv not found.
@@ -99,15 +99,6 @@ SNAPSHOT ?= auto
 DRY_RUN ?= 0
 REPO_ROOT ?= .
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ETL namespace (v4.1.0) — safe, idempotent, uses '>' as recipe prefix
-# ─────────────────────────────────────────────────────────────────────────────
-PID       ?= P000001
-SNAPSHOT  ?= auto
-DRY_RUN   ?= 1
-REPO_ROOT ?= .
-PYTHON    ?= python
 
 # =========================
 # ETL namespace (v4.1.0)
