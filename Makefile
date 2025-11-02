@@ -108,8 +108,8 @@ etl:
 # 1) extract (já existente no projeto – manter apenas eco aqui)
 .PHONY: extract
 extract:
-> PYTHONPATH="$(PYTHONPATH_ETL)" \
-> $(PYTHON) scripts/etl_runner.py extract \
+	> PYTHONPATH="$(PYTHONPATH_ETL)" \
+	> $(PYTHON) -m cli.etl_runner extract \
 >   --participant "$(PID)" \
 >   --snapshot "$(SNAPSHOT)" \
 >   --cutover "$(CUTOVER)" \

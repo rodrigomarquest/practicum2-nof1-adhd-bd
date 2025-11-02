@@ -1,40 +1,20 @@
 #!/usr/bin/env python3
-"""Run src.etl_pipeline inside a Timer to show our progress header/footer.
+"""Backward-compatible shim for the legacy scripts/ CLI.
 
-This wrapper imports the package and calls main() so internal progress
-bars (from src.domains.common.progress) continue to work as designed.
+This file remains to avoid breaking callers that still run
+``python scripts/run_etl_with_timer.py``. It forwards execution to
+the new `cli.run_etl_with_timer` module and prints a brief deprecation
+notice.
 """
 from __future__ import annotations
+import runpy
 import sys
-
-def _run_with_timer(argv: list[str]) -> int:
-    # Import late so PYTHONPATH can be set by Makefile
-    try:
-        from src.domains.common.progress import Timer
-        import src.etl_pipeline as etl
-    except Exception as e:
-        print(f"[run_etl_with_timer] import failed: {e}")
-        return 2
-
-    # Prepare sys.argv for the etl module's argparse
-    sys.argv = ["etl_pipeline"] + argv
-    cmd_desc = f"etl {' '.join(argv[:1]) if argv else ''}"
-    with Timer(cmd_desc):
-        try:
-            etl.main()
-            return 0
-        except SystemExit as se:
-            # argparse or the module may call sys.exit()
-            return int(se.code) if isinstance(se.code, int) else 1
-        except Exception:
-            import traceback
-
-            traceback.print_exc()
-            return 1
 
 
 def main() -> int:
-    return _run_with_timer(sys.argv[1:])
+    print("[DEPRECATION] Use `python -m cli.run_etl_with_timer` instead of scripts/run_etl_with_timer.py")
+    runpy.run_module("cli.run_etl_with_timer", run_name="__main__")
+    return 0
 
 
 if __name__ == "__main__":
