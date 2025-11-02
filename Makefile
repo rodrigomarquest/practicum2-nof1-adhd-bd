@@ -9,6 +9,7 @@
 # ================================
 
 .RECIPEPREFIX := >
+SHELL := /bin/bash
 
 # -------- Environment --------
 # Auto-detect venv Python (Windows vs POSIX); fallback to "python" if venv not found.
@@ -98,48 +99,65 @@ SNAPSHOT ?= auto
 DRY_RUN ?= 0
 REPO_ROOT ?= .
 
-# Namespace 'etl' para estilo: make etl <subcomando>
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ETL namespace (v4.1.0) — safe, idempotent, uses '>' as recipe prefix
+# ─────────────────────────────────────────────────────────────────────────────
+PID       ?= P000001
+SNAPSHOT  ?= auto
+DRY_RUN   ?= 1
+REPO_ROOT ?= .
+PYTHON    ?= python
+
 .PHONY: etl
 etl:
-> @echo "[ETL] namespace loaded (use: make etl extract|sleep|cardio|activity|full)"
+> @echo "[ETL] namespace loaded (use: make etl extract|cardio|activity|join|enrich|full)"
 
-# Subcomandos (nível 2) -----------------------------
-
-# 1) extract (já existente no projeto – manter apenas eco aqui)
 .PHONY: extract
 extract:
-	> PYTHONPATH="$(PYTHONPATH_ETL)" \
-	> $(PYTHON) -m cli.etl_runner extract \
->   --participant "$(PID)" \
+> @echo "[ETL] extract"
+> PYTHONPATH=src \
+> $(PYTHON) -m cli.etl_runner extract \
+>   --pid "$(PID)" \
 >   --snapshot "$(SNAPSHOT)" \
->   --cutover "$(CUTOVER)" \
->   --tz_before "$(TZ_BEFORE)" \
->   --tz_after "$(TZ_AFTER)" \
->   $(DRY_FLAG)
+>   --auto-zip \
+>   --dry-run "$(DRY_RUN)"
 
-# 2) sleep (stub provisório)
-.PHONY: sleep
-sleep:
-> @echo "[ETL] sleep (stub) — será implementado em prompt separado"
-
-# 3) cardio (stub provisório)
 .PHONY: cardio
 cardio:
-> @echo "[ETL] cardio (stub) — será implementado em prompt separado"
+> @echo "[ETL] cardio (stub)"
+> @exit 0
 
-# 4) activity (NOVO: chama o módulo de features)
 .PHONY: activity
 activity:
+> @echo "[ETL] activity"
 > PYTHONPATH=src \
-> python -m domains.activity.activity_features \
->   --pid $(PID) \
->   --repo-root $(REPO_ROOT) \
->   --snapshot $(SNAPSHOT) \
->   --dry-run $(DRY_RUN)
+> $(PYTHON) -m domains.activity.activity_features \
+>   --pid "$(PID)" \
+>   --repo-root "$(REPO_ROOT)" \
+>   --snapshot "$(SNAPSHOT)" \
+>   --dry-run "$(DRY_RUN)"
 
-# 5) full — encadeia extract → cardio → activity
+.PHONY: join
+join:
+> @echo "[ETL] join"
+> PYTHONPATH=src \
+> $(PYTHON) -m cli.etl_runner join \
+>   --pid "$(PID)" \
+>   --snapshot "$(SNAPSHOT)" \
+>   --dry-run "$(DRY_RUN)"
+
+.PHONY: enrich
+enrich:
+> @echo "[ETL] enrich"
+> PYTHONPATH=src \
+> $(PYTHON) -m cli.etl_runner enrich \
+>   --pid "$(PID)" \
+>   --snapshot "$(SNAPSHOT)" \
+>   --dry-run "$(DRY_RUN)"
+
 .PHONY: full
-full: extract cardio activity
+full: extract cardio activity join enrich
 > @echo "[OK] FULL ETL completed for PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
 
 # Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
