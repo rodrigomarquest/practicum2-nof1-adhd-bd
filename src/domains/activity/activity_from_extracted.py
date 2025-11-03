@@ -33,6 +33,13 @@ from collections import defaultdict
 from dateutil import parser as dt_parser
 from dateutil import tz as dateutil_tz
 
+# optional tqdm for progress bars (safe fallback if not installed)
+try:
+    from tqdm import tqdm as _tqdm  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    def _tqdm(it, *a, **k):
+        return it
+
 
 logger = logging.getLogger("etl.activity")
 
@@ -100,7 +107,9 @@ def load_apple_daily(paths: List[Path], home_tz: str) -> pd.DataFrame:
 
         for xml in paths:
             try:
-                for event, elem in ET.iterparse(str(xml), events=("end",)):
+                disable = not (os.getenv("ETL_TQDM") == "1" and not os.getenv("CI"))
+                it = _tqdm(ET.iterparse(str(xml), events=("end",)), desc=f"Apple export.xml ({xml.name})", disable=disable)
+                for event, elem in it:
                     tag = elem.tag
                     if tag.endswith("ActivitySummary"):
                         # ActivitySummary often contains attributes like date, activeEnergyBurned, appleExerciseTime, appleStandHours, and goals
@@ -228,12 +237,14 @@ def load_apple_daily(paths: List[Path], home_tz: str) -> pd.DataFrame:
 
 def aggregate_zepp(paths: List[Path]) -> pd.DataFrame:
     parts = []
-    for p in paths:
-        try:
-            df = pd.read_csv(p)
-            parts.append(df)
-        except Exception:
-            logger.info(f"zepp: failed to read {p}; skipping")
+    if paths:
+        disable = not (os.getenv("ETL_TQDM") == "1" and not os.getenv("CI"))
+        for p in _tqdm(paths, desc="Zepp daily CSVs", disable=disable):
+            try:
+                df = pd.read_csv(p)
+                parts.append(df)
+            except Exception:
+                logger.info(f"zepp: failed to read {p}; skipping")
     if not parts:
         return pd.DataFrame()
     df = pd.concat(parts, ignore_index=True, sort=False)
@@ -350,6 +361,11 @@ def main(argv: List[str] | None = None) -> int:
         snapshot_dir = Path("data") / "etl" / pid / snap
 
     print(f"INFO: activity_from_extracted start snapshot={snapshot_dir} dry_run={dry_run}")
+    try:
+        if os.getenv("ETL_TQDM") == "1" and not os.getenv("CI"):
+            print("INFO: progress bars enabled (ETL_TQDM=1)")
+    except Exception:
+        pass
 
     # Discover Apple exports (prefer export.xml under variant/apple_health_export/)
     apple_paths = discover_apple(snapshot_dir)
