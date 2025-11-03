@@ -9,6 +9,8 @@ from hashlib import sha256
 
 import pandas as pd
 from dateutil import tz
+from tqdm import tqdm
+import os
 
 from etl_modules.io_utils import _open_zip_any, _norm_posix_lower
 
@@ -25,10 +27,18 @@ def _concat_nonempty(dfs: list[pd.DataFrame]) -> pd.DataFrame:
 
 
 def safe_write_csv(df: pd.DataFrame, path: Path):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    df.to_csv(tmp, index=False)
-    tmp.replace(path)  # atomic rename on same FS
+    """Write CSV atomically. Prefer canonical lib.io_guards when available."""
+    try:
+        from lib.io_guards import write_csv  # type: ignore
+
+        write_csv(df, path)
+        return
+    except Exception:
+        # fallback to local atomic write
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        df.to_csv(tmp, index=False)
+        tmp.replace(path)  # atomic rename on same FS
 
 
 def derive_export_id(p: Path) -> str:
@@ -100,7 +110,9 @@ def _read_zip_table(
         if not sel:
             return pd.DataFrame()
         dfs = []
-        for n in sel:
+        # progress control (disabled by default unless ETL_TQDM=1 and not CI)
+        disable = bool(os.getenv("ETL_TQDM", "0") == "0" or os.getenv("CI"))
+        for n in tqdm(sel, desc=f"ZIP:{zip_path.name}", disable=disable):
             df = _read_csv_robust_from_zip(zf, n, password)
             df["_source"] = n
             dfs.append(df)
@@ -114,7 +126,9 @@ def _read_dir_table(dir_path: Path, folder_prefix: str) -> pd.DataFrame:
     if not base.exists():
         return pd.DataFrame()
     dfs = []
-    for p in sorted(base.rglob("*.csv")):
+    # progress control (disabled by default unless ETL_TQDM=1 and not CI)
+    disable = bool(os.getenv("ETL_TQDM", "0") == "0" or os.getenv("CI"))
+    for p in tqdm(sorted(base.rglob("*.csv")), desc="Zepp daily CSVs", disable=disable):
         try:
             text = p.read_text(encoding="utf-8", errors="replace")
             df = _read_csv_robust_text(text)
