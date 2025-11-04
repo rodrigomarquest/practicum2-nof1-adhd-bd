@@ -32,6 +32,18 @@ import json
 from collections import defaultdict
 from dateutil import parser as dt_parser
 from dateutil import tz as dateutil_tz
+try:
+    # new centralized zepp discovery and loaders
+    from src.domains.parse_zepp_export import discover_zepp_tables
+    from src.domains.activity.zepp_activity import load_zepp_activity_daily
+except Exception:
+    # best-effort import for different execution contexts
+    try:
+        from domains.parse_zepp_export import discover_zepp_tables  # type: ignore
+        from domains.activity.zepp_activity import load_zepp_activity_daily  # type: ignore
+    except Exception:
+        discover_zepp_tables = None  # type: ignore
+        load_zepp_activity_daily = None  # type: ignore
 
 # optional tqdm for progress bars (safe fallback if not installed)
 try:
@@ -384,17 +396,36 @@ def main(argv: List[str] | None = None) -> int:
 
     apple_df = load_apple_daily(apple_paths, home_tz) if apple_paths else pd.DataFrame()
 
-    # Zepp: only consider if password set and files exist
-    zepp_paths = discover_zepp_csvs(snapshot_dir)
-    zepp_available = bool(os.getenv("ZEPP_ZIP_PASSWORD")) and bool(zepp_paths)
-    if zepp_paths:
-        print(f"INFO: zepp sources found: {len(zepp_paths)} (will use if ZEPP_ZIP_PASSWORD set)")
+    # Zepp: discover per-domain tables under extracted/zepp/cloud
+    zepp_root = snapshot_dir / "extracted" / "zepp" / "cloud"
+    tables = {}
+    if discover_zepp_tables is not None:
+        try:
+            tables = discover_zepp_tables(zepp_root)
+        except Exception:
+            tables = {}
     else:
-        print("INFO: zepp sources found: 0")
+        # fallback: simple rglob of CSVs (legacy behavior)
+        zepp_paths = list((snapshot_dir / "extracted" / "zepp").rglob("*.csv")) if (snapshot_dir / "extracted" / "zepp").exists() else []
+        if zepp_paths:
+            tables = {"ACTIVITY": zepp_paths}
 
-    zepp_df = aggregate_zepp(zepp_paths) if zepp_available else pd.DataFrame()
-    if not zepp_available and zepp_paths:
-        print("INFO: ZEPP_ZIP_PASSWORD not set; zepp data will be ignored")
+    zepp_has_files = bool(tables)
+    zepp_available = bool(os.getenv("ZEPP_ZIP_PASSWORD")) and zepp_has_files
+    if zepp_has_files:
+        print(f"INFO: zepp tables discovered: {', '.join([f'{k}={len(v)}' for k,v in tables.items()])}")
+    else:
+        print("INFO: zepp tables discovered: 0")
+
+    if load_zepp_activity_daily is not None and zepp_available:
+        try:
+            zepp_df = load_zepp_activity_daily(tables, home_tz)
+        except Exception:
+            zepp_df = pd.DataFrame()
+    else:
+        if zepp_has_files and not os.getenv("ZEPP_ZIP_PASSWORD"):
+            print("INFO: ZEPP_ZIP_PASSWORD not set; zepp data will be ignored")
+        zepp_df = pd.DataFrame()
 
     seed = build_activity_seed(apple_df, zepp_df)
 
@@ -414,7 +445,7 @@ def main(argv: List[str] | None = None) -> int:
 
     source_summary = []
     source_summary.append("apple:OK" if not apple_df.empty else "apple:SKIP")
-    if zepp_paths:
+    if zepp_has_files:
         source_summary.append("zepp:OK" if zepp_available and not zepp_df.empty else "zepp:SKIP")
     summary = {
         "date_min": str(date_min),

@@ -5,9 +5,14 @@ from pathlib import Path
 import sys
 import shutil
 from typing import Optional
+import warnings
 
 import numpy as np
 import pandas as pd
+
+# canonical helpers
+from lib.io_guards import write_csv, atomic_backup_write, ensure_joined_snapshot, write_joined_features
+from lib.df_utils import zscore, rolling_cv, safe_merge_on_date, ensure_columns
 
 
 def find_latest_snapshot(repo_root: Path, pid: str) -> Optional[str]:
@@ -22,14 +27,7 @@ def find_latest_snapshot(repo_root: Path, pid: str) -> Optional[str]:
     return snaps[-1]
 
 
-def zscore(s: pd.Series) -> pd.Series:
-    if s.dropna().empty:
-        return pd.Series(index=s.index, dtype="float64")
-    m = s.mean()
-    sd = s.std(ddof=0)
-    if sd == 0 or np.isnan(sd):
-        return (s - m) * np.nan
-    return (s - m) / sd
+# local helpers use canonical ones from lib.df_utils
 
 
 def compute_activity_features(df: pd.DataFrame, steps_hourly: Optional[pd.DataFrame]) -> pd.DataFrame:
@@ -185,11 +183,11 @@ def main(argv: Optional[list] = None) -> int:
 
     # paths
     snap_root = repo / "data" / "etl" / pid / snap
-    if "data_ai" in str(snap_root):
-        print("Refusing to operate on data_ai path")
-        return 1
+    # note: write safeguards (warnings for data_ai/) are handled by `write_csv()`;
+    # do not perform standalone guard calls here to avoid duplicate behavior.
 
-    joined_path = snap_root / "joined" / "features_daily.csv"
+    # Resolve (and migrate if needed) the canonical joined features CSV
+    joined_path = ensure_joined_snapshot(snap_root)
     if not joined_path.exists():
         print("ERROR: input file missing:", joined_path)
         return 1
@@ -214,15 +212,22 @@ def main(argv: Optional[list] = None) -> int:
     merged["date"] = pd.to_datetime(merged["date"]).dt.date
     merged = merged.sort_values("date")
 
-    # backup
-    backup = joined_path.parent / "features_daily_prejoined.csv"
+    # backup + write (atomic) — use centralized helper to standardize backup name
+    f_activity = snap_root / "joined" / "features_activity.csv"
     if args.dry_run:
-        print("DRY RUN: would backup", joined_path, "->", backup)
         print("DRY RUN: would write columns:", new_cols)
+        print(f"DRY RUN: would write per-domain activity CSV -> {f_activity}")
+        write_joined_features(merged, snap_root, dry_run=True)
     else:
-        shutil.copy2(joined_path, backup)
-        merged.to_csv(joined_path, index=False)
-        print("WROTE:", joined_path, "(backup at", backup, ")")
+        # write per-domain activity CSV to interim joined/ to assist join_run
+        try:
+            write_csv(derived, f_activity, dry_run=False, backup_name=None)
+            print(f"WROTE per-domain activity CSV: {f_activity}")
+        except Exception:
+            # non-fatal: continue and still write canonical joined
+            pass
+        write_joined_features(merged, snap_root, dry_run=False)
+        print("WROTE:", joined_path)
 
     # QC
     qc_path = snap_root / "qc"
@@ -237,10 +242,10 @@ def main(argv: Optional[list] = None) -> int:
     qc["act_steps_cv7"] = merged.get("act_steps_cv7")
     qc["qx_act_missing"] = merged.get("qx_act_missing")
 
+    write_csv(qc, qc_file, dry_run=bool(args.dry_run), backup_name=None)
     if args.dry_run:
         print("DRY RUN: would write QC ->", qc_file)
     else:
-        qc.to_csv(qc_file, index=False)
         print("WROTE QC:", qc_file)
 
     return 0

@@ -37,3 +37,8 @@ provenance/migrate_layout_*.json        export-ignore
 # --- Re-incluir amostras (sobrescreve export-ignore)
 data/sample_input/**             -export-ignore
 data/sample_output/**            -export-ignore
+
+# --- Evitar error de EOL automático em arquivos .sh e .py
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf

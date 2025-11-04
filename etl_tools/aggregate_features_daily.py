@@ -11,10 +11,16 @@ import pandas as pd
 
 
 def _write_atomic_csv(df: pd.DataFrame, out_path: Path):
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out_path.with_suffix(out_path.suffix + '.tmp')
-    df.to_csv(tmp, index=False)
-    os.replace(str(tmp), str(out_path))
+    try:
+        from lib.io_guards import atomic_backup_write  # type: ignore
+
+        atomic_backup_write(df, out_path)
+        return
+    except Exception:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = out_path.with_suffix(out_path.suffix + '.tmp')
+        df.to_csv(tmp, index=False)
+        os.replace(str(tmp), str(out_path))
 
 
 def _sha256_file(path: Path) -> str:

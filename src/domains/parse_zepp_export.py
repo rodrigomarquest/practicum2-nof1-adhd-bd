@@ -1,335 +1,71 @@
+"""Zepp extraction discovery helpers.
+
+Provides a small discovery helper that lists CSV files per known Zepp
+domain under `extracted/zepp/cloud`.
+
+This module intentionally only discovers files and does not parse them.
+"""
 from __future__ import annotations
-import os
-import argparse
-import io
-import csv
-import codecs
+
 from pathlib import Path
-from hashlib import sha256
+from typing import Dict, List
+import logging
 
-import pandas as pd
-from dateutil import tz
-from tqdm import tqdm
-import os
-
-from etl_modules.io_utils import _open_zip_any, _norm_posix_lower
+logger = logging.getLogger("etl.extract")
 
 
-# -------------------- Utils: safe write & export id --------------------
-def _concat_nonempty(dfs: list[pd.DataFrame]) -> pd.DataFrame:
-    """Concatena apenas DataFrames não vazios e com pelo menos 1 coluna válida."""
-    clean = [
-        d for d in dfs if isinstance(d, pd.DataFrame) and not d.empty and d.shape[1] > 0
-    ]
-    if not clean:
-        return pd.DataFrame()
-    return pd.concat(clean, ignore_index=True)
+ZEPP_DOMAINS = (
+    "ACTIVITY",
+    "ACTIVITY_MINUTE",
+    "ACTIVITY_STAGE",
+    "HEARTRATE",
+    "HEARTRATE_AUTO",
+    "SLEEP",
+    "SPORT",
+    "HEALTH_DATA",
+    "BODY",
+    "USER",
+)
 
 
-def safe_write_csv(df: pd.DataFrame, path: Path):
-    """Write CSV atomically. Prefer canonical lib.io_guards when available."""
-    try:
-        from lib.io_guards import write_csv  # type: ignore
-
-        write_csv(df, path)
-        return
-    except Exception:
-        # fallback to local atomic write
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        df.to_csv(tmp, index=False)
-        tmp.replace(path)  # atomic rename on same FS
-
-
-def derive_export_id(p: Path) -> str:
-    # ZIP com padrão 3088..._1760...zip -> "1760..."
-    if p.is_file():
-        stem = p.stem
-        if "_" in stem:
-            cand = stem.split("_")[-1]
-            if cand.isdigit():
-                return cand
-        return sha256(stem.encode("utf-8")).hexdigest()[:12]
-    # diretório -> hash curto do caminho absoluto
-    return "dir_" + sha256(str(p.resolve()).encode("utf-8")).hexdigest()[:12]
-
-
-# -------------------- Robust CSV readers --------------------
-
-
-def _sniff_sep(sample: str) -> str | None:
-    try:
-        return csv.Sniffer().sniff(sample).delimiter
-    except Exception:
-        return None
-
-
-def _read_csv_robust_text(text: str) -> pd.DataFrame:
-    sep = _sniff_sep(text.splitlines()[0] if text else ",")
-    try:
-        return pd.read_csv(
-            io.StringIO(text), sep=(sep or None), engine="python", on_bad_lines="skip"
-        )
-    except Exception:
-        return pd.read_csv(
-            io.StringIO(text), sep="\t", engine="python", on_bad_lines="skip"
-        )
-
-
-def _read_csv_robust_from_zip(
-    zf, member_name: str, password: str | None
-) -> pd.DataFrame:
-    # tenta sem senha e depois com pwd=
-    try:
-        with zf.open(member_name, "r") as fh:
-            data = fh.read()
-    except Exception:
-        with zf.open(
-            member_name, "r", pwd=(password.encode("utf-8") if password else None)
-        ) as fh:
-            data = fh.read()
-    text = codecs.decode(data, "utf-8", errors="replace")
-    if text and text[0] == "\ufeff":
-        text = text.lstrip("\ufeff")
-    return _read_csv_robust_text(text)
-
-
-def _read_zip_table(
-    zip_path: Path, password: str | None, folder_prefix: str
-) -> pd.DataFrame:
-    """Concatena todos CSVs dentro de uma pasta (ex.: 'SLEEP/') de um ZIP."""
-    zf = _open_zip_any(zip_path, password)
-    try:
-        names = zf.namelist()
-        sel = [
-            n
-            for n in names
-            if _norm_posix_lower(n).startswith(_norm_posix_lower(folder_prefix))
-        ]
-        sel = [n for n in sel if _norm_posix_lower(n).endswith(".csv")]
-        if not sel:
-            return pd.DataFrame()
-        dfs = []
-        # progress control (disabled by default unless ETL_TQDM=1 and not CI)
-        disable = bool(os.getenv("ETL_TQDM", "0") == "0" or os.getenv("CI"))
-        for n in tqdm(sel, desc=f"ZIP:{zip_path.name}", disable=disable):
-            df = _read_csv_robust_from_zip(zf, n, password)
-            df["_source"] = n
-            dfs.append(df)
-        return _concat_nonempty(dfs)
-    finally:
-        zf.close()
-
-
-def _read_dir_table(dir_path: Path, folder_prefix: str) -> pd.DataFrame:
-    base = dir_path / folder_prefix.strip("/\\")
-    if not base.exists():
-        return pd.DataFrame()
-    dfs = []
-    # progress control (disabled by default unless ETL_TQDM=1 and not CI)
-    disable = bool(os.getenv("ETL_TQDM", "0") == "0" or os.getenv("CI"))
-    for p in tqdm(sorted(base.rglob("*.csv")), desc="Zepp daily CSVs", disable=disable):
-        try:
-            text = p.read_text(encoding="utf-8", errors="replace")
-            df = _read_csv_robust_text(text)
-        except Exception:
-            data = p.read_bytes()
-            text = codecs.decode(data, "utf-8", errors="replace")
-            df = _read_csv_robust_text(text)
-        df["_source"] = str(p.relative_to(dir_path))
-        dfs.append(df)
-    return _concat_nonempty(dfs)
-
-
-# -------------------- Date handling --------------------
-
-from datetime import date as _date
-
-
-def _to_local_date(
-    series_utc, cutover_str: str, tz_before: str, tz_after: str
-) -> pd.Series:
+def discover_zepp_tables(root: Path) -> Dict[str, List[Path]]:
     """
-    Converte série de timestamps para data local (string), aplicando cutover:
-      - datas UTC < cutover  -> tz_before
-      - datas UTC >= cutover -> tz_after
-    Detecta epoch ms/s e formatos ISO comuns.
+    root = .../extracted/zepp/cloud
+    Return mapping domain -> list[Path] of CSVs found under that domain.
+
+    Only include keys that have at least one file.
     """
-    import numpy as np
+    res: Dict[str, List[Path]] = {}
+    try:
+        r = Path(root)
+        if not r.exists():
+            return {}
 
-    s = pd.Series(series_utc)
+        for d in ZEPP_DOMAINS:
+            domain_dir = r / d
+            files: List[Path] = []
+            if domain_dir.exists() and domain_dir.is_dir():
+                # recursive glob to capture nested dirs
+                files = [p for p in domain_dir.rglob("*.csv") if p.is_file()]
+            # also accept some vendors that place files directly under cloud with prefix
+            if not files:
+                cand = [p for p in r.rglob(f"{d}*.csv") if p.is_file()]
+                if cand:
+                    files.extend(cand)
 
-    # 1) parse para UTC (tz-aware)
-    if pd.api.types.is_numeric_dtype(s):
-        m = s.astype("float64")
-        if np.isfinite(m).any():
-            if (m > 1e12).mean() > 0.5:
-                dt = pd.to_datetime(s, unit="ms", utc=True, errors="coerce")
-            elif (m > 1e9).mean() > 0.5:
-                dt = pd.to_datetime(s, unit="s", utc=True, errors="coerce")
-            else:
-                dt = pd.to_datetime(s, utc=True, errors="coerce")
+            if files:
+                res[d] = sorted(files)
+
+        # log concise summary
+        if res:
+            parts = [f"{k}={len(v)}" for k, v in sorted(res.items())]
+            logger.info("zepp tables discovered: %s", ", ".join(parts))
         else:
-            dt = pd.to_datetime(s, utc=True, errors="coerce")
-    elif pd.api.types.is_string_dtype(s):
-        fmt_try = [
-            "%Y-%m-%d %H:%M:%S",
-            "%Y/%m/%d %H:%M:%S",
-            "%Y-%m-%dT%H:%M:%S.%fZ",
-            "%Y-%m-%dT%H:%M:%SZ",
-            "%Y-%m-%d",
-            "%Y/%m/%d",
-        ]
-        dt = None
-        for fmt in fmt_try:
-            try:
-                dt = pd.to_datetime(s, format=fmt, utc=True, errors="raise")
-                break
-            except Exception:
-                dt = None
-        if dt is None:
-            dt = pd.to_datetime(s, utc=True, errors="coerce")
-    else:
-        dt = pd.to_datetime(s, utc=True, errors="coerce")
+            logger.info("zepp tables discovered: none")
 
-    # 2) aplica cutover: duas TZs -> calcula datas locais separadas e combina
-    y, m, d = map(int, cutover_str.split("-"))
-    cutover = _date(y, m, d)
-    tz_b = tz.gettz(tz_before)
-    tz_a = tz.gettz(tz_after)
-
-    mask_after = dt.dt.tz_convert(tz.gettz("UTC")).dt.date >= cutover
-    dates_before = dt.dt.tz_convert(tz_b).dt.date.astype("string")
-    dates_after = dt.dt.tz_convert(tz_a).dt.date.astype("string")
-
-    out = pd.Series(index=dt.index, dtype="string")
-    out.loc[mask_after] = dates_after.loc[mask_after]
-    out.loc[~mask_after] = dates_before.loc[~mask_after]
-    return out
-
-
-def _maybe_col(df: pd.DataFrame, *candidates: str) -> str | None:
-    cols_l = {c.lower(): c for c in df.columns}
-    for c in candidates:
-        if c.lower() in cols_l:
-            return cols_l[c.lower()]
-    for c in candidates:
-        for k, orig in cols_l.items():
-            if c.lower() in k:
-                return orig
-    return None
-
-
-# -------------------- Latest rebuild & manifest --------------------
-
-
-def rebuild_latest(processed_base: Path, filename: str) -> bool:
-    dfs = []
-    for sub in sorted(processed_base.iterdir()):
-        if not sub.is_dir() or sub.name == "_latest":
-            continue
-        f = sub / filename
-        if f.exists():
-            d = pd.read_csv(f, dtype={"date": "string"})
-            d["export_id"] = sub.name
-            dfs.append(d)
-    if not dfs:
-        return False
-    all_df = _concat_nonempty(dfs)
-    if all_df.empty:
-        return False
-    all_df = (
-        all_df.sort_values(["date", "export_id"])
-        .drop_duplicates(subset=["date"], keep="last")
-        .drop(columns=["export_id"])
-    )
-    safe_write_csv(all_df, processed_base / "_latest" / filename)
-    return True
-
-
-def append_manifest(
-    pid: str,
-    outroot: Path,
-    zip_path: Path,
-    export_id: str,
-    categories: list[str],
-    df_coverage: dict,
-):
-    import csv as _csv
-
-    man_dir = outroot.parent / "manifests"
-    man_dir.mkdir(parents=True, exist_ok=True)
-    man_csv = man_dir / "ZEPP_EXPORTS.csv"
-
-    row = {
-        "participant_id": pid,
-        "export_id": export_id,
-        "zip_name": zip_path.name if zip_path.is_file() else str(zip_path),
-        "sha256": "",
-        "source": "zepp_portal",
-        "from_date": df_coverage.get("from_date", ""),
-        "to_date": df_coverage.get("to_date", ""),
-        "categories": ",".join(categories),
-        "rows": df_coverage.get("rows", 0),
-        "created_at": pd.Timestamp.utcnow().isoformat(),
-    }
-    try:
-        row["sha256"] = sha256(zip_path.read_bytes()).hexdigest()
-    except Exception:
-        pass
-
-    new = not man_csv.exists()
-    with man_csv.open("a", newline="", encoding="utf-8") as fh:
-        w = _csv.DictWriter(fh, fieldnames=row.keys())
-        if new:
-            w.writeheader()
-        w.writerow(row)
-
-
-# -------------------- CLI --------------------
-
-
-def parse_args():
-    ap = argparse.ArgumentParser("parse-zepp-export")
-    ap.add_argument("--input", required=True, help="Path to Zepp export ZIP (or dir)")
-    ap.add_argument(
-        "--outdir-root",
-        required=True,
-        help="Root dir for processed outputs (per export_id)",
-    )
-    ap.add_argument(
-        "--password", default=None, help="ZIP password (fallback ZEPP_ZIP_PASSWORD)"
-    )
-    # cutover Brazil -> Ireland
-    ap.add_argument("--cutover", required=True, help="Cutover date YYYY-MM-DD (BR→IE)")
-    ap.add_argument(
-        "--tz_before",
-        required=True,
-        help="IANA TZ before cutover, e.g., America/Sao_Paulo",
-    )
-    ap.add_argument(
-        "--tz_after", required=True, help="IANA TZ after cutover, e.g., Europe/Dublin"
-    )
-    ap.add_argument(
-        "--export-id",
-        default=None,
-        help="Override export_id (default: derived from input)",
-    )
-    ap.add_argument(
-        "--participant", default="P000001", help="Participant ID (for manifests)"
-    )
-    return ap.parse_args()
-
-
-# -------------------- Main --------------------
-
-
-def main():
-    args = parse_args()
-    zip_password = args.password or os.getenv("ZEPP_ZIP_PASSWORD") or None
-    src = Path(args.input)
-
-    export_id = args.export_id or derive_export_id(src)
+    except Exception as exc:
+        logger.warning("discover_zepp_tables failure: %s", exc)
+    return res
 
     processed_root = Path(args.outdir_root) / export_id
     latest_root = Path(args.outdir_root) / "_latest"

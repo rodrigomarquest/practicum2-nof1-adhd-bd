@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-# stdlib
-import argparse
-import os
-import sys
+from pathlib import Path
 import re
 import json
-import glob
-import io
 import tempfile
-import hashlib
-from datetime import datetime, date
-from pathlib import Path
+from datetime import datetime, timezone
 from typing import Optional, Iterable, Tuple, Any, Dict, Union
 import xml.etree.ElementTree as ET
 import traceback
@@ -442,29 +435,54 @@ def extract_run(pid: str, snapshot_arg: str = "auto", auto_zip: bool = True, dry
                 elapsed = 0.0
             else:
                 # extract into variant out_dir (idempotent: overwrite files)
-                with zipfile.ZipFile(zip_path, "r") as zf:
-                    # Zepp may be password-protected
-                    if vendor == "zepp":
-                        pwd = os.environ.get("ZEPP_ZIP_PASSWORD")
-                        if pwd:
-                            try:
-                                zf.extractall(path=str(out_dir), pwd=pwd.encode("utf-8"))
-                            except RuntimeError:
-                                print(f"WARNING: Zepp zip appears encrypted or bad password: {zip_path}; skipping")
-                                manifest["warnings"].append(f"Zepp bad password: {zip_path}")
-                                status = "skip"
-                                elapsed = time.time() - t0
-                                qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": 0, "parsed_cda": 0, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
-                                continue
-                        else:
-                            print(f"WARNING: ZEPP_ZIP_PASSWORD not set; skipping Zepp {zip_path}")
-                            manifest["warnings"].append(f"Zepp skipped (no password): {zip_path}")
-                            status = "skip"
-                            elapsed = time.time() - t0
-                            qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": 0, "parsed_cda": 0, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
-                            continue
-                    else:
-                        # regular zip extraction for Apple variants
+                # Use pyzipper for Zepp archives to support AES-encrypted ZIPs; fallback to zipfile for others
+                if vendor == "zepp":
+                    pwd = os.environ.get("ZEPP_ZIP_PASSWORD")
+                    if not pwd:
+                        print(f"WARNING: ZEPP_ZIP_PASSWORD not set; skipping Zepp {zip_path}")
+                        manifest["warnings"].append(f"Zepp skipped (no password): {zip_path}")
+                        status = "skip"
+                        elapsed = time.time() - t0
+                        qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": 0, "parsed_cda": 0, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
+                        continue
+                    try:
+                        import pyzipper
+
+                        with pyzipper.AESZipFile(str(zip_path)) as zf:
+                            if pwd:
+                                zf.pwd = pwd.encode("utf-8")
+                            for member in zf.namelist():
+                                target = out_dir / Path(member)
+                                if member.endswith('/'):
+                                    target.mkdir(parents=True, exist_ok=True)
+                                    continue
+                                target.parent.mkdir(parents=True, exist_ok=True)
+                                try:
+                                    data = zf.read(member)
+                                except RuntimeError:
+                                    # bad password or other runtime issue
+                                    print(f"WARNING: Zepp zip appears encrypted or bad password: {zip_path}; skipping")
+                                    manifest["warnings"].append(f"Zepp bad password: {zip_path}")
+                                    status = "skip"
+                                    elapsed = time.time() - t0
+                                    qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": 0, "parsed_cda": 0, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
+                                    raise
+                                with open(str(target), "wb") as fh:
+                                    fh.write(data)
+                    except RuntimeError:
+                        # already handled above and manifested
+                        continue
+                    except Exception as e:
+                        # any other extraction problem -> skip Zepp and warn
+                        print(f"WARNING: failed to extract Zepp zip {zip_path}: {e}; skipping")
+                        manifest["warnings"].append(f"Zepp extract failed: {zip_path}: {e}")
+                        status = "skip"
+                        elapsed = time.time() - t0
+                        qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": 0, "parsed_cda": 0, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
+                        continue
+                else:
+                    # regular zip extraction for Apple variants
+                    with zipfile.ZipFile(zip_path, "r") as zf:
                         zf.extractall(path=str(out_dir))
 
                 # attempt to find export.xml and export_cda.xml inside out_dir
@@ -487,14 +505,50 @@ def extract_run(pid: str, snapshot_arg: str = "auto", auto_zip: bool = True, dry
                 else:
                     print(f"extract: [{vendor}/{variant}] no export.xml found in {out_dir}")
 
-                # check cda
+                # check cda (non-fatal). Use the new CDA probe which produces a small QC summary.
                 cda_cand = out_dir / "apple_health_export" / "export_cda.xml"
                 if cda_cand.exists():
-                    rows_cda, warns = _parse_export_cda(cda_cand)
-                    parsed_cda = rows_cda
-                    for w in warns:
-                        print(f"WARNING: {w}")
-                        manifest["warnings"].append(w)
+                    # determine home_tz from participant profile if present
+                    home_tz = None
+                    try:
+                        prof_path = Path("data") / "config" / f"{pid}_profile.json"
+                        if prof_path.exists():
+                            prof = json.loads(prof_path.read_text(encoding="utf-8"))
+                            home_tz = prof.get("home_tz")
+                    except Exception:
+                        home_tz = None
+
+                    import logging
+                    logger = logging.getLogger("etl.extract")
+                    try:
+                        from domains.cda import parse_cda
+
+                        summary = parse_cda.cda_probe(cda_cand, home_tz=home_tz)
+                        parsed_cda = summary.get("n_observation", 0)
+                        if parsed_cda > 0:
+                            logger.info(
+                                f"CDA parsed: {summary.get('n_section',0)} sections, {parsed_cda} observations, {len(summary.get('codes',{}))} unique codes"
+                            )
+                        else:
+                            logger.warning(f"CDA parsed but empty: {cda_cand.name}")
+                        snapshot_root = etl_snapshot_root(pid, snapshot)
+                        parse_cda.write_cda_qc(snapshot_root, summary)
+                    except Exception as e:
+                        # attempt to write a minimal QC summary so users can inspect the error
+                        try:
+                            from domains.cda import parse_cda
+
+                            snapshot_root = etl_snapshot_root(pid, snapshot)
+                            summary = {"error": f"{type(e).__name__}: {e}", "n_section": 0, "n_observation": 0, "codes": {}}
+                            try:
+                                parse_cda.write_cda_qc(snapshot_root, summary)
+                            except Exception:
+                                pass
+                        except Exception:
+                            pass
+                        except Exception:
+                            pass
+                        logger.warning(f"CDA parse failed: {cda_cand.name} ({type(e).__name__}: {e})")
 
                 rows_out = parsed_xml + parsed_cda
                 status = "ok"
@@ -3779,31 +3833,68 @@ def main():
                         cda_paths = list(extracted_apple_dir.rglob("export_cda.xml"))
                         if cda_paths:
                             cda = cda_paths[0]
-                            # build tz selector based on cutover
-                            y, m, d = map(int, args.cutover.split("-"))
-                            tz_sel = make_tz_selector(
-                                date(y, m, d), args.tz_before, args.tz_after
-                            )
-                            som_df = _parse_apple_cda_som(cda, tz_sel)
-                            # apply content filter to som_df before writing
-                            df_som_f = _filter_som_candidates(som_df)
-                            snapshot_dir = Path(outdir)
-                            out_som = (
-                                snapshot_dir / "normalized" / "apple_state_of_mind.csv"
-                            )
-                            out_som.parent.mkdir(parents=True, exist_ok=True)
-                            if df_som_f.empty:
-                                print(
-                                    "INFO: SoM candidates found but none passed filters; skipping write."
-                                )
-                            else:
-                                written_flag = _write_if_changed_df(df_som_f, out_som)
-                                if written_flag:
-                                    print(f"INFO: wrote apple SoM -> {out_som}")
+                            # determine home_tz from participant profile if present
+                            home_tz = None
+                            try:
+                                prof_path = Path("data") / "config" / f"{pid}_profile.json"
+                                if prof_path.exists():
+                                    prof = json.loads(prof_path.read_text(encoding="utf-8"))
+                                    home_tz = prof.get("home_tz")
+                            except Exception:
+                                home_tz = None
+
+                            # call the CDA probe in a non-fatal way and write QC
+                            import logging
+
+                            logger = logging.getLogger("etl.extract")
+                            try:
+                                from domains.cda import parse_cda
+
+                                summary = parse_cda.cda_probe(cda, home_tz=home_tz)
+                                n_obs = int(summary.get("n_observation", 0) or 0)
+                                snapshot_root = etl_snapshot_root(pid, snap_iso)
+                                # enrich summary with metadata
+                                enriched = dict(summary or {})
+                                enriched["snapshot_dir"] = str(snapshot_root)
+                                enriched["source_path"] = str(cda.resolve())
+                                enriched["home_tz"] = home_tz or "unknown"
+                                enriched["n_observation"] = n_obs
+                                enriched["n_section"] = int(enriched.get("n_section", 0) or 0)
+                                enriched["codes"] = enriched.get("codes", {}) or {}
+                                if n_obs > 0:
+                                    enriched["status"] = "ok"
+                                    logger.info(
+                                        "CDA parsed: %s (obs=%d) [snapshot=%s]",
+                                        str(cda.resolve()),
+                                        n_obs,
+                                        str(snapshot_root),
+                                    )
                                 else:
-                                    print(f"[SKIP] apple SoM unchanged -> {out_som}")
+                                    enriched["status"] = "empty"
+                                    logger.warning(
+                                        "CDA parsed but empty: %s [snapshot=%s]",
+                                        str(cda.resolve()),
+                                        str(snapshot_root),
+                                    )
+                                parse_cda.write_cda_qc(snapshot_root, enriched)
+                            except Exception as e:
+                                # write minimal QC summary on failure
+                                try:
+                                    from domains.cda import parse_cda
+
+                                    snapshot_root = etl_snapshot_root(pid, snap_iso)
+                                    summary = {"error": f"{type(e).__name__}: {e}", "n_section": 0, "n_observation": 0, "codes": {}}
+                                    try:
+                                        parse_cda.write_cda_qc(snapshot_root, summary)
+                                    except Exception:
+                                        pass
+                                except Exception:
+                                    pass
+                                logger.warning(f"CDA parse failed: {cda.name} ({type(e).__name__}: {e})")
                     except Exception as _e:
-                        print(f"WARNING: apple SoM parsing failed (non-fatal): {_e}")
+                        import logging
+
+                        logging.getLogger("etl.extract").warning(f"apple SoM parsing failed (non-fatal): {_e}")
 
             return 0
     if args.cmd == "cardio":

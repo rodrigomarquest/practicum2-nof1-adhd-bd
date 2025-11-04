@@ -1,3 +1,12 @@
+import os
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _silence_cutover_scan(monkeypatch):
+    # Disable codebase scan warnings during tests
+    monkeypatch.setenv("ETL_TZ_GUARD", "0")
+    yield
 import sys
 from pathlib import Path
 

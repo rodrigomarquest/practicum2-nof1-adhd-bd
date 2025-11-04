@@ -6,11 +6,14 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Dict, Optional, Iterable
+import warnings
+import shutil
 
 import numpy as np
 import pandas as pd
 
 from src.domains.common.io import joined_dir
+from lib.io_guards import ensure_joined_snapshot, write_joined_features, write_csv
 
 
 # ------------------------ optional progress ------------------------
@@ -29,21 +32,32 @@ def _progress(iterable: Iterable, desc: str = "") -> Iterable:
 
 # ------------------------ helpers: atomic write ------------------------
 def _write_atomic_csv(df: pd.DataFrame, out_path: str | os.PathLike[str]) -> None:
-    d = os.path.dirname(out_path) or "."
-    fd, tmp = tempfile.mkstemp(prefix=".tmp_", dir=d, suffix=".csv")
-    os.close(fd)
+    """Delegate to canonical atomic writer when available, otherwise fallback."""
     try:
-        df.to_csv(tmp, index=False)
-        os.replace(tmp, out_path)
-        print(
-            f"[atomic] wrote CSV -> {out_path} ({Path(out_path).stat().st_size} bytes)"
-        )
-    finally:
-        if os.path.exists(tmp):
+        from lib.io_guards import atomic_backup_write  # type: ignore
+
+        atomic_backup_write(df, Path(out_path), backup_name="cardio")
+        return
+    except Exception:
+        # fallback to local implementation
+        d = os.path.dirname(str(out_path)) or "."
+        fd, tmp = tempfile.mkstemp(prefix=".tmp_", dir=d, suffix=".csv")
+        os.close(fd)
+        try:
+            df.to_csv(tmp, index=False)
+            os.replace(tmp, str(out_path))
             try:
-                os.remove(tmp)
+                print(
+                    f"[atomic] wrote CSV -> {out_path} ({Path(out_path).stat().st_size} bytes)"
+                )
             except Exception:
                 pass
+        finally:
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except Exception:
+                    pass
 
 
 # ------------------------ datetime normalização ------------------------
@@ -177,18 +191,20 @@ def write_cardio_outputs(
     snap_part = snapdir.parts[-1] if len(snapdir.parts) >= 1 else ""
     jdir = joined_dir(pid_part, snap_part)
 
-    # write cardio features into joined/
+    # write cardio features into joined/ (auxiliary per-domain file)
     f_cardio = jdir / "features_cardiovascular.csv"
-    _write_atomic_csv(cardio_feat, f_cardio)
+    try:
+        # use canonical helper for simple writes (no backup required for aux files)
+        write_csv(cardio_feat, f_cardio, dry_run=False, backup_name=None)
+    except Exception:
+        # fallback to existing atomic writer
+        _write_atomic_csv(cardio_feat, f_cardio)
 
-    # Merge into canonical features_daily.csv (create/merge in joined/)
-    f_daily = jdir / "features_daily.csv"
+    # Resolve canonical joined path (migrates legacy file if needed)
+    f_daily = ensure_joined_snapshot(snapdir)
+
     if f_daily.exists():
-        base = (
-            pd.read_csv(f_daily, parse_dates=["date"])
-            if f_daily.exists()
-            else pd.DataFrame(columns=["date"])
-        )
+        base = pd.read_csv(f_daily, parse_dates=["date"]) if f_daily.exists() else pd.DataFrame(columns=["date"])
         # normalize date column
         if "date" in base.columns:
             try:
@@ -212,7 +228,8 @@ def write_cardio_outputs(
         .sort_values("date")
         .reset_index(drop=True)
     )
-    _write_atomic_csv(merged, f_daily)
+    # Write merged joined features using centralized helper to standardize backup name
+    write_joined_features(merged, snapdir, dry_run=False)
 
     # Do NOT produce legacy alias `features_daily_updated.csv` anymore.
     # Consumers should read `joined/features_daily.csv`.

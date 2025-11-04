@@ -3,6 +3,20 @@ from pathlib import Path
 import pandas as pd
 from typing import Iterable
 
+try:
+    from lib.io_guards import atomic_backup_write, write_csv  # type: ignore
+except Exception:
+    # fallback to local simple writer
+    def write_csv(df, path, dry_run=False, backup_name=None):
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(p.suffix + ".tmp")
+        df.to_csv(tmp, index=False)
+        tmp.replace(p)
+
+    def atomic_backup_write(df, path, backup_name=None, dry_run=False):
+        write_csv(df, path)
+
 
 def _read_csv_safe(p: Path, usecols: Iterable[str] | None = None) -> pd.DataFrame:
     """Lê CSV garantindo dtype consistente para 'date' e filtrando colunas quando útil."""
@@ -96,7 +110,8 @@ def join_into_features(
 
     # merge
     out = f.merge(z, on="date", how="left")
-    out.to_csv(fpath, index=False)
+    # write without standalone guard: atomic_backup_write is used directly.
+    atomic_backup_write(out, fpath, backup_name="zepp_join")
 
     # version log opcional
     if version_log_path:
@@ -109,7 +124,7 @@ def join_into_features(
                     added_cols = [c for c in out.columns if c not in f.columns]
                     vl.loc[last, "zepp_joined"] = True
                     vl.loc[last, "zepp_cols_added"] = ",".join(added_cols)
-                    vl.to_csv(vpath, index=False)
+                    write_csv(vl, vpath)
         except Exception:
             # não bloquear o pipeline por causa do version log
             pass

@@ -1,0 +1,32 @@
+name: tests
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+  pull_request: {}
+
+# TODO: Expand test matrix after P8–P12 stabilization.
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dev dependencies if present
+        run: |
+          if [ -f requirements/dev.txt ]; then
+            pip install -r requirements/dev.txt
+          else
+            echo "requirements/dev.txt not found — skipping deps install"
+          fi
+
+      - name: Run focused unit test
+        env:
+          PYTHONPATH: src
+          ETL_TZ_GUARD: "0"
+          ETL_STRICT_TZ: "1"
+        run: pytest -q tests/test_cli_tz_guard.py
