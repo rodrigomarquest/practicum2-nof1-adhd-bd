@@ -147,6 +147,16 @@ join:
 >	  --snapshot $(SNAPSHOT) \
 >	  --dry-run $(DRY_RUN)
 
+# -------- aggregate (minimal) --------
+.PHONY: aggregate
+aggregate:
+> @echo "[ETL] aggregate PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+> PYTHONPATH=src \
+> $(PYTHON) -m src.tools.aggregate_joined \
+>   --pid $(PID) \
+>   --snapshot $(SNAPSHOT) \
+>   --dry-run $(DRY_RUN)
+
 # -------- enrich --------
 .PHONY: enrich
 enrich:
