@@ -164,11 +164,12 @@ full: extract activity join enrich
 
 # Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
 labels:
-> @echo ">>> labels: running src.make_labels for $(PID) @ $(SNAPSHOT)"
+labels:
+> @echo ">>> labels: running src.make_labels for $(PID)@$(SNAPSHOT)"
 > @PYTHONPATH="$$PWD" $(PYTHON) -m src.make_labels \
 >   --rules config/label_rules.yaml \
->   --in data/etl/$(PID)/snapshots/$(SNAPSHOT)/joined/features_daily.csv \
->   --out data/etl/$(PID)/snapshots/$(SNAPSHOT)/joined/features_daily_labeled.csv
+>   --in data/etl/$(PID)/$(SNAPSHOT)/joined/joined_features_daily.csv \
+>   --out data/etl/$(PID)/$(SNAPSHOT)/joined/features_daily_labeled.csv
 
 
 

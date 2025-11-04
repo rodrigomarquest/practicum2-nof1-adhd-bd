@@ -5,6 +5,7 @@ Usage:
 """
 
 import argparse
+import sys
 from pathlib import Path
 import yaml
 import pandas as pd
@@ -24,7 +25,23 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     rules = load_rules(Path(args.rules))
-    df = pd.read_csv(args.inpath, parse_dates=["date"])
+    inpath = Path(args.inpath)
+    outpath = Path(args.outpath)
+
+    # Strict: require the explicit --in path to exist. Do not default to legacy
+    # snapshots/ paths. Exit with code 2 on missing input.
+    if not inpath.exists():
+        print(f"ERROR: input file not found: {inpath}", file=sys.stderr)
+        raise SystemExit(2)
+
+    # Ensure parent dir for out exists
+    try:
+        outpath.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        print(f"ERROR: cannot create output directory: {outpath.parent}", file=sys.stderr)
+        raise
+
+    df = pd.read_csv(inpath, parse_dates=["date"])
 
     zcols = rules.get("zscore_columns", [])
     if zcols:
