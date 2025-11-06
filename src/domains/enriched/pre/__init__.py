@@ -5,4 +5,6 @@ idempotent, and import-safe. They typically read domain artifacts and may
 write intermediate per-domain enriched outputs consumed by joiners.
 """
 
-__all__ = []
+from .prejoin_enricher import enrich_prejoin_run
+
+__all__ = ["enrich_prejoin_run"]

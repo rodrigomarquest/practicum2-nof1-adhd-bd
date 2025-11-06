@@ -31,8 +31,9 @@ def export_per_metric(
     cutover: str,
     tz_before: str,
     tz_after: str,
+    max_records: int = None,
 ) -> Dict[str, str]:
-    legacy = importlib.import_module("etl_pipeline_legacy")
+    legacy = importlib.import_module("etl_pipeline")
     out_pm = out_snapshot_dir / "per-metric"
     out_pm.mkdir(parents=True, exist_ok=True)
 
@@ -42,8 +43,8 @@ def export_per_metric(
     y, m, d = map(int, cutover.split("-"))
     tz_selector = legacy.make_tz_selector(date(y, m, d), tz_before, tz_after)
 
-    # Stream records
-    recs = legacy.iter_health_records(export_xml, tz_selector)
+    # Stream records with optional max_records limit
+    recs = legacy.iter_health_records(export_xml, tz_selector, max_records=max_records)
     # progress control (disabled by default unless ETL_TQDM=1 and not CI)
     disable = bool(os.getenv("ETL_TQDM", "0") == "0" or os.getenv("CI"))
     recs_iter = tqdm(recs, desc=f"Parsing {export_xml.name}", disable=disable)

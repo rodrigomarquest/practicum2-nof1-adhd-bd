@@ -115,27 +115,31 @@ PID        ?= P000001
 SNAPSHOT   ?= auto
 DRY_RUN    ?= 1
 REPO_ROOT  ?= .
+MAX_RECORDS ?=
+ZEPP_ZIP_PASSWORD ?=
 
 # -------- extract --------
 .PHONY: extract
 extract:
->	@echo "[ETL] extract PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+>	@echo "[ETL] extract PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) ZEPP_ZIP_PASSWORD=$(if $(ZEPP_ZIP_PASSWORD),[provided],)"
 >	PYTHONPATH=src \
 >	$(PYTHON) -m cli.etl_runner extract \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT) \
 >	  --auto-zip \
->	  --dry-run $(DRY_RUN)
+>	  --dry-run $(DRY_RUN) \
+>	  $(if $(ZEPP_ZIP_PASSWORD),--zepp-zip-password $(ZEPP_ZIP_PASSWORD),)
 
 # -------- activity (seed per-domain) --------
 .PHONY: activity
 activity:
->	@echo "[ETL] activity (seed) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+>	@echo "[ETL] activity (seed) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
 >	PYTHONPATH=src \
 >	$(PYTHON) -m domains.activity.activity_from_extracted \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT) \
->	  --dry-run $(DRY_RUN)
+>	  --dry-run $(DRY_RUN) \
+>	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
 
 # -------- join --------
 .PHONY: join
@@ -146,6 +150,28 @@ join:
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT) \
 >	  --dry-run $(DRY_RUN)
+
+# -------- enrich-prejoin (per-domain) --------
+.PHONY: enrich-prejoin
+enrich-prejoin:
+>	@echo "[ETL] enrich-prejoin (seed) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m domains.enriched.pre.prejoin_enricher \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN) \
+>	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
+
+# -------- enrich-postjoin (cross-domain after join) --------
+.PHONY: enrich-postjoin
+enrich-postjoin:
+>	@echo "[ETL] enrich-postjoin (global) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m domains.enriched.post.postjoin_enricher \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN) \
+>	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
 
 # -------- aggregate (minimal) --------
 .PHONY: aggregate
@@ -170,22 +196,37 @@ enrich:
 # -------- cardio --------
 .PHONY: cardio
 cardio:
->	@echo "[ETL] cardio PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+>	@echo "[ETL] cardio PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
 >	PYTHONPATH=src \
-	$(PYTHON) -m domains.cardiovascular.cardio_from_extracted \
+>	$(PYTHON) -m domains.cardiovascular.cardio_from_extracted \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT) \
->	  --dry-run $(DRY_RUN)
+>	  --dry-run $(DRY_RUN) \
+>	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
 
 # -------- sleep --------
 .PHONY: sleep
 sleep:
->	@echo "[ETL] sleep PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+>	@echo "[ETL] sleep PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
 >	PYTHONPATH=src \
-	$(PYTHON) -m domains.sleep.sleep_from_extracted \
+>	$(PYTHON) -m domains.sleep.sleep_from_extracted \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT) \
->	  --dry-run $(DRY_RUN)
+>	  --dry-run $(DRY_RUN) \
+>	  --allow-empty 1 \
+>	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
+
+# -------- truncate-export (para testes com poucos registros) --------
+.PHONY: truncate-export
+truncate-export:
+>	@if [ -z "$(MAX_RECORDS)" ]; then echo "ERROR: MAX_RECORDS not set (ex: make truncate-export MAX_RECORDS=20)"; exit 1; fi
+>	@echo "[ETL] truncate-export: limiting export.xml to $(MAX_RECORDS) records"
+>	@EXPORT_XML="data/etl/$(PID)/$(SNAPSHOT)/extracted/apple/inapp/apple_health_export/export.xml"; \
+>	if [ ! -f "$$EXPORT_XML" ]; then echo "ERROR: $$EXPORT_XML not found"; exit 1; fi; \
+>	$(PYTHON) scripts/truncate_export_xml.py "$$EXPORT_XML" "$$EXPORT_XML.limited" $(MAX_RECORDS) && \
+>	mv "$$EXPORT_XML" "$$EXPORT_XML.backup" && \
+>	mv "$$EXPORT_XML.limited" "$$EXPORT_XML" && \
+>	echo "[OK] export.xml truncated to $(MAX_RECORDS) records"
 
 # -------- full --------
 .PHONY: full

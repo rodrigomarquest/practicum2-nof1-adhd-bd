@@ -68,10 +68,13 @@ def enrich_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
         print("[error] joined CSV missing required 'date' column")
         return 2
 
-    # normalize date column (keep as string but sortable)
+    # normalize date column to datetime64 (day precision). Use normalize() to
+    # keep dtype as datetime64[ns] so reductions (min/max) tolerate missing
+    # values (NaT) and avoid mixed-type comparisons between date and float.
     try:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
     except Exception:
+        # fallback: keep as string if parsing fails
         df["date"] = df["date"].astype(str)
 
     n_rows_before = len(df)

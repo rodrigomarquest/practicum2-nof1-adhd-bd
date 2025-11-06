@@ -23,6 +23,7 @@ import pandas as pd
 from etl_modules.common.progress import Timer, progress_bar
 from src.domains.common.io import migrate_from_data_ai_if_present, etl_snapshot_root
 from lib.io_guards import ensure_joined_snapshot, write_joined_features
+from src.domains.enriched.pre import enrich_prejoin_run
 
 
 # ----------------------------------------------------------------------
@@ -902,6 +903,7 @@ def extract_apple_per_metric(
     with Timer("extract: parse export.xml"):
         total_records = _estimate_record_count(xml_file)
         # stream-parse the XML and update the bar per Record event
+    
     with progress_bar(
         total=total_records or None, desc="Parsing Records", unit="items"
     ) as _bar:
@@ -989,6 +991,13 @@ def extract_apple_per_metric(
                         "raw_value": value,
                     }
                 )
+            
+            # Progress update and memory cleanup
+            try:
+                _bar.update(1)
+            except Exception:
+                pass
+            elem.clear()
 
     written: Dict[str, str] = {}
 
@@ -3069,15 +3078,89 @@ def run_stage_labels(
     }
 
 
+def _generate_join_qc(merged: "pd.DataFrame", snap: Path, used_prejoin: dict[str, bool]) -> dict:
+    """Generate QC report for joined features.
+    
+    Returns dict with:
+    - n_rows: number of rows in joined
+    - date_min, date_max: period coverage
+    - coverage_activity: % non-null act_steps (if exists)
+    - coverage_cardio: % non-null hr_mean (if exists)
+    - coverage_sleep: % non-null sleep_total_h (if exists)
+    - used_prejoin_activity, used_prejoin_cardio: 1/0 flags
+    """
+    qc: dict[str, Any] = {
+        "n_rows": len(merged),
+        "date_min": None,
+        "date_max": None,
+        "coverage_activity": None,
+        "coverage_cardio": None,
+        "coverage_sleep": None,
+        "used_prejoin_activity": used_prejoin.get("activity", 0),
+        "used_prejoin_cardio": used_prejoin.get("cardio", 0),
+    }
+    
+    # Date coverage
+    if "date" in merged.columns:
+        try:
+            dates = pd.to_datetime(merged["date"], errors="coerce")
+            qc["date_min"] = str(dates.min().date()) if not pd.isna(dates.min()) else None
+            qc["date_max"] = str(dates.max().date()) if not pd.isna(dates.max()) else None
+        except Exception:
+            pass
+    
+    # Activity coverage: % non-null act_steps (or coalesced apple_steps/zepp_act_steps)
+    act_col = None
+    if "act_steps" in merged.columns:
+        act_col = "act_steps"
+    elif "apple_steps" in merged.columns:
+        act_col = "apple_steps"
+    elif "zepp_act_steps" in merged.columns:
+        act_col = "zepp_act_steps"
+    
+    if act_col and len(merged) > 0:
+        qc["coverage_activity"] = round(100.0 * merged[act_col].notna().sum() / len(merged), 2)
+    
+    # Cardio coverage: % non-null hr_mean
+    hr_col = None
+    if "hr_mean" in merged.columns:
+        hr_col = "hr_mean"
+    elif "apple_hr_mean" in merged.columns:
+        hr_col = "apple_hr_mean"
+    elif "zepp_hr_mean" in merged.columns:
+        hr_col = "zepp_hr_mean"
+    
+    if hr_col and len(merged) > 0:
+        qc["coverage_cardio"] = round(100.0 * merged[hr_col].notna().sum() / len(merged), 2)
+    
+    # Sleep coverage: % non-null sleep_total_h
+    sleep_col = None
+    if "sleep_total_h" in merged.columns:
+        sleep_col = "sleep_total_h"
+    elif "apple_slp_total_h" in merged.columns:
+        sleep_col = "apple_slp_total_h"
+    elif "zepp_slp_total_h" in merged.columns:
+        sleep_col = "zepp_slp_total_h"
+    
+    if sleep_col and len(merged) > 0:
+        qc["coverage_sleep"] = round(100.0 * merged[sleep_col].notna().sum() / len(merged), 2)
+    
+    return qc
+
+
 def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
     """Orchestrate a minimal join of per-domain features into canonical joined CSV.
 
-    Current behaviour (P8):
-    - Look for per-domain files under <snapshot_dir>/joined/:
-      - features_cardiovascular.csv
-      - features_activity.csv
-    - If both cardio and activity are present, read them, add provenance
-      columns (source_vendor, variant, domain), concat them, and merge
+    Current behaviour (P8+):
+    - Look for per-domain enriched files under <snapshot_dir>/enriched/prejoin/:
+      - enriched/prejoin/<domain>/<vendor>/<variant>/enriched_<domain>.csv
+    - If prejudoin enrichment files are not found, fallback to:
+      - features/<domain>/<vendor>/<variant>/features_daily.csv
+    - If those are not found, fallback to legacy interim joined/ per-domain files:
+      - features_cardiovascular.csv, features_activity.csv
+    - Each domain may have multiple vendor/variant combinations (e.g., apple/inapp, zepp/cloud)
+    - All vendor/variant files for a domain are read and concatenated before joining
+    - If both cardio and activity are present, concat them and merge
       into the canonical joined features CSV.
     - Use `ensure_joined_snapshot` and `write_joined_features` from
       `lib.io_guards` to resolve and write the canonical joined path.
@@ -3089,46 +3172,43 @@ def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
 
     jdir = snap / "joined"
 
-    # For each domain, prefer canonical layout under <snapshot>/features/<domain>/**/features_daily.csv
-    # otherwise fallback to interim joined/ per-domain files.
-    domains = {
-        "cardio": {
-            "canonical_glob": snap / "features" / "cardio" / "**" / "features_daily.csv",
-            "fallback": jdir / "features_cardiovascular.csv",
-        },
-        "activity": {
-            "canonical_glob": snap / "features" / "activity" / "**" / "features_daily.csv",
-            "fallback": jdir / "features_activity.csv",
-        },
+    # Collect ALL vendor/variant combinations for each domain (not just one)
+    domains_data: dict[str, list[tuple[Path, str, str]]] = {
+        "cardio": [],
+        "activity": [],
     }
-
-    found: list[tuple[str, Path, str]] = []  # (domain, path, chosen_kind)
-    for d, meta in domains.items():
-        # search canonical pattern
-        candidates = list(Path().glob(str(meta["canonical_glob"])))
-        # convert string patterns possibly; use rglob instead
-        if not candidates:
-            try:
-                candidates = list((snap / "features" / d).rglob("features_daily.csv"))
-            except Exception:
-                candidates = []
-
-        chosen = None
-        chosen_kind = "none"
-        if candidates:
-            # choose latest by mtime
-            candidates.sort(key=lambda p: (p.stat().st_mtime if p.exists() else 0), reverse=True)
-            chosen = candidates[0]
-            chosen_kind = "canonical"
-        else:
-            fb = Path(meta["fallback"])
-            if fb.exists():
-                chosen = fb
-                chosen_kind = "fallback"
-
-        if chosen is not None:
-            found.append((d, chosen, chosen_kind))
-
+    
+    for d in ["cardio", "activity"]:
+        # Priority 1: enriched/prejoin
+        enriched_dir = snap / "enriched" / "prejoin" / d
+        if enriched_dir.exists():
+            # Find all enriched_<domain>.csv files recursively
+            for enriched_file in enriched_dir.rglob(f"enriched_{d}.csv"):
+                domains_data[d].append((enriched_file, "enriched_prejoin"))
+        
+        # Priority 2: features/<domain>
+        if not domains_data[d]:  # Only if no enriched found
+            features_dir = snap / "features" / d
+            if features_dir.exists():
+                for features_file in features_dir.rglob("features_daily.csv"):
+                    domains_data[d].append((features_file, "canonical_features"))
+        
+        # Priority 3: legacy fallback joined/<domain>
+        if not domains_data[d]:  # Only if no enriched or features found
+            if d == "cardio":
+                legacy_file = jdir / "features_cardiovascular.csv"
+            else:
+                legacy_file = jdir / "features_activity.csv"
+            
+            if legacy_file.exists():
+                domains_data[d].append((legacy_file, "legacy_joined"))
+    
+    # Flatten: list of (domain, path, source_kind)
+    found: list[tuple[str, Path, str]] = []
+    for d, files in domains_data.items():
+        for fpath, source_kind in files:
+            found.append((d, fpath, source_kind))
+    
     if not found:
         # No per-domain files discovered
         if dry_run:
@@ -3142,9 +3222,9 @@ def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
     for name, p, kind in found:
         try:
             df = pd.read_csv(p, parse_dates=["date"]) if p.exists() else pd.DataFrame()
-            print(f"  - {name}: {p} rows={len(df)} (chosen={kind})")
+            print(f"  - {name}: {p.relative_to(snap)} rows={len(df)} (source={kind})")
         except Exception:
-            print(f"  - {name}: {p} (could not read) (chosen={kind})")
+            print(f"  - {name}: {p.relative_to(snap)} (could not read) (source={kind})")
 
     if dry_run:
         out_path = ensure_joined_snapshot(snap)
@@ -3152,21 +3232,59 @@ def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
         print("INFO: join_run end (dry-run)")
         return 0
 
-    # read dataframes and add provenance
-    parts = []
+    # read dataframes and group by domain
+    domain_dfs: dict[str, list[pd.DataFrame]] = {"cardio": [], "activity": []}
     for name, p, kind in found:
         try:
             df = pd.read_csv(p, parse_dates=["date"]) if p.exists() else pd.DataFrame()
+            if not df.empty:
+                domain_dfs[name].append(df)
         except Exception:
-            df = pd.DataFrame()
-        if df.empty:
+            pass
+
+    # For each domain, concat all vendor/variant files and apply coalescence
+    parts = []
+    used_prejoin: dict[str, bool] = {}  # Track if prejoin was used per domain
+    
+    for domain_name in ["cardio", "activity"]:
+        if not domain_dfs[domain_name]:
             continue
-        # provenance columns
-        df = df.copy()
-        df["source_vendor"] = name
-        df["variant"] = kind
-        df["domain"] = name
-        parts.append(df)
+        
+        # Concat all vendor/variant files for this domain
+        domain_df = pd.concat(domain_dfs[domain_name], ignore_index=True, sort=False)
+        domain_df = domain_df.copy()
+        
+        # Track if we used prejoin enrichment for this domain
+        # (infer from presence of _7d or _zscore columns)
+        used_prejoin[domain_name] = any(c.endswith(("_7d", "_zscore")) for c in domain_df.columns)
+        
+        # Apply coalescence for duplicate vendor/variant combinations
+        if domain_name == "cardio":
+            # hr_mean: coalesce(apple_hr_mean, zepp_hr_mean)
+            if "apple_hr_mean" in domain_df.columns and "zepp_hr_mean" in domain_df.columns:
+                domain_df["hr_mean"] = domain_df["apple_hr_mean"].fillna(domain_df["zepp_hr_mean"])
+            
+            # hr_std: coalesce(apple_hr_std, zepp_hr_std)
+            if "apple_hr_std" in domain_df.columns and "zepp_hr_std" in domain_df.columns:
+                domain_df["hr_std"] = domain_df["apple_hr_std"].fillna(domain_df["zepp_hr_std"])
+            
+            # n_hr: coalesce(apple_n_hr, zepp_n_hr)
+            if "apple_n_hr" in domain_df.columns and "zepp_n_hr" in domain_df.columns:
+                domain_df["n_hr"] = domain_df["apple_n_hr"].fillna(domain_df["zepp_n_hr"])
+        
+        elif domain_name == "activity":
+            # act_steps: coalesce(apple_steps, zepp_steps)
+            if "apple_steps" in domain_df.columns and "zepp_steps" in domain_df.columns:
+                domain_df["act_steps"] = domain_df["apple_steps"].fillna(domain_df["zepp_steps"])
+            
+            # act_active_min: coalesce(apple_exercise_min, zepp_exercise_min)
+            if "apple_exercise_min" in domain_df.columns and "zepp_exercise_min" in domain_df.columns:
+                domain_df["act_active_min"] = domain_df["apple_exercise_min"].fillna(domain_df["zepp_exercise_min"])
+
+        
+        # Add provenance columns
+        domain_df["source_domain"] = domain_name
+        parts.append(domain_df)
 
     if not parts:
         print("INFO: no readable domain dataframes to merge")
@@ -3175,10 +3293,10 @@ def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
     # concat per-domain rows (provenance preserved)
     concat_df = pd.concat(parts, ignore_index=True, sort=False)
 
-    # Normalize date column to date objects
+    # Keep date as datetime64 until write (avoid mixed-type issues)
     if "date" in concat_df.columns:
         try:
-            concat_df["date"] = pd.to_datetime(concat_df["date"]).dt.date
+            concat_df["date"] = pd.to_datetime(concat_df["date"])
         except Exception:
             pass
 
@@ -3187,30 +3305,59 @@ def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
     if base_path.exists():
         try:
             base = pd.read_csv(base_path, parse_dates=["date"]) if base_path.exists() else pd.DataFrame()
-            if "date" in base.columns:
-                base["date"] = pd.to_datetime(base["date"]).dt.date
         except Exception:
             base = pd.DataFrame()
     else:
         base = pd.DataFrame()
 
-    # Merge base and concat_df; concat_df columns may overlap with base; prefer base values where present
-    merged = base.merge(concat_df.drop(columns=[c for c in ["source_vendor", "variant", "domain"] if c in concat_df.columns], errors="ignore"), on="date", how="outer") if not base.empty else concat_df.copy()
+    # Merge base and concat_df; concat_df columns may overlap with base; prefer concat_df values (enriched)
+    merged = base.merge(concat_df.drop(columns=[c for c in ["source_domain"] if c in concat_df.columns], errors="ignore"), on="date", how="outer", suffixes=("_x", "_y")) if not base.empty else concat_df.copy()
 
-    # finalize: sort and reset index
+    # Resolve suffix conflicts: prefer _y (enriched) over _x (base)
+    if not base.empty:
+        for col in merged.columns:
+            if col.endswith("_x"):
+                col_y = col[:-2] + "_y"
+                if col_y in merged.columns:
+                    merged[col[:-2]] = merged[col_y].fillna(merged[col])
+                    merged = merged.drop(columns=[col, col_y], errors="ignore")
+
+    # finalize: sort and reset index, keep datetime64 until write
     if "date" in merged.columns:
         try:
             merged = merged.sort_values("date").reset_index(drop=True)
         except Exception:
             pass
 
+    # Generate QC report
+    qc_record = _generate_join_qc(merged, snap, used_prejoin)
+
     # write using canonical helper (this creates backup named joined_features_daily_prev.csv)
     try:
+        # Convert datetime64 to date string before write
+        if "date" in merged.columns:
+            try:
+                merged["date"] = pd.to_datetime(merged["date"]).dt.strftime("%Y-%m-%d")
+            except Exception:
+                pass
+        
         write_joined_features(merged, snap, dry_run=False)
         print(f"INFO: wrote joined features -> {ensure_joined_snapshot(snap)}")
     except Exception as e:
         print(f"ERROR: failed to write joined features: {e}")
         return 1
+
+    # Write QC report
+    try:
+        qc_dir = snap / "qc"
+        qc_dir.mkdir(parents=True, exist_ok=True)
+        qc_path = qc_dir / "join_qc.csv"
+        
+        qc_df = pd.DataFrame([qc_record])
+        qc_df.to_csv(qc_path, index=False)
+        print(f"INFO: wrote QC report -> {qc_path}")
+    except Exception as e:
+        print(f"WARNING: failed to write QC report: {e}")
 
     print("INFO: join_run end")
     return 0
@@ -3331,6 +3478,24 @@ def main():
         "--dry-run",
         action="store_true",
         help="Dry-run: print discovered domain features and output paths; do not write",
+    )
+
+    # enrich-prejoin (pre-join enrichment)
+    p_prejoin = sub.add_parser("enrich-prejoin", help="Apply per-domain enrichment before join")
+    g_prejoin = p_prejoin.add_mutually_exclusive_group(required=True)
+    g_prejoin.add_argument("--snapshot_dir", help=HELP_SNAPSHOT_DIR)
+    g_prejoin.add_argument("--participant", help=HELP_PARTICIPANT)
+    p_prejoin.add_argument("--snapshot", help=HELP_SNAPSHOT_ID)
+    p_prejoin.add_argument(
+        "--max-records",
+        type=int,
+        default=None,
+        help="Limit records per vendor/variant (for testing)",
+    )
+    p_prejoin.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Dry-run: print what would be enriched; do not write",
     )
 
     # aggregate
@@ -4110,8 +4275,27 @@ def main():
         rc = join_run(snap_dir, dry_run=bool(getattr(args, "dry_run", False)))
         return int(rc)
 
+    if args.cmd == "enrich-prejoin":
+        # determine snapshot_dir
+        if getattr(args, "snapshot_dir", None):
+            snap_dir = Path(args.snapshot_dir)
+        else:
+            pid = args.participant
+            snap = args.snapshot or "auto"
+            snap = canon_snap_id(snap) if snap != "auto" else snap
+            if snap == "auto":
+                snap = resolve_snapshot(snap, pid)
+            snap_dir = etl_snapshot_root(pid, snap)
+
+        max_records = getattr(args, "max_records", None)
+        dry_run = bool(getattr(args, "dry_run", False))
+
+        rc = enrich_prejoin_run(snap_dir, dry_run=dry_run, max_records=max_records)
+        return int(rc)
+
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
+

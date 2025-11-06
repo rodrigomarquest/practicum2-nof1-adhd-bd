@@ -69,6 +69,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--snapshot", default="auto", help="Snapshot id YYYY-MM-DD or 'auto' (default)")
     p.add_argument("--auto-zip", action="store_true", dest="auto_zip", help="Auto-discover zips")
     p.add_argument("--dry-run", type=int, default=0, help="If 1 do a dry-run discovery only")
+    p.add_argument("--zepp-zip-password", dest="zepp_zip_password", default=None, help="Password for Zepp encrypted ZIP files")
     # legacy/compat flags forwarded by Makefile; accept and ignore
     p.add_argument("--cutover", required=False, help=argparse.SUPPRESS)
     p.add_argument("--tz_before", required=False, help=argparse.SUPPRESS)
@@ -200,7 +201,11 @@ def main(argv: list[str] | None = None) -> int:
             # Zepp password: log a WARNING if missing (do not crash; extract_run
             # will also handle missing password and skip Zepp). Use logger so the
             # message is visible on stderr by default and not echo the password.
-            if os.getenv("ZEPP_ZIP_PASSWORD") in (None, ""):
+            zepp_pwd = args.zepp_zip_password or os.getenv("ZEPP_ZIP_PASSWORD")
+            if zepp_pwd:
+                # Set env var so extract_run can access it
+                os.environ["ZEPP_ZIP_PASSWORD"] = zepp_pwd
+            elif os.getenv("ZEPP_ZIP_PASSWORD") in (None, ""):
                 logger = logging.getLogger("etl.extract")
                 msg = "ZEPP_ZIP_PASSWORD not set; Zepp cloud exports will be skipped."
                 logger.warning(msg)
