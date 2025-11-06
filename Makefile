@@ -167,9 +167,29 @@ enrich:
 >	  --snapshot $(SNAPSHOT) \
 >	  --dry-run $(DRY_RUN)
 
+# -------- cardio --------
+.PHONY: cardio
+cardio:
+>	@echo "[ETL] cardio PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+>	PYTHONPATH=src \
+	$(PYTHON) -m domains.cardiovascular.cardio_from_extracted \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN)
+
+# -------- sleep --------
+.PHONY: sleep
+sleep:
+>	@echo "[ETL] sleep PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+>	PYTHONPATH=src \
+	$(PYTHON) -m domains.sleep.sleep_from_extracted \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN)
+
 # -------- full --------
 .PHONY: full
-full: extract activity join enrich
+full: extract activity cardio sleep join enrich
 >	@echo "[ETL] FULL completed for PID=$(PID) SNAPSHOT=$(SNAPSHOT) (DRY_RUN=$(DRY_RUN))"
 
 # Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
