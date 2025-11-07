@@ -71,6 +71,10 @@ Hotfix release addressing tqdm progress bar visibility in Git Bash/MSYS2 termina
   - Now uses memory-efficient chunk-based streaming (1MB chunks, 500MB limit)
   - Automatic fallback chain: strict parse → lxml.iterparse → recover mode → salvage streaming
   - Prevents OutOfMemory errors during Apple Health CDA extraction
+  - **Progress bar with total estimation:** Added record count estimation for progress feedback
+    - Fast binary scan of file for `<entry` and `<Section` tags
+    - Progress shows percentage/ETA instead of just items/sec
+    - Prevents CLI from appearing hung during CDA parsing
 
 ### Infrastructure
 
