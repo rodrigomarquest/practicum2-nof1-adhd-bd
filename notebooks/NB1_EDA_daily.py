@@ -138,6 +138,126 @@ def initialize_paths(pid: str, snapshot: str, repo_root: Path | None = None) -> 
 
 
 # ============================================================================
+# SECTION 0B: EXTRACTION VERIFICATION
+# ============================================================================
+
+def check_extraction(base: Path, pid: str, snapshot: str) -> dict:
+    """
+    Verify ETL extraction status for Apple INAPP and Zepp CLOUD.
+    
+    Returns status dict with structure for each component.
+    """
+    logger.info("=" * 80)
+    logger.info(f"EXTRACTION VERIFICATION: {pid} / {snapshot}")
+    logger.info("=" * 80)
+    
+    status = {
+        'apple_inapp': {},
+        'zepp_cloud': {},
+        'joined_features': {}
+    }
+    
+    extracted = base / snapshot / "extracted"
+    
+    # --- APPLE INAPP ---
+    apple_dir = extracted / "apple" / "inapp"
+    logger.info("\n📱 APPLE INAPP:")
+    
+    if apple_dir.exists():
+        status['apple_inapp']['exists'] = True
+        logger.info(f"  ✓ Directory exists: {apple_dir}")
+        
+        # Check for export.xml
+        export_xml = apple_dir / "apple_health_export" / "export.xml"
+        if export_xml.exists():
+            size_mb = export_xml.stat().st_size / (1024 * 1024)
+            status['apple_inapp']['export_xml'] = True
+            logger.info(f"  ✓ export.xml found: {size_mb:.1f} MB")
+        else:
+            status['apple_inapp']['export_xml'] = False
+            logger.warning(f"  ✗ export.xml NOT found")
+        
+        # Check for CSV files
+        csv_files = list(apple_dir.glob("HKQuantityType*.csv"))
+        status['apple_inapp']['csv_count'] = len(csv_files)
+        logger.info(f"  ✓ CSV files extracted: {len(csv_files)}")
+        if csv_files:
+            sample = [f.name for f in csv_files[:3]]
+            logger.info(f"    Sample: {sample}")
+    else:
+        status['apple_inapp']['exists'] = False
+        logger.warning(f"  ✗ Directory NOT found: {apple_dir}")
+    
+    # --- ZEPP CLOUD ---
+    zepp_dir = extracted / "zepp" / "cloud"
+    logger.info("\n⌚ ZEPP CLOUD:")
+    
+    if zepp_dir.exists():
+        status['zepp_cloud']['exists'] = True
+        logger.info(f"  ✓ Directory exists: {zepp_dir}")
+        
+        # Check each subdirectory
+        domains = ['HEARTRATE_AUTO', 'SLEEP', 'ACTIVITY_STAGE', 'ACTIVITY_MINUTE']
+        for domain in domains:
+            domain_dir = zepp_dir / domain
+            if domain_dir.exists():
+                csv_count = len(list(domain_dir.glob("*.csv")))
+                status['zepp_cloud'][domain] = csv_count
+                logger.info(f"  ✓ {domain}: {csv_count} CSV file(s)")
+            else:
+                status['zepp_cloud'][domain] = 0
+                logger.warning(f"  ✗ {domain}: NOT found")
+    else:
+        status['zepp_cloud']['exists'] = False
+        logger.warning(f"  ✗ Directory NOT found: {zepp_dir}")
+    
+    # --- JOINED FEATURES ---
+    joined = base / snapshot / "joined" / "joined_features_daily.csv"
+    logger.info("\n📊 JOINED FEATURES:")
+    
+    if joined.exists():
+        status['joined_features']['daily'] = True
+        size_mb = joined.stat().st_size / (1024 * 1024)
+        logger.info(f"  ✓ joined_features_daily.csv: {size_mb:.1f} MB")
+        
+        try:
+            df = pd.read_csv(joined, nrows=1)
+            n_cols = len(df.columns)
+            status['joined_features']['daily_columns'] = n_cols
+            logger.info(f"    Columns: {n_cols}")
+            first_cols = list(df.columns[:5])
+            logger.info(f"    First columns: {first_cols}")
+        except Exception as e:
+            logger.warning(f"    Could not read: {e}")
+    else:
+        status['joined_features']['daily'] = False
+        logger.warning(f"  ✗ joined_features_daily.csv NOT found")
+    
+    # --- BIOMARKERS ---
+    biomarkers = base / snapshot / "joined" / "joined_features_daily_biomarkers.csv"
+    logger.info("\n🧬 BIOMARKERS:")
+    
+    if biomarkers.exists():
+        status['joined_features']['biomarkers'] = True
+        size_mb = biomarkers.stat().st_size / (1024 * 1024)
+        logger.info(f"  ✓ joined_features_daily_biomarkers.csv: {size_mb:.1f} MB")
+        
+        try:
+            df = pd.read_csv(biomarkers, nrows=1)
+            biomarker_cols = [c for c in df.columns if any(x in c.lower() for x in ['hrv', 'sleep', 'activity', 'circadian'])]
+            logger.info(f"    Biomarker columns: {len(biomarker_cols)}")
+            logger.info(f"    Sample: {biomarker_cols[:5]}")
+        except Exception as e:
+            logger.warning(f"    Could not read: {e}")
+    else:
+        status['joined_features']['biomarkers'] = False
+        logger.info(f"  ⏳ Biomarkers not yet extracted (run: make biomarkers)")
+    
+    logger.info("\n" + "=" * 80)
+    return status
+
+
+# ============================================================================
 # SECTION 1: DATA LOADING & VALIDATION
 # ============================================================================
 
@@ -709,6 +829,9 @@ def main():
         base, out, plots, latest, snapshot = initialize_paths(
             args.pid, args.snapshot, args.repo_root
         )
+
+        # Verify extraction status
+        check_extraction(base, args.pid, snapshot)
 
         # Load and validate data
         joined = base / snapshot / "joined" / "joined_features_daily.csv"

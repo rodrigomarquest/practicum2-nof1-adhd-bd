@@ -13,7 +13,14 @@ import pandas as pd
 from typing import Dict
 import importlib
 import os
-from tqdm import tqdm
+
+# Optional tqdm for progress bars with safe fallback
+try:
+    from tqdm import tqdm
+except Exception:
+    def tqdm(it, *a, **k):
+        return it
+
 try:
     from lib.io_guards import write_csv  # type: ignore
 except Exception:

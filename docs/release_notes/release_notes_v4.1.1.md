@@ -41,16 +41,16 @@ v4.1.1 marks a significant milestone with the complete integration of the Sleep 
 
 All 8 stages validated and passing:
 
-| Stage | Status | Rows | Notes |
-|-------|--------|------|-------|
-| Extract | ✅ | 8,515 | Apple + Zepp data |
-| Activity | ✅ | 2,721 | Daily aggregates |
-| Cardio | ✅ | 960 | 150x optimized |
-| Sleep | ✅ | 252 | NEW integration |
-| Join | ✅ | 8,515 | Datetime fixes |
-| Enrich | ✅ | 284,049 | 7-day rolling averages |
-| Labels | ✅ | 284,049 | 100% coverage |
-| Aggregate | ✅ | 284,049 | Final dataset |
+| Stage     | Status | Rows    | Notes                  |
+| --------- | ------ | ------- | ---------------------- |
+| Extract   | ✅     | 8,515   | Apple + Zepp data      |
+| Activity  | ✅     | 2,721   | Daily aggregates       |
+| Cardio    | ✅     | 960     | 150x optimized         |
+| Sleep     | ✅     | 252     | NEW integration        |
+| Join      | ✅     | 8,515   | Datetime fixes         |
+| Enrich    | ✅     | 284,049 | 7-day rolling averages |
+| Labels    | ✅     | 284,049 | 100% coverage          |
+| Aggregate | ✅     | 284,049 | Final dataset          |
 
 ## Data Quality
 

@@ -9,8 +9,8 @@ from typing import Optional
 import os
 import numpy as np
 import pandas as pd
-from etl_modules.common.io import read_csv_if_exists, to_local_dt
-from etl_modules.common.adapters import ProviderContext, HRProvider, register_provider
+from src.etl.common.io import read_csv_if_exists, to_local_dt
+from src.etl.common.adapters import ProviderContext, HRProvider, register_provider
 
 
 def _date_col(series) -> pd.Series:

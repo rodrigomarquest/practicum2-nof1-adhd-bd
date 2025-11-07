@@ -19,10 +19,9 @@ import re
 from datetime import datetime
 import pytz
 
-from tqdm import tqdm
-
 from ..parse_zepp_export import discover_zepp_tables
 from lib.io_guards import write_csv
+from ..common.progress import progress_bar
 
 # Use lxml for fast streaming (10-50x faster than ElementTree)
 try:
@@ -112,79 +111,64 @@ def load_apple_cardio_from_xml(xml_path: Path, home_tz: str = "UTC", max_records
     # Track statistics per day
     stats: dict[str, tuple[float, float, int]] = {}
     hr_count = 0
-    bytes_read = 0
     chunk_size = 1024 * 1024 * 10  # 10MB chunks
-    overlap = 200  # Keep 200 bytes overlap to catch records split across chunks
     
     try:
-        pbar = tqdm(
-            total=int(file_size_mb),
-            unit="MB",
-            desc=f"  {xml_path.name}",
-            leave=False,
-            disable=os.environ.get('ETL_TQDM') != '1'
-        )
-        
-        with open(xml_path, 'rb') as fh:
-            chunk_num = 0
-            
-            while True:
-                # Read next chunk
-                chunk = fh.read(chunk_size)
-                if not chunk:
-                    break
-                
-                chunk_num += 1
-                bytes_read += len(chunk)
-                pbar.update(len(chunk) / (1024 * 1024))
-                
-                # Find all HR Record tags in this chunk
-                for record_match in re.finditer(record_pattern, chunk):
-                    record_tag = record_match.group(0)
+        with progress_bar(total=int(file_size_mb), desc=f"Apple {xml_path.name}", unit="MB") as pbar:
+            with open(xml_path, 'rb') as fh:
+                while True:
+                    # Read next chunk
+                    chunk = fh.read(chunk_size)
+                    if not chunk:
+                        break
                     
-                    # Extract value from the record
-                    val_match = re.search(value_pattern, record_tag)
-                    if not val_match:
-                        continue
-                    val_str = val_match.group(1)
+                    pbar.update(int(len(chunk) / (1024 * 1024)))
                     
-                    # Extract any date (prefer startDate > creationDate > endDate)
-                    ts_str = None
-                    for date_pat in date_patterns:
-                        date_match = re.search(date_pat, record_tag)
-                        if date_match:
-                            ts_str = date_match.group(1)
-                            break
-                    
-                    if not ts_str:
-                        continue
-                    
-                    try:
-                        hr = float(val_str)
-                        ts = ts_str.decode('utf-8', errors='ignore')
+                    # Find all HR Record tags in this chunk
+                    for record_match in re.finditer(record_pattern, chunk):
+                        record_tag = record_match.group(0)
                         
-                        # Parse timestamp using FAST method (no pandas overhead)
-                        d = _parse_apple_timestamp_fast(ts)
-                        if d:
-                            # Update stats for the day
-                            cur = stats.get(d, (0.0, 0.0, 0))
-                            ssum, smax, scnt = cur
-                            ssum += hr
-                            smax = max(smax, hr)
-                            scnt += 1
-                            stats[d] = (ssum, smax, scnt)
-                            
-                            hr_count += 1
-                            if max_records is not None and hr_count >= max_records:
-                                pbar.close()
+                        # Extract value from the record
+                        val_match = re.search(value_pattern, record_tag)
+                        if not val_match:
+                            continue
+                        val_str = val_match.group(1)
+                        
+                        # Extract any date (prefer startDate > creationDate > endDate)
+                        ts_str = None
+                        for date_pat in date_patterns:
+                            date_match = re.search(date_pat, record_tag)
+                            if date_match:
+                                ts_str = date_match.group(1)
                                 break
-                    except (ValueError, TypeError, AttributeError):
-                        pass
-                
-                if max_records is not None and hr_count >= max_records:
-                    break
+                        
+                        if not ts_str:
+                            continue
+                        
+                        try:
+                            hr = float(val_str)
+                            ts = ts_str.decode('utf-8', errors='ignore')
+                            
+                            # Parse timestamp using FAST method (no pandas overhead)
+                            d = _parse_apple_timestamp_fast(ts)
+                            if d:
+                                # Update stats for the day
+                                cur = stats.get(d, (0.0, 0.0, 0))
+                                ssum, smax, scnt = cur
+                                ssum += hr
+                                smax = max(smax, hr)
+                                scnt += 1
+                                stats[d] = (ssum, smax, scnt)
+                                
+                                hr_count += 1
+                                if max_records is not None and hr_count >= max_records:
+                                    break
+                        except (ValueError, TypeError, AttributeError):
+                            pass
+                    
+                    if max_records is not None and hr_count >= max_records:
+                        break
         
-        pbar.close()
         logger.info("apple cardio: %s parsed %d HR records into %d days", xml_path.name, hr_count, len(stats))
     
     except Exception as e:
@@ -195,41 +179,38 @@ def load_apple_cardio_from_xml(xml_path: Path, home_tz: str = "UTC", max_records
         hr_count = 0
         try:
             it = ET.iterparse(str(xml_path), events=("end",))
-            pbar = tqdm(unit=" records", desc=f"  {xml_path.name} [ET]", leave=False, disable=os.environ.get('ETL_TQDM') != '1')
+            with progress_bar(total=None, desc=f"Apple {xml_path.name} [ET]", unit="items") as pbar:
+                for event, elem in it:
+                    tag = elem.tag
+                    if tag.endswith("Record"):
+                        typ = elem.get("type") or ""
+                        if typ == "HKQuantityTypeIdentifierHeartRate":
+                            val = elem.get("value")
+                            ts = elem.get("startDate") or elem.get("creationDate") or elem.get("endDate")
+                            
+                            if ts is not None and val is not None:
+                                try:
+                                    hr = float(val)
+                                    d = _parse_apple_timestamp_fast(ts)
+                                    if d:
+                                        cur = stats.get(d, (0.0, 0.0, 0))
+                                        ssum, smax, scnt = cur
+                                        ssum += hr
+                                        smax = max(smax, hr)
+                                        scnt += 1
+                                        stats[d] = (ssum, smax, scnt)
+                                        
+                                        hr_count += 1
+                                        if hr_count % 5000 == 0:
+                                            pbar.update(5000)
+                                        
+                                        if max_records is not None and hr_count >= max_records:
+                                            break
+                                except (ValueError, TypeError):
+                                    pass
+                    
+                    elem.clear()
             
-            for event, elem in it:
-                tag = elem.tag
-                if tag.endswith("Record"):
-                    typ = elem.get("type") or ""
-                    if typ == "HKQuantityTypeIdentifierHeartRate":
-                        val = elem.get("value")
-                        ts = elem.get("startDate") or elem.get("creationDate") or elem.get("endDate")
-                        
-                        if ts is not None and val is not None:
-                            try:
-                                hr = float(val)
-                                d = _parse_apple_timestamp_fast(ts)
-                                if d:
-                                    cur = stats.get(d, (0.0, 0.0, 0))
-                                    ssum, smax, scnt = cur
-                                    ssum += hr
-                                    smax = max(smax, hr)
-                                    scnt += 1
-                                    stats[d] = (ssum, smax, scnt)
-                                    
-                                    hr_count += 1
-                                    if hr_count % 5000 == 0:
-                                        pbar.update(5000)
-                                    
-                                    if max_records is not None and hr_count >= max_records:
-                                        pbar.close()
-                                        break
-                            except (ValueError, TypeError):
-                                pass
-                
-                elem.clear()
-            
-            pbar.close()
             logger.info("apple cardio: %s parsed %d HR records into %d days (ElementTree fallback)", xml_path.name, hr_count, len(stats))
         except Exception as e2:
             logger.warning("apple cardio: ElementTree fallback also failed: %s", str(e2))

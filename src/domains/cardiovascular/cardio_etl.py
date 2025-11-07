@@ -9,7 +9,7 @@ import pandas as pd
 
 # Timer com fallback (para não quebrar se o módulo não existir)
 try:
-    from etl_modules.common.progress import Timer
+    from src.etl.common.progress import Timer
 except Exception:
     import time
     from contextlib import contextmanager
@@ -24,9 +24,9 @@ except Exception:
             dt = time.time() - t0
             print(f"⏱ {label}: {dt:.2f}s [OK]")
 
-from etl_modules.common.adapters import get_providers, ProviderContext
-from etl_modules.cardiovascular._join.join import join_hr, select_hrv
-from etl_modules.cardiovascular.cardio_features import (
+from src.etl.common.adapters import get_providers, ProviderContext
+from src.etl.cardiovascular._join.join import join_hr, select_hrv
+from src.etl.cardiovascular.cardio_features import (
     _daily_from_hr, _daily_from_hrv,
     build_cardio_features, write_cardio_outputs
 )

@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from etl_modules.apple_raw_to_per_metric import export_per_metric
+from src.etl.apple_raw_to_per_metric import export_per_metric
 import os
 from src.domains.common.io import per_metric_dir, etl_snapshot_root
 

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 import pandas as pd
 
-from etl_modules.common.adapters import CardioProvider, ProviderContext
+from src.etl.common.adapters import CardioProvider, ProviderContext
 
 
 class AppleCardioProvider(CardioProvider):

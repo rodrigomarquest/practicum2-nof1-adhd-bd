@@ -15,26 +15,74 @@ It integrates data pre-processing (ETL), feature engineering, time-series modeli
 
 The project extends the previous Practicum (Part 1) phase and focuses on reprocessing and modelling data from an N-of-1 longitudinal study on comorbidity ADHD + Bipolar Disorder, collected from wearable sensors (Apple Health, Amazfit GTR 4, Helio Ring) and self-reports (EMA / State of Mind).
 
-📊 Repository Structure
-etl/ → ETL scripts and data quality control
-ios_extract/ → iPhone Screen Time and KnowledgeC extraction tools
-notebooks/ → Feature engineering and model training (Kaggle-compatible)
-models/ → Trained models, metrics and SHAP explainability
-docs/ → Ethics, consent, configuration manual, governance
-data/ → Synthetic or anonymised samples for reproducibility
+📊 Repository Structure (Canonical)
+
+```
+data/
+  raw/                    # única fonte persistente (Apple Health exports, Zepp data)
+  etl/                    # gerado; outputs canônicos (joined/qc/segment_autolog)
+  ai/                     # gerado; artefatos NB2/NB3 por snapshot
+src/
+  etl/                    # ETL pipeline stages (aggregation, unify, labels)
+  modeling/               # NB2, NB3, LSTM training modules
+  utils/                  # zip extraction, IO guards, paths, logger
+scripts/
+  run_full_pipeline.py    # orquestrador determinístico 9 stages (0-9)
+docs/
+  README.md               # documentação principal
+  PERIOD_EXPANSION_*.md   # relatórios de implementação
+  RUN_REPORT_TEMPLATE.md  # template para relatórios
+tests/
+  test_etl_consistency.py
+  test_anti_leak.py
+  test_pipeline_reproducibility.py
+config/
+  participants.yaml       # configuração de participantes
+  label_rules.yaml        # regras de rotulação
+archive/                  # versões antigas preservadas (sem deleção)
+```
 
 ⚙️ Reproducibility and Environment
-cd etl
-pip install -r requirements.txt
-python etl_pipeline.py
+
+```bash
+# Install dependencies
+pip install -r requirements/base.txt
+
+# Run full deterministic pipeline (stages 0-9)
+python scripts/run_full_pipeline.py --participant P000001 --snapshot 2025-11-07
+
+# Outputs:
+#   data/etl/P000001/2025-11-07/joined/features_daily_unified.csv
+#   data/ai/P000001/2025-11-07/nb2/cv_summary.json
+#   data/ai/P000001/2025-11-07/nb3/shap_summary.md
+#   RUN_REPORT.md
+```
+
+Pipeline Stages:
+- Stage 0: Ingest (Apple Health + Zepp extraction)
+- Stage 1: CSV Aggregation (daily metrics)
+- Stage 2: Unify Daily (canonical features)
+- Stage 3: Apply Labels (3-class classification)
+- Stage 4: Segmentation (period boundaries)
+- Stage 5: Prep NB2 (anti-leak safeguards)
+- Stage 6: NB2 Training (Logistic Regression, temporal CV)
+- Stage 7: NB3 Analysis (SHAP + Drift + LSTM)
+- Stage 8: TFLite Export (model conversion + latency)
+- Stage 9: Generate Report (RUN_REPORT.md)
 
 Outputs
 
-features_daily_sample.csv
+features_daily_unified.csv (2828 rows, 2017-2025)
 
-etl_qc_summary.csv
+cv_summary.json (6 folds with dates, F1 scores)
 
-Includes z-score scaling, missing-value handling, and segment normalization (S1–S6).
+shap_summary.md (top-10 global features)
+
+drift_report.md (ADWIN + KS drift detection)
+
+best_model.tflite (LSTM M1 exported)
+
+Includes z-score scaling, missing-value handling, and segment normalization.
 
 🧩 iOS Screen Time / Usage Extraction
 

@@ -64,7 +64,7 @@ def get_providers(domain: str) -> Dict[str, CardioProvider]:
     if domain == "cardio":
         # Apple (per-metric)
         try:
-            from etl_modules.cardiovascular.apple.loader import AppleCardioProvider
+            from src.etl.cardiovascular.apple.loader import AppleCardioProvider
 
             providers["apple"] = AppleCardioProvider()
         except Exception as e:
@@ -72,7 +72,7 @@ def get_providers(domain: str) -> Dict[str, CardioProvider]:
 
         # Zepp (opcional)
         try:
-            from etl_modules.cardiovascular.zepp.loader import ZeppCardioProvider
+            from src.etl.cardiovascular.zepp.loader import ZeppCardioProvider
 
             providers["zepp"] = ZeppCardioProvider()
         except Exception as e:

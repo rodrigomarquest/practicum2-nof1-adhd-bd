@@ -13,14 +13,17 @@ import zipfile
 import shutil
 import time
 import os
+import sys
 import math
 import warnings
+import argparse
 
 # third-party
 import pandas as pd
+import numpy as np
 
 # local
-from etl_modules.common.progress import Timer, progress_bar
+from src.etl.common.progress import Timer, progress_bar
 from src.domains.common.io import migrate_from_data_ai_if_present, etl_snapshot_root
 from lib.io_guards import ensure_joined_snapshot, write_joined_features
 from src.domains.enriched.pre import enrich_prejoin_run
@@ -1862,8 +1865,8 @@ def _parse_zepp_health_emotion(
 # Cardiovascular stage
 # ----------------------------------------------------------------------
 def run_stage_cardio(snapshot_dir: Path) -> Dict[str, str]:
-    from etl_modules.config import CardioCfg
-    from etl_modules.cardiovascular.cardio_etl import run_stage_cardio as _run
+    from src.etl.config import CardioCfg
+    from src.etl.cardiovascular.cardio_etl import run_stage_cardio as _run
 
     cfg = CardioCfg()
     res = _run(str(snapshot_dir), str(snapshot_dir), cfg)
@@ -3139,7 +3142,7 @@ def _generate_join_qc(merged: "pd.DataFrame", snap: Path, used_prejoin: dict[str
     return qc
 
 
-def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
+def join_run(snapshot_dir: Path | str, *, dry_run: bool = False, months: int = 30) -> int:
     """Orchestrate a minimal join of per-domain features into canonical joined CSV.
 
     Current behaviour (P8+):
@@ -3151,15 +3154,23 @@ def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
       - features_cardiovascular.csv, features_activity.csv
     - Each domain may have multiple vendor/variant combinations (e.g., apple/inapp, zepp/cloud)
     - All vendor/variant files for a domain are read and concatenated before joining
+    - Aggregate to one row per (date, domain) to ensure daily uniqueness
     - If both cardio and activity are present, concat them and merge
       into the canonical joined features CSV.
     - Use `ensure_joined_snapshot` and `write_joined_features` from
       `lib.io_guards` to resolve and write the canonical joined path.
+    - Filter to last `months` months for data quality (default 30 months).
+
+    Args:
+        snapshot_dir: Path to snapshot directory
+        dry_run: If True, only report what would be done
+        months: Number of months to keep (default 30). Set to 0 to disable filtering.
 
     Returns 0 on success, 2 if no domain features found to merge.
     """
     snap = Path(snapshot_dir)
-    print(f"INFO: join_run start snapshot_dir={snap} dry_run={dry_run}")
+    print(f"INFO: join_run start snapshot_dir={snap} dry_run={dry_run} months_filter={months}")
+
 
     jdir = snap / "joined"
 
@@ -3284,8 +3295,29 @@ def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
 
     # concat per-domain rows (provenance preserved)
     concat_df = pd.concat(parts, ignore_index=True, sort=False)
-
-    # Keep date as datetime64 until write (avoid mixed-type issues)
+    
+    # CRITICAL: Aggregate to one row per (date, domain) to ensure daily uniqueness
+    # Multiple intra-day records per domain must be aggregated before merge
+    if "date" in concat_df.columns and "source_domain" in concat_df.columns:
+        print("INFO: aggregating intra-day records by (date, domain)...")
+        concat_df["date"] = pd.to_datetime(concat_df["date"], errors="coerce")
+        
+        # Identify numeric columns to aggregate by mean
+        numeric_cols = concat_df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        # Remove source_domain from numeric aggregation (keep first instead)
+        if "source_domain" in numeric_cols:
+            numeric_cols.remove("source_domain")
+        
+        # Define aggregation spec: mean for numeric, 'first' for non-numeric
+        agg_spec = {col: "mean" for col in numeric_cols}
+        agg_spec["source_domain"] = "first"  # Preserve domain indicator
+        
+        # Aggregate by (date, source_domain)
+        concat_df = concat_df.groupby(["date", "source_domain"], as_index=False).agg(agg_spec)
+        print(f"INFO: after aggregation: {len(concat_df)} records")
+    
+    # Keep date as datetime64 for now (used in filtering after merge)
     if "date" in concat_df.columns:
         try:
             concat_df["date"] = pd.to_datetime(concat_df["date"])
@@ -3308,10 +3340,18 @@ def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
     if "date" in concat_df.columns and not concat_df.empty:
         concat_df["date"] = pd.to_datetime(concat_df["date"], errors="coerce")
 
-    # Merge base and concat_df; concat_df columns may overlap with base; prefer concat_df values (enriched)
-    merged = base.merge(concat_df.drop(columns=[c for c in ["source_domain"] if c in concat_df.columns], errors="ignore"), on="date", how="outer", suffixes=("_x", "_y")) if not base.empty else concat_df.copy()
+    # Final aggregation: merge domains to ONE ROW per date by averaging numeric columns
+    # This collapses (date, source_domain) grouping into just (date) grouping
+    if "date" in concat_df.columns and len(concat_df) > 0:
+        numeric_cols = concat_df.select_dtypes(include=['number']).columns.tolist()
+        agg_dict = {col: 'mean' for col in numeric_cols}
+        concat_df = concat_df.groupby('date', as_index=False).agg(agg_dict)
+        print(f"INFO: aggregated by date: {len(concat_df)} unique dates")
 
-    # Resolve suffix conflicts: prefer _y (enriched) over _x (base)
+    # Merge base and concat_df on date only (concat_df now has one row per date)
+    merged = base.merge(concat_df, on="date", how="outer", suffixes=("_x", "_y")) if not base.empty else concat_df.copy()
+
+    # Resolve suffix conflicts: prefer _y (enriched/new) over _x (base/old)
     if not base.empty:
         for col in merged.columns:
             if col.endswith("_x"):
@@ -3319,6 +3359,22 @@ def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
                 if col_y in merged.columns:
                     merged[col[:-2]] = merged[col_y].fillna(merged[col])
                     merged = merged.drop(columns=[col, col_y], errors="ignore")
+
+    # Apply date window filtering for data quality (last N months) - AFTER merge
+    # This filters BOTH base (old data) and concat_df (new data) to the recent window
+    if months and months > 0 and "date" in merged.columns:
+        merged["date"] = pd.to_datetime(merged["date"], errors="coerce")
+        cutoff_date = pd.Timestamp.now() - pd.DateOffset(months=months)
+        original_len = len(merged)
+        merged = merged[merged["date"] >= cutoff_date]
+        print(f"INFO: filtered to last {months} months (since {cutoff_date.date()}): {original_len} -> {len(merged)} records")
+        print(f"INFO: unique dates after filtering: {merged['date'].nunique()}")
+    
+    # Remove any date column duplicates (shouldn't happen, but be safe)
+    if len(merged) > 0 and "date" in merged.columns:
+        # Keep only one row per date (prefer rows with more non-null values from merged)
+        merged = merged.sort_values('date').reset_index(drop=True)
+        merged = merged.drop_duplicates(subset=['date'], keep='last')
 
     # finalize: sort and reset index, keep datetime64 until write
     if "date" in merged.columns:
@@ -4251,7 +4307,9 @@ def main():
                 snap = resolve_snapshot(snap, pid)
             snap_dir = etl_snapshot_root(pid, snap)
 
-        rc = join_run(snap_dir, dry_run=bool(getattr(args, "dry_run", False)))
+        # Use last 30 months for data quality (can override via --months arg if added)
+        months_filter = getattr(args, "months", 30)
+        rc = join_run(snap_dir, dry_run=bool(getattr(args, "dry_run", False)), months=months_filter)
         return int(rc)
 
     if args.cmd == "enrich-prejoin":

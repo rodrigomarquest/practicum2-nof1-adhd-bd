@@ -229,6 +229,33 @@ truncate-export:
 full: extract activity cardio sleep join enrich
 >	@echo "[ETL] FULL completed for PID=$(PID) SNAPSHOT=$(SNAPSHOT) (DRY_RUN=$(DRY_RUN))"
 
+# -------- biomarkers (clinical features extraction) --------
+.PHONY: biomarkers
+biomarkers:
+>	@echo "[BIOMARKERS] Extract clinical features PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
+>	$(PYTHON) -m src.cli.extract_biomarkers \
+>	  --participant $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --data-dir data/etl/$(PID)/$(SNAPSHOT)/extracted \
+>	  --output-dir data/etl \
+>	  --cutoff-months 30
+
+# -------- prepare-zepp (link/copy Zepp data from raw to etl) --------
+.PHONY: prepare-zepp
+prepare-zepp:
+>	@echo "[DATA] Prepare Zepp from raw directory"
+>	$(PYTHON) -m src.cli.prepare_zepp_data \
+>	  --participant $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --zepp-source data/raw/$(PID)/zepp \
+>	  --target-base data/etl \
+>	  --symlink
+
+# -------- pipeline (complete: prepare → extract → biomarkers → labels → nb2) --------
+.PHONY: pipeline
+pipeline: prepare-zepp biomarkers labels nb2
+>	@echo "[PIPELINE] Complete clinical analysis for PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
+
 # -------- nb1-eda-run (non-interactive EDA from Python script) --------
 .PHONY: nb1-eda-run
 nb1-eda-run:
@@ -237,6 +264,15 @@ nb1-eda-run:
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT)
 
+# -------- eda-biomarkers (EDA for biomarkers features) --------
+.PHONY: eda-biomarkers
+eda-biomarkers:
+>	@echo "[EDA] eda-biomarkers: PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
+>	$(PYTHON) make_eda_biomarkers.py \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT)
+>	@echo "[EDA] Biomarkers EDA complete. Reports in: reports/"
+
 # -------- etl full-with-eda (complete pipeline + NB1 EDA) --------
 .PHONY: full-with-eda
 full-with-eda: extract activity cardio sleep join enrich nb1-eda-run
@@ -244,13 +280,72 @@ full-with-eda: extract activity cardio sleep join enrich nb1-eda-run
 >	@echo "Artifacts saved to: reports/ and latest/"
 
 # Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
-labels:
+.PHONY: labels
 labels:
 > @echo ">>> labels: running src.make_labels for $(PID)@$(SNAPSHOT)"
 > @PYTHONPATH="$$PWD" $(PYTHON) -m src.make_labels \
 >   --rules config/label_rules.yaml \
 >   --in data/etl/$(PID)/$(SNAPSHOT)/joined/joined_features_daily.csv \
 >   --out data/etl/$(PID)/$(SNAPSHOT)/joined/features_daily_labeled.csv
+
+# -------- nb2: Unified data, PBSI labels, temporal CV (vFinal 2025-11) --------
+
+.PHONY: nb2-unify
+nb2-unify:
+>	@echo "[NB2] Stage 1: Unify Apple + Zepp data"
+>	$(PYTHON) scripts/run_nb2_pipeline.py \
+>	  --stage unify \
+>	  --participant $(PID) \
+>	  --snapshot $(SNAPSHOT)
+
+.PHONY: nb2-labels
+nb2-labels:
+>	@echo "[NB2] Stage 2: Build PBSI heuristic labels"
+>	$(PYTHON) scripts/run_nb2_pipeline.py \
+>	  --stage labels \
+>	  --participant $(PID) \
+>	  --snapshot $(SNAPSHOT)
+
+.PHONY: nb2-baselines
+nb2-baselines:
+>	@echo "[NB2] Stage 3: Temporal CV with 6 folds + baselines"
+>	$(PYTHON) scripts/run_nb2_pipeline.py \
+>	  --stage baselines \
+>	  --participant $(PID) \
+>	  --snapshot $(SNAPSHOT)
+
+.PHONY: nb2-all
+nb2-all:
+>	@echo "[NB2] Full pipeline: unify → labels → baselines"
+>	$(PYTHON) scripts/run_nb2_pipeline.py \
+>	  --stage all \
+>	  --participant $(PID) \
+>	  --snapshot $(SNAPSHOT)
+
+.PHONY: nb2-summary
+nb2-summary:
+>	@echo "[NB2] Generate baselines summary markdown"
+>	$(PYTHON) scripts/generate_nb2_summary.py
+
+# -------- nb2-engage7 (baseline models with Engage7-grade validation) --------
+.PHONY: nb2-engage7
+nb2-engage7:
+>	@echo "[NB2] Running Engage7-grade baseline models for PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
+>	$(PYTHON) run_nb2_engage7.py \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --n-folds 6 \
+>	  --train-days 120 \
+>	  --val-days 60 \
+>	  --class-weight balanced \
+>	  --seed 42 \
+>	  --plots 1 \
+>	  --save-all 1 \
+>	  --verbose 2
+
+# Alias for convenience
+.PHONY: nb2
+nb2: nb2-engage7
 
 
 
@@ -382,6 +477,21 @@ help-release:
 qc:
 > echo ">>> qc: running src.eda"
 > $(PYTHON) -m src.eda
+
+# -------- NB3 namespace (SHAP + Drift + LSTM M1 + TFLite) --------
+
+.PHONY: nb3-run
+nb3-run:
+>	@echo "[NB3] Run SHAP + Drift Detection + LSTM M1 + TFLite"
+>	$(PYTHON) scripts/run_nb3_pipeline.py \
+>	  --csv data/etl/features_daily_labeled.csv \
+>	  --outdir nb3
+
+.PHONY: nb3-all
+nb3-all: nb2-all nb3-run
+>	@echo "[NB3] Complete NB2 → NB3 pipeline (features → labels → baselines → SHAP/drift/LSTM)"
+
+# -------- Packaging --------
 
 PACK_OUT := dist/assets
 
