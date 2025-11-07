@@ -13,6 +13,62 @@ Export best_model.tflite and latency measurements.
 
 Finalise LaTeX main.tex with updated figures + Appendices C–D.
 
+## [v4.1.0] – 2025-11-07
+
+### Fase 3 ETL Consolidation & Production-Ready Analytics
+
+**Summary:**  
+Major consolidation milestone completing Fase 3 of the ETL→Modeling pipeline with production-ready analytics, unified extract infrastructure for Apple/Zepp variants, and deterministic CLI entrypoints for cardio/sleep/activity domain seeds.
+
+**Key achievements:**
+
+- End-to-end reproducibility from raw device exports → normalized domain datasets → feature engineering.
+- Resolves 4 critical data quality issues (#8, #9, #10, #13).
+- Manifest-based provenance with full audit trail.
+
+### Added
+
+- **Unified Extract Orchestration:** Single discovery pipeline for Apple Health export, iTunes backup, AutoExport, and Zepp imports.
+- **Snapshot Path Normalization:** Canonical path `data/etl/<PID>/<YYYY-MM-DD>/` (removed redundant `snapshots/` nesting).
+- **CLI Domain Entrypoints:** `etl_runner activity`, `etl_runner cardio`, `etl_runner sleep` with dry-run support.
+- **Fase 3 Analytics Pipeline:** Per-domain joins (cardio HR/HRV, activity steps, sleep intervals) with post-join enrichments.
+- **NB1_EDA_MIGRATION.md:** Consolidation report documenting Fase 1→3 analytics workflow and migration guides.
+- **Manifest-Based Provenance:** All extract stages log source file, size, modification timestamp with validation warnings.
+- **Optional Progress Visualization:** `ETL_TQDM=1` enables tqdm bars for large files.
+
+### Fixed
+
+- Corrected PID extraction from snapshot directory (cardio outputs now write to `data/etl/<PID>/<SNAP>/joined/`).
+- Fixed activity import to discover Apple export.xml under extracted structure with fallback to daily CSVs.
+- Harmonized CLI dry-run exit codes: dry-run=0, empty real run=2.
+- Fixed cross-platform shell compatibility in ETL namespace Makefile recipes.
+- Removed deprecated standalone cardio orchestrator (integrated into full ETL).
+
+### Changed
+
+- ETL namespace now unified under `make etl` orchestrator with subcommands.
+- Normalized line endings (LF) across Makefile and CLI entrypoints.
+- Activity import now supports home timezone profile for multi-device scenarios.
+- Improved Windows/Git Bash/Linux compatibility.
+
+### Infrastructure
+
+- Extended Makefile modernization with modular ETL orchestration.
+- Cross-platform testing validated on Windows (bash.exe) and Linux.
+- Dry-run mode tested; idempotence checks pass for re-runs.
+
+### Documentation
+
+- Release notes follow academic template with citation and reproducibility guarantees.
+- Updated README and DEV_GUIDE with new CLI entrypoints and Fase 3 workflow.
+
+### Issues Resolved
+
+- Closes #8 (Remove Deprecated Cardio ETL step)
+- Closes #9 (Incorrect data_etl participant snapshots directory)
+- Closes #10 (ETL: cardio outputs written to wrong path)
+- Closes #13 (Snapshot date incoherence across sources)
+
 ## 🔧 Summary
 
 Release 2.1.7
@@ -371,8 +427,7 @@ This project adheres to **Semantic Versioning (SemVer)** and each entry correspo
 
 ### 🚀 Tooling & Provenance Refactor
 
-**Summary:**  
---
+## **Summary:**
 
 ### Added
 
@@ -398,7 +453,6 @@ This project adheres to **Semantic Versioning (SemVer)** and each entry correspo
 
 [3.0.2]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/{{PREVIOUS_TAG}}...3.0.2
 
-
 # 📜 Changelog — N-of-1 Study (Practicum Part 2)
 
 All notable changes to this project will be documented in this file.  
@@ -410,8 +464,7 @@ This project adheres to **Semantic Versioning (SemVer)** and each entry correspo
 
 ### 🚀 Tooling & Provenance Refactor
 
-**Summary:**  
---
+## **Summary:**
 
 ### Added
 
@@ -436,7 +489,6 @@ This project adheres to **Semantic Versioning (SemVer)** and each entry correspo
 ---
 
 [3.0.1]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/compare/{{PREVIOUS_TAG}}...3.0.1
-
 
 # 📜 Changelog — N-of-1 Study (Practicum Part 2)
 
@@ -520,8 +572,5 @@ This project adheres to **Semantic Versioning (SemVer)** and each entry correspo
 [v2.0-pre-ethics]: https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/releases/tag/v2.0-pre-ethics
 [2.1.5]: https://github.com/<owner>/<repo>/compare/v2.1.4...2.1.5
 [2.1.7]: https://github.com/<owner>/<repo>/compare/v2.1.4...2.1.7
-
 [3.0.1]: https://github.com/<owner>/<repo>/compare/v2.1.7...3.0.1
-
 [3.0.2]: https://github.com/<owner>/<repo>/compare/v3.0.1-26-ge94eb8d3c1a2db11c2afa68167c920be0ce80753...3.0.2
-
