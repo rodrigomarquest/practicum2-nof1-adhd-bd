@@ -15,10 +15,10 @@ Finalise LaTeX main.tex with updated figures + Appendices C–D.
 
 ## [v4.1.1] – 2025-11-07
 
-### Infrastructure Improvements & CI/Batch Support + Performance Hotfixes
+### Infrastructure Improvements & CI/Batch Support + Performance Hotfixes + Sleep Domain Integration
 
 **Summary:**  
-Hotfix release addressing tqdm progress bar visibility in Git Bash/MSYS2 terminals, adding non-interactive Python EDA script for CI/batch pipelines, and **major performance optimization for XML parsing** (150x speedup on 3.9GB files). Enables fully automated workflows with real-time feedback and responsive CLI.
+Hotfix release addressing tqdm progress bar visibility in Git Bash/MSYS2 terminals, adding non-interactive Python EDA script for CI/batch pipelines, **major performance optimization for XML parsing** (150x speedup on 3.9GB files), and **fixing missing sleep domain in canonical join**. Enables fully automated workflows with real-time feedback, responsive CLI, and complete data domain integration.
 
 **Performance Highlights:**
 
@@ -26,6 +26,7 @@ Hotfix release addressing tqdm progress bar visibility in Git Bash/MSYS2 termina
 - ✅ Cardio parsing: **2.5 minutes** (was indefinitely hung) — 4.6M heart rate records from 3.9GB XML
 - ✅ Zero hanging or buffering issues — all commands responsive with real-time progress
 - ✅ 101,955 daily observation rows extracted and processed end-to-end
+- ✅ Sleep domain now fully included: 4 Zepp sleep features (total, deep, light, REM hours)
 
 **Key technical improvements:**
 
@@ -142,6 +143,10 @@ Major consolidation milestone completing Fase 3 of the ETL→Modeling pipeline w
 
 ### Fixed
 
+- **Sleep domain now included in canonical join** — Fixed missing sleep features in `joined_features_daily.csv`
+  - Added 'sleep' domain to `join_run()` domains_data collection
+  - Sleep features now properly merged: zepp_slp_total_h, zepp_slp_deep_h, zepp_slp_light_h, zepp_slp_rem_h
+  - EDA reports now show complete domain coverage (Activity Apple/Zepp/Coalesced + Cardio + Sleep)
 - Corrected PID extraction from snapshot directory (cardio outputs now write to `data/etl/<PID>/<SNAP>/joined/`).
 - Fixed activity import to discover Apple export.xml under extracted structure with fallback to daily CSVs.
 - Harmonized CLI dry-run exit codes: dry-run=0, empty real run=2.
