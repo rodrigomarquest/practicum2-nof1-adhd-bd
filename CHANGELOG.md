@@ -47,6 +47,12 @@ Hotfix release addressing tqdm progress bar visibility in Git Bash/MSYS2 termina
   - Fallback detection for interactive terminals where isatty() fails
   - Environment variable control: ETL_TQDM=1 (force), ETL_TQDM=0 (disable)
 
+- **ZIP extraction progress bars:**
+  - Added progress_bar during Apple Health ZIP extraction
+  - Added progress_bar during Zepp AES-encrypted ZIP extraction
+  - File-level feedback prevents user perception of hang during long extractions
+  - Shows real-time progress for potentially 1000s of files
+
 ### Changed
 
 - `.gitignore`: Whitelist notebooks/\*.py for EDA/modeling scripts
