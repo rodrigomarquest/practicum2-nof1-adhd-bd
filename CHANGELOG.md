@@ -13,6 +13,62 @@ Export best_model.tflite and latency measurements.
 
 Finalise LaTeX main.tex with updated figures + Appendices C–D.
 
+## [v4.1.1] – 2025-11-07
+
+### Infrastructure Improvements & CI/Batch Support
+
+**Summary:**  
+Hotfix release addressing tqdm progress bar visibility in Git Bash/MSYS2 terminals and adding non-interactive Python EDA script for CI/batch pipelines. Enables fully automated workflows without notebook kernel dependency.
+
+**Key improvements:**
+
+- tqdm progress bars now visible in Git Bash despite isatty() detection quirks
+- Non-interactive NB1 EDA script: NB1_EDA_daily.py for CI/GitHub Actions
+- Makefile targets for complete pipeline orchestration with EDA
+- Full cross-platform compatibility (Windows/Linux/macOS)
+
+### Added
+
+- **NB1_EDA_daily.py:** Non-interactive Python version of NB1_EDA_daily.ipynb
+  - Generates nb1_eda_summary.md, nb1_feature_stats.csv, nb1_manifest.json
+  - Saves 5+ PNG visualizations (coverage, signals, correlations, labels)
+  - CLI args: --pid, --snapshot, --repo-root
+  - Logging with INFO messages, no user interaction
+  - Useful for CI pipelines, GitHub Actions, batch processing
+
+- **Makefile targets for EDA automation:**
+  - `make nb1-eda-run`: Execute NB1_EDA_daily.py with ETL_TQDM=1
+  - `make full-with-eda`: Complete pipeline (extract→join→enrich→nb1-eda)
+
+- **tqdm Git Bash/MSYS2 detection:**
+  - Improved _should_show_tqdm() with MSYSTEM/TERM environment detection
+  - Fallback detection for interactive terminals where isatty() fails
+  - Environment variable control: ETL_TQDM=1 (force), ETL_TQDM=0 (disable)
+
+### Changed
+
+- `.gitignore`: Whitelist notebooks/*.py for EDA/modeling scripts
+- `.gitignore`: Add reports/ and latest/ to outputs exclusion list
+- Progress bar display logic: Now respects Git Bash/MSYS2 terminals
+
+### Fixed
+
+- tqdm progress bars not displaying in Git Bash terminal despite interactive TTY
+- NB1 EDA output organization (reports/ + latest/ mirror)
+
+### Infrastructure
+
+- CI-ready NB1 EDA with no notebook kernel dependency
+- Progress visualization works across Windows/Git Bash/Linux
+- Batch processing support via CLI entry points
+
+### Tested
+
+- NB1_EDA_daily.py: <10s execution on test data (201 rows × 53 cols)
+- 5 PNG plots + JSON metadata generated successfully
+- ETL_TQDM=1 enables progress bars in Git Bash
+- All outputs UTF-8 encoded (cross-platform compatible)
+
 ## [v4.1.0] – 2025-11-07
 
 ### Fase 3 ETL Consolidation & Production-Ready Analytics
