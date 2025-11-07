@@ -77,6 +77,16 @@ Hotfix release addressing tqdm progress bar visibility in Git Bash/MSYS2 termina
     - Progress shows percentage/ETA instead of just items/sec
     - Prevents CLI from appearing hung during CDA parsing
 
+### Breaking Changes
+
+- ⚠️ **Hard-removed CUTOVER/TZ functionality:** ETL now operates UTC-only for all timestamps and daily binning
+  - Removed `--cutover`, `--tz-before`, `--tz-after` CLI flags entirely
+  - Removed `make_tz_selector()` and all timezone-switching logic
+  - All timestamps are parsed/converted to UTC; daily buckets use UTC midnight
+  - Impact: All `features_*.csv` files now use UTC date columns; no local timezone projection
+  - Migration: If local day views needed for reporting, compute downstream (e.g., `df['date_local'] = df['timestamp_utc'].dt.tz_convert('Europe/Dublin').dt.floor('D')`)
+  - **Rationale:** Simplified timezone handling reduces off-by-one errors in multi-device scenarios with DST transitions
+
 ### Infrastructure
 
 - CI-ready NB1 EDA with no notebook kernel dependency
