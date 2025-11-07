@@ -13,21 +13,21 @@ Consolidated old notebook (`notebooks/NB1_EDA_daily.ipynb` — 12 cells, ~400 li
 
 ### Decision Matrix
 
-| Aspect | Old Notebook | New Notebook | Decision |
-|--------|--------------|--------------|----------|
-| Multi-env support (LOCAL/KAGGLE/COLAB) | ✅ | ⚙️ LOCAL-first | Keep old logic, optimize for LOCAL |
-| Config-first design | ❌ | ✅ | ✅ Adopt new |
-| Date continuity validation | ❌ | ✅ | ✅ Adopt new |
-| Duplicates detection | ❌ | ✅ | ✅ Adopt new |
-| Value range/unit checks | ❌ | ✅ | ✅ Adopt new |
-| Segment-aware views (S1-S6) | ❌ | ✅ | ✅ Adopt new |
-| Labels coverage analysis | ❌ | ✅ | ✅ Adopt new |
-| Spearman correlation | ❌ | ✅ | ✅ Adopt new |
-| Best/Worst days analysis | ❌ | ✅ | ✅ Adopt new |
-| Cross-domain enrichments | ❌ | ✅ (Fase 3) | ✅ Adopt new |
-| Structured reports (summary.md, stats.csv) | ✅ | ✅ | ✅ Keep both |
-| Manifest JSON + latest mirror | ✅ | ✅ | ✅ Keep both |
-| INTERACTIVE/PERSISTENT modes | ✅ | ⚙️ In-progress | ⚙️ Upgrade needed |
+| Aspect                                     | Old Notebook | New Notebook   | Decision                           |
+| ------------------------------------------ | ------------ | -------------- | ---------------------------------- |
+| Multi-env support (LOCAL/KAGGLE/COLAB)     | ✅           | ⚙️ LOCAL-first | Keep old logic, optimize for LOCAL |
+| Config-first design                        | ❌           | ✅             | ✅ Adopt new                       |
+| Date continuity validation                 | ❌           | ✅             | ✅ Adopt new                       |
+| Duplicates detection                       | ❌           | ✅             | ✅ Adopt new                       |
+| Value range/unit checks                    | ❌           | ✅             | ✅ Adopt new                       |
+| Segment-aware views (S1-S6)                | ❌           | ✅             | ✅ Adopt new                       |
+| Labels coverage analysis                   | ❌           | ✅             | ✅ Adopt new                       |
+| Spearman correlation                       | ❌           | ✅             | ✅ Adopt new                       |
+| Best/Worst days analysis                   | ❌           | ✅             | ✅ Adopt new                       |
+| Cross-domain enrichments                   | ❌           | ✅ (Fase 3)    | ✅ Adopt new                       |
+| Structured reports (summary.md, stats.csv) | ✅           | ✅             | ✅ Keep both                       |
+| Manifest JSON + latest mirror              | ✅           | ✅             | ✅ Keep both                       |
+| INTERACTIVE/PERSISTENT modes               | ✅           | ⚙️ In-progress | ⚙️ Upgrade needed                  |
 
 **Conclusion:** New notebook supersedes old with backward compatibility where needed.
 
@@ -37,44 +37,45 @@ Consolidated old notebook (`notebooks/NB1_EDA_daily.ipynb` — 12 cells, ~400 li
 
 ### Old Notebook (12 cells)
 
-| # | Type | Content |
-|---|------|---------|
-| 1 | Code | Version check (TF, pandas, numpy, scikit-learn, shap) |
-| 2 | Markdown | Mode description (INTERACTIVE/PERSISTENT) |
-| 3 | Code | NB_MODE setup |
-| 4 | Code | Boot & output dirs (timestamped) |
-| 5 | Code | Environment detection (LOCAL/KAGGLE/COLAB) |
-| 6 | Code | Package checks |
-| 7 | Code | Path resolution with fallbacks |
-| 8 | Code | Diagnostic (first 10 lines) |
-| 9 | Code | Load & schema guards |
-| 10 | Code | EDA (histograms, boxplots, time-series, correlations) |
-| 11 | Code | Manifest & latest mirror |
-| 12 | Markdown | Notes & error messages |
+| #   | Type     | Content                                               |
+| --- | -------- | ----------------------------------------------------- |
+| 1   | Code     | Version check (TF, pandas, numpy, scikit-learn, shap) |
+| 2   | Markdown | Mode description (INTERACTIVE/PERSISTENT)             |
+| 3   | Code     | NB_MODE setup                                         |
+| 4   | Code     | Boot & output dirs (timestamped)                      |
+| 5   | Code     | Environment detection (LOCAL/KAGGLE/COLAB)            |
+| 6   | Code     | Package checks                                        |
+| 7   | Code     | Path resolution with fallbacks                        |
+| 8   | Code     | Diagnostic (first 10 lines)                           |
+| 9   | Code     | Load & schema guards                                  |
+| 10  | Code     | EDA (histograms, boxplots, time-series, correlations) |
+| 11  | Code     | Manifest & latest mirror                              |
+| 12  | Markdown | Notes & error messages                                |
 
 ### New Notebook (13 cells)
 
-| # | Type | Content |
-|---|------|---------|
-| 0 | Markdown | Title, purpose, inputs, outputs, version |
-| 1 | Code | Imports + pandas options + log helper |
-| 2 | Code | Config & paths (PID, SNAPSHOT, BASE, OUT, PLOTS, LATEST) |
-| 3 | Code | Safe load, date normalization, duplicates, sort |
-| 4 | Code | Column inventory & dtype coercion |
-| 5 | Code | Data health checks (missingness, continuity, ranges) |
-| 6 | Code | Descriptive stats (per-column, per-domain) |
-| 7 | Code | Daily signals (activity, cardio, sleep plots) |
-| 8 | Code | Segment-aware views (S1-S6 boxplots, table) |
-| 9 | Code | Labels coverage (if present) |
-| 10 | Code | Correlations & cross-domain hints |
-| 11 | Code | Best/Worst days + patterns |
-| 12 | Code | Manifest & summary (JSON, MD, CSV) |
+| #   | Type     | Content                                                  |
+| --- | -------- | -------------------------------------------------------- |
+| 0   | Markdown | Title, purpose, inputs, outputs, version                 |
+| 1   | Code     | Imports + pandas options + log helper                    |
+| 2   | Code     | Config & paths (PID, SNAPSHOT, BASE, OUT, PLOTS, LATEST) |
+| 3   | Code     | Safe load, date normalization, duplicates, sort          |
+| 4   | Code     | Column inventory & dtype coercion                        |
+| 5   | Code     | Data health checks (missingness, continuity, ranges)     |
+| 6   | Code     | Descriptive stats (per-column, per-domain)               |
+| 7   | Code     | Daily signals (activity, cardio, sleep plots)            |
+| 8   | Code     | Segment-aware views (S1-S6 boxplots, table)              |
+| 9   | Code     | Labels coverage (if present)                             |
+| 10  | Code     | Correlations & cross-domain hints                        |
+| 11  | Code     | Best/Worst days + patterns                               |
+| 12  | Code     | Manifest & summary (JSON, MD, CSV)                       |
 
 ---
 
 ## 🎯 Key Improvements
 
 ### 1. **Validation Enhancements**
+
 ```
 OLD: Basic load + schema
 NEW: + Date continuity checks
@@ -84,6 +85,7 @@ NEW: + Date continuity checks
 ```
 
 ### 2. **Segment-Aware Analysis**
+
 ```
 NEW: If segment_id (S1-S6) present:
      - Boxplots per segment for act_steps, hr_mean, sleep_total_h
@@ -92,6 +94,7 @@ NEW: If segment_id (S1-S6) present:
 ```
 
 ### 3. **Cross-Domain Enrichments** (Fase 3)
+
 ```
 NEW: Detect & analyze *_7d and *_zscore columns
      - Rolling correlations (7d windows)
@@ -100,6 +103,7 @@ NEW: Detect & analyze *_7d and *_zscore columns
 ```
 
 ### 4. **Structured Reporting**
+
 ```
 OLD: Tables/figures to notebooks/outputs/NB1/<TIMESTAMP>/
 NEW: Reports go to reports/ (cleaner artifact path):
@@ -111,6 +115,7 @@ NEW: Reports go to reports/ (cleaner artifact path):
 ```
 
 ### 5. **Correlation Robustness**
+
 ```
 OLD: Pearson on top-variance 50 features
 NEW: Spearman on curated subset (act_steps, hr_mean, sleep_total_h, *_7d)
@@ -118,6 +123,7 @@ NEW: Spearman on curated subset (act_steps, hr_mean, sleep_total_h, *_7d)
 ```
 
 ### 6. **Daily Signals & Patterns**
+
 ```
 NEW: - Top 10 best sleep days (with activity/HR context)
      - Top 10 high activity days (with sleep context)
@@ -129,6 +135,7 @@ NEW: - Top 10 best sleep days (with activity/HR context)
 ## ⚙️ Config & Usage
 
 ### Parameters
+
 ```python
 PID = "P000001"
 SNAPSHOT = "auto"  # or "YYYY-MM-DD"
@@ -139,10 +146,12 @@ LATEST = Path("latest")
 ```
 
 ### SNAPSHOT Resolution
+
 - `"auto"` → latest folder under `data/etl/<PID>/`
 - `"YYYY-MM-DD"` → specific snapshot
 
 ### Output Paths
+
 ```
 reports/
 ├── nb1_eda_summary.md          # Human-readable summary
@@ -165,24 +174,26 @@ latest/
 ## 📦 Artifacts Generated
 
 ### Primary Outputs
-| File | Format | Purpose |
-|------|--------|---------|
-| `nb1_eda_summary.md` | Markdown | Bullet summary: coverage, anomalies, insights, next steps |
-| `nb1_feature_stats.csv` | CSV | column, non_null, mean, std, min, p25, p50, p75, max, missing_pct |
-| `nb1_manifest.json` | JSON | pid, snapshot, input, row/col counts, date_range, num_missing, plots, timestamp, version |
+
+| File                    | Format   | Purpose                                                                                  |
+| ----------------------- | -------- | ---------------------------------------------------------------------------------------- |
+| `nb1_eda_summary.md`    | Markdown | Bullet summary: coverage, anomalies, insights, next steps                                |
+| `nb1_feature_stats.csv` | CSV      | column, non_null, mean, std, min, p25, p50, p75, max, missing_pct                        |
+| `nb1_manifest.json`     | JSON     | pid, snapshot, input, row/col counts, date_range, num_missing, plots, timestamp, version |
 
 ### Visualization Outputs (in `plots/`)
-| Plot | Purpose |
-|------|---------|
-| `activity_timeseries.png` | act_steps over time; top 5 highs/lows annotated |
-| `cardio_overlay.png` | hr_mean + hr_std; coalesced vs vendor alignment |
-| `sleep_components.png` | sleep_total_h + zepp components (deep, light, rem) |
-| `segment_boxplots.png` | Box plots per segment (S1–S6) for key features |
+
+| Plot                      | Purpose                                               |
+| ------------------------- | ----------------------------------------------------- |
+| `activity_timeseries.png` | act_steps over time; top 5 highs/lows annotated       |
+| `cardio_overlay.png`      | hr_mean + hr_std; coalesced vs vendor alignment       |
+| `sleep_components.png`    | sleep_total_h + zepp components (deep, light, rem)    |
+| `segment_boxplots.png`    | Box plots per segment (S1–S6) for key features        |
 | `labels_distribution.png` | (if labels present) Count by class; imbalance warning |
-| `correlations_table.png` | Spearman correlation heatmap |
-| `act_vs_sleep.png` | Scatter: activity vs sleep |
-| `hr_vs_sleep.png` | Scatter: HR vs sleep |
-| `active_min_vs_hr.png` | Scatter: exercise min vs HR |
+| `correlations_table.png`  | Spearman correlation heatmap                          |
+| `act_vs_sleep.png`        | Scatter: activity vs sleep                            |
+| `hr_vs_sleep.png`         | Scatter: HR vs sleep                                  |
+| `active_min_vs_hr.png`    | Scatter: exercise min vs HR                           |
 
 ---
 
@@ -198,6 +209,7 @@ latest/
 8. ✅ Pushed to `origin/release/v4.1.0`
 
 ### Git Commit
+
 ```
 refactor: NB1_EDA_daily.ipynb - upgrade with Fase 3 coalescença, validation, cross-domain enrichments
 
@@ -221,17 +233,20 @@ refactor: NB1_EDA_daily.ipynb - upgrade with Fase 3 coalescença, validation, cr
 ## ⚠️ Notes & Caveats
 
 ### Multi-Environment Support (Reduced)
+
 - **Old:** Full support for LOCAL, KAGGLE, COLAB
 - **New:** PRIMARY LOCAL (optimized for local dev)
 - **Action:** If KAGGLE/COLAB support needed, can re-integrate path resolution logic from old notebook
 
 ### INTERACTIVE vs PERSISTENT Modes
+
 - **Status:** In-progress optimization
 - **Old behavior:** Gated all outputs behind NB_MODE
 - **New behavior:** All outputs generated, but can be filtered downstream
 - **Action:** Consider adding NB_MODE parameter if needed for production runs
 
 ### Column Naming Conventions
+
 - **Activity (Apple):** `apple_steps`, `apple_exercise_min`, etc.
 - **Activity (Zepp):** `zepp_steps`, `zepp_exercise_min`, etc.
 - **Coalesced (Fase 3):** `act_steps`, `act_active_min`
@@ -239,6 +254,7 @@ refactor: NB1_EDA_daily.ipynb - upgrade with Fase 3 coalescença, validation, cr
 - **Enriched:** `*_7d`, `*_zscore` (detected & analyzed)
 
 ### Expected Data Structure
+
 ```
 data/etl/<PID>/<SNAPSHOT>/
 ├── joined/
@@ -291,4 +307,3 @@ data/etl/<PID>/<SNAPSHOT>/
 ---
 
 **Status:** ✅ MIGRATION COMPLETE — NB1_EDA_daily.ipynb ready for production use.
-
