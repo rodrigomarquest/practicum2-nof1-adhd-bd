@@ -61,6 +61,10 @@ Hotfix release addressing tqdm progress bar visibility in Git Bash/MSYS2 termina
 - tqdm progress bars not displaying in Git Bash terminal despite interactive TTY
 - NB1 EDA output organization (reports/ + latest/ mirror)
 - **Makefile Python unbuffered output:** Added `-u` flag to all Python commands to ensure real-time progress bar visibility during long-running ETL extractions (extract runs for ~10 min)
+- **CDA export_cda.xml parser memory overflow:** Replaced whole-file parsing with streaming iterparse() for large files (4GB+)
+  - Now uses memory-efficient chunk-based streaming (1MB chunks, 500MB limit)
+  - Automatic fallback chain: strict parse → lxml.iterparse → recover mode → salvage streaming
+  - Prevents OutOfMemory errors during Apple Health CDA extraction
 
 ### Infrastructure
 
