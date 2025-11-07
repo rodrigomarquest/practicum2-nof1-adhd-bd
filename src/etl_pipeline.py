@@ -452,24 +452,28 @@ def extract_run(pid: str, snapshot_arg: str = "auto", auto_zip: bool = True, dry
                         with pyzipper.AESZipFile(str(zip_path)) as zf:
                             if pwd:
                                 zf.pwd = pwd.encode("utf-8")
-                            for member in zf.namelist():
-                                target = out_dir / Path(member)
-                                if member.endswith('/'):
-                                    target.mkdir(parents=True, exist_ok=True)
-                                    continue
-                                target.parent.mkdir(parents=True, exist_ok=True)
-                                try:
-                                    data = zf.read(member)
-                                except RuntimeError:
-                                    # bad password or other runtime issue
-                                    print(f"WARNING: Zepp zip appears encrypted or bad password: {zip_path}; skipping")
-                                    manifest["warnings"].append(f"Zepp bad password: {zip_path}")
-                                    status = "skip"
-                                    elapsed = time.time() - t0
-                                    qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": 0, "parsed_cda": 0, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
-                                    raise
-                                with open(str(target), "wb") as fh:
-                                    fh.write(data)
+                            members = zf.namelist()
+                            with progress_bar(total=len(members), desc=f"Zepp extract {vendor}/{variant}", unit="files") as bar:
+                                for member in members:
+                                    target = out_dir / Path(member)
+                                    if member.endswith('/'):
+                                        target.mkdir(parents=True, exist_ok=True)
+                                        bar.update(1)
+                                        continue
+                                    target.parent.mkdir(parents=True, exist_ok=True)
+                                    try:
+                                        data = zf.read(member)
+                                    except RuntimeError:
+                                        # bad password or other runtime issue
+                                        print(f"WARNING: Zepp zip appears encrypted or bad password: {zip_path}; skipping")
+                                        manifest["warnings"].append(f"Zepp bad password: {zip_path}")
+                                        status = "skip"
+                                        elapsed = time.time() - t0
+                                        qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": 0, "parsed_cda": 0, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
+                                        raise
+                                    with open(str(target), "wb") as fh:
+                                        fh.write(data)
+                                    bar.update(1)
                     except RuntimeError:
                         # already handled above and manifested
                         continue
@@ -484,7 +488,17 @@ def extract_run(pid: str, snapshot_arg: str = "auto", auto_zip: bool = True, dry
                 else:
                     # regular zip extraction for Apple variants
                     with zipfile.ZipFile(zip_path, "r") as zf:
-                        zf.extractall(path=str(out_dir))
+                        members = zf.namelist()
+                        with progress_bar(total=len(members), desc=f"Apple extract {vendor}/{variant}", unit="files") as bar:
+                            for member in members:
+                                target = out_dir / Path(member)
+                                if member.endswith('/'):
+                                    target.mkdir(parents=True, exist_ok=True)
+                                else:
+                                    target.parent.mkdir(parents=True, exist_ok=True)
+                                    with open(str(target), "wb") as fh:
+                                        fh.write(zf.read(member))
+                                bar.update(1)
 
                 # attempt to find export.xml and export_cda.xml inside out_dir
                 export_xml = None
