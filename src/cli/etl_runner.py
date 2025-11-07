@@ -14,7 +14,32 @@ import os
 import logging
 
 
+def _ensure_unbuffered_output():
+    """Ensure stdout/stderr are unbuffered for real-time progress bars.
+    
+    This is critical for tqdm progress bars to display in real-time
+    instead of being buffered and printed all at once at the end.
+    """
+    # Set environment variable for Python
+    os.environ['PYTHONUNBUFFERED'] = '1'
+    
+    # Attempt to reconfigure streams (Python 3.7+)
+    try:
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(line_buffering=False)  # type: ignore
+    except (AttributeError, ValueError, TypeError):
+        pass
+    try:
+        if hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(line_buffering=False)  # type: ignore
+    except (AttributeError, ValueError, TypeError):
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    # Ensure unbuffered output for real-time progress bars
+    _ensure_unbuffered_output()
+    
     if argv is None:
         argv = sys.argv[1:]
 
@@ -26,7 +51,22 @@ def main(argv: list[str] | None = None) -> int:
         lvl = getattr(logging, lvl_name.upper(), logging.INFO)
     except Exception:
         lvl = logging.INFO
-    logging.basicConfig(level=lvl)
+    
+    # Configure logging with unbuffered stream
+    # Remove any existing handlers to avoid duplication
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+    
+    # Create a new handler that writes unbuffered directly to stderr
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setLevel(lvl)
+    formatter = logging.Formatter(
+        '%(levelname)s:%(name)s:%(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    handler.setFormatter(formatter)
+    logging.root.addHandler(handler)
+    logging.root.setLevel(lvl)
 
     parser = argparse.ArgumentParser(prog="etl_runner")
     sub = parser.add_subparsers(dest="cmd")
