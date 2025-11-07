@@ -1482,8 +1482,11 @@ def _parse_apple_cda_som_lxml(
     return df
 
 
-def _parse_cda_textscan(cda_xml_path: Path, tz_selector) -> pd.DataFrame:
-    """Fallback text-scan: stream file, find tokens and grab snippets and possible timestamps."""
+def _parse_cda_textscan(cda_xml_path: Path) -> pd.DataFrame:
+    """Fallback text-scan: stream file, find tokens and grab snippets and possible timestamps.
+    
+    Note: All timestamps are returned in UTC. Daily binning is at UTC midnight.
+    """
     TOKENS = [
         "mood",
         "pleasant",
@@ -1574,24 +1577,22 @@ def _parse_cda_textscan(cda_xml_path: Path, tz_selector) -> pd.DataFrame:
                     value_norm = -1
 
                 ts_iso = ts.isoformat() if ts is not None else pd.NA
-                date_proj = ""
+                date_utc = ""
                 try:
                     if ts is not None:
-                        proj_tz = (
-                            tz_selector(ts)
-                            if tz_selector is not None
-                            else get_tz("UTC")
-                        )
-                        date_proj = (
-                            ts.tz_localize("UTC").astimezone(proj_tz).date().isoformat()
-                        )
+                        # Ensure UTC
+                        if ts.tzinfo is None:
+                            ts_utc = ts.tz_localize("UTC")
+                        else:
+                            ts_utc = ts.astimezone(get_tz("UTC"))
+                        date_utc = ts_utc.date().isoformat()
                 except Exception:
-                    date_proj = ""
+                    date_utc = ""
 
                 rows.append(
                     {
                         "timestamp_utc": ts_iso if ts is not None else pd.NA,
-                        "date": date_proj,
+                        "date": date_utc,
                         "source": "apple_som",
                         "value_raw": value_raw,
                         "value_norm": (
@@ -2124,12 +2125,14 @@ def _write_if_changed_df(df: "pd.DataFrame", out_path: Path) -> bool:
                 pass
 
 
-def _parse_apple_autoexport_som(file_path: Path, tz_selector) -> pd.DataFrame:
+def _parse_apple_autoexport_som(file_path: Path) -> pd.DataFrame:
     """Parse a Health Auto Export StateOfMind CSV and normalize it.
 
     Expected columns: Start, End, Kind, Labels, Associations,
                       Valence, Valence Classification
     Returns columns: timestamp_utc, date, source, value_raw, value_norm, notes
+    
+    Note: All timestamps are returned in UTC. Daily binning is at UTC midnight.
     """
     # If the file does not exist, return empty frame with expected columns
     if not file_path or not Path(file_path).exists():
@@ -2318,11 +2321,8 @@ def _parse_apple_autoexport_som(file_path: Path, tz_selector) -> pd.DataFrame:
                 continue
 
         ts_iso = ts_utc.isoformat()
-        try:
-            proj_tz = tz_selector(ts_utc) if tz_selector is not None else get_tz("UTC")
-            date_proj = ts_utc.astimezone(proj_tz).date().isoformat()
-        except Exception:
-            date_proj = pd.NA
+        # date in UTC
+        date_utc = ts_utc.date().isoformat()
 
         # compute normalized value: prefer numeric valence, else classification text
         value_norm = pd.NA
@@ -2354,7 +2354,7 @@ def _parse_apple_autoexport_som(file_path: Path, tz_selector) -> pd.DataFrame:
         rows.append(
             {
                 "timestamp_utc": ts_iso,
-                "date": date_proj,
+                "date": date_utc,
                 "source": "apple_autoexport",
                 "value_raw": value_raw,
                 "value_norm": int(value_norm),
@@ -3569,7 +3569,7 @@ def main():
         # 2) Stdlib fallback
         if df.empty:
             try:
-                df = _parse_apple_cda_som(cda_path, tz_sel)
+                df = _parse_apple_cda_som(cda_path)
             except Exception as e:
                 parse_exc = e
                 if args.trace:
@@ -3579,7 +3579,7 @@ def main():
         # 3) Text-scan fallback
         if df.empty:
             try:
-                df = _parse_cda_textscan(cda_path, tz_sel)
+                df = _parse_cda_textscan(cda_path)
             except Exception as e:
                 parse_exc = e
                 if args.trace:
