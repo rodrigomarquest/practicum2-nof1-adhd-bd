@@ -62,7 +62,16 @@ def cda_probe(path: Path, home_tz: Optional[str] = None) -> Dict:
 
     # 1) strict streaming parse
     try:
-        it = _tqdm(ET.iterparse(str(path), events=("end",)), desc="CDA export_cda.xml", disable=disable)
+        # Estimate record count for progress bar (fast binary scan)
+        record_count = 0
+        try:
+            with open(path, 'rb') as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b''):
+                    record_count += chunk.count(b'<entry') + chunk.count(b'<Section')
+        except Exception:
+            record_count = None
+        
+        it = _tqdm(ET.iterparse(str(path), events=("end",)), desc="CDA export_cda.xml", total=record_count, disable=disable, unit="items")
         n_section, n_observation, codes = _count_from_iterable((elem for _, elem in it))
         return {
             "n_section": n_section,
@@ -82,7 +91,9 @@ def cda_probe(path: Path, home_tz: Optional[str] = None) -> Dict:
 
             # Use iterparse (streaming) for large files to avoid loading entire XML into memory
             try:
-                it = _tqdm(LET.iterparse(str(path), events=("end",)), desc="CDA recovery (iterparse)", disable=disable)
+                # Estimate for recovery attempt too
+                record_count = None
+                it = _tqdm(LET.iterparse(str(path), events=("end",)), desc="CDA recovery (iterparse)", total=record_count, disable=disable, unit="items")
                 n_s = 0
                 n_o = 0
                 cs: Dict[str, int] = {}
@@ -121,9 +132,8 @@ def cda_probe(path: Path, home_tz: Optional[str] = None) -> Dict:
                 try:
                     # Open file and attempt parse with recover=True
                     # This is a last-ditch effort; it may still fail on very large files
-                    parser = LET.XMLParser(recover=True)
                     # Use iterparse with recover parser
-                    it = _tqdm(LET.iterparse(str(path), events=("end",), recover=True), desc="CDA recovery (recover mode)", disable=disable)
+                    it = _tqdm(LET.iterparse(str(path), events=("end",), recover=True), desc="CDA recovery (recover mode)", disable=disable, unit="items")
                     n_s = 0
                     n_o = 0
                     cs: Dict[str, int] = {}
