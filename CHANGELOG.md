@@ -60,6 +60,7 @@ Hotfix release addressing tqdm progress bar visibility in Git Bash/MSYS2 termina
 
 - tqdm progress bars not displaying in Git Bash terminal despite interactive TTY
 - NB1 EDA output organization (reports/ + latest/ mirror)
+- **Makefile Python unbuffered output:** Added `-u` flag to all Python commands to ensure real-time progress bar visibility during long-running ETL extractions (extract runs for ~10 min)
 
 ### Infrastructure
 
