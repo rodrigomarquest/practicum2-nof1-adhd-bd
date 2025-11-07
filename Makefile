@@ -21,7 +21,7 @@ SNAPSHOT ?= auto
 ETL_CMD ?= full
 DRY_RUN ?= 0
 REPO_ROOT ?= .
-ETL_TQDM ?= 0
+ETL_TQDM ?= 1
 export ETL_TQDM
 # Compute platform path separator via the chosen Python executable and build a
 # PYTHONPATH value that works on both POSIX (:) and Windows (;) hosts. This
