@@ -1,23 +1,20 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-# stdlib
-import argparse
-import os
-import sys
+from pathlib import Path
 import re
 import json
-import glob
-import io
 import tempfile
-import hashlib
-from datetime import datetime, date
-from pathlib import Path
+from datetime import datetime, timezone
 from typing import Optional, Iterable, Tuple, Any, Dict, Union
 import xml.etree.ElementTree as ET
 import traceback
 import zipfile
 import shutil
+import time
+import os
+import math
+import warnings
 
 # third-party
 import pandas as pd
@@ -25,25 +22,35 @@ import pandas as pd
 # local
 from etl_modules.common.progress import Timer, progress_bar
 from src.domains.common.io import migrate_from_data_ai_if_present, etl_snapshot_root
+from lib.io_guards import ensure_joined_snapshot, write_joined_features
+from src.domains.enriched.pre import enrich_prejoin_run
 
 
 # ----------------------------------------------------------------------
 # Atomic write helpers
 # ----------------------------------------------------------------------
 def _write_atomic_csv(df: "pd.DataFrame", out_path: str | os.PathLike[str]):
-    d = os.path.dirname(str(out_path)) or "."
-    fd, tmp = tempfile.mkstemp(prefix=".tmp_", dir=d, suffix=".csv")
-    os.close(fd)
+    """Prefer canonical atomic writer from lib.io_guards, fallback to local atomic rename."""
     try:
-        # Use pandas to write the DataFrame to the temporary file, then atomically replace
-        df.to_csv(tmp, index=False)
-        os.replace(tmp, str(out_path))
-    finally:
-        if os.path.exists(tmp):
-            try:
-                os.remove(tmp)
-            except Exception:
-                pass
+        from lib.io_guards import atomic_backup_write  # type: ignore
+
+        atomic_backup_write(df, Path(out_path))
+        return
+    except Exception:
+        # fallback
+        d = os.path.dirname(str(out_path)) or "."
+        fd, tmp = tempfile.mkstemp(prefix=".tmp_", dir=d, suffix=".csv")
+        os.close(fd)
+        try:
+            # Use pandas to write the DataFrame to the temporary file, then atomically replace
+            df.to_csv(tmp, index=False)
+            os.replace(tmp, str(out_path))
+        finally:
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except Exception:
+                    pass
 
 
 def _write_atomic_json(obj: dict, out_path: str | os.PathLike[str]):
@@ -74,7 +81,7 @@ VERSION_RAW = "version_raw.csv"
 VERSION_LOG = "version_log_enriched.csv"
 
 # common help strings
-HELP_SNAPSHOT_DIR = "Caminho data/etl/<PID>/snapshots/<YYYY-MM-DD>"
+HELP_SNAPSHOT_DIR = "Path data/etl/<PID>/<YYYY-MM-DD>"
 HELP_PARTICIPANT = "PID (usar com --snapshot)"
 HELP_SNAPSHOT_ID = "Snapshot id (YYYY-MM-DD ou YYYYMMDD)"
 USAGE_SNAPSHOT_OR_PARTICIPANT = "Use --snapshot_dir OU (--participant e --snapshot)."
@@ -118,7 +125,7 @@ def ensure_ai_outdir(pid: str, snap: str) -> Path:
 
     Historically this returned a path under `data_ai/`. To preserve
     compatibility with existing callers we keep the function name but
-    make it return the canonical `data/etl/<pid>/snapshots/<snap>` using
+    make it return the canonical `data/etl/<pid>/<snap>` using
     `etl_snapshot_root` so callers receive the correct write location.
     """
     snap_iso = canon_snap_id(snap)
@@ -215,6 +222,357 @@ def snapshot_from_zip_file_date(zip_path: Path) -> str:
         return date.today().isoformat()
 
 
+# ----------------------------------------------------------------------
+# New: snapshot resolution, discovery and unified extract_run
+# ----------------------------------------------------------------------
+def resolve_snapshot(snapshot_arg: str, pid: str) -> str:
+    """Resolve the canonical snapshot id for a run.
+
+    - If snapshot_arg != 'auto' -> return canonicalized snapshot
+    - If 'auto' -> read data/config/<PID>_profile.json for home_tz and use
+      local today() in that timezone. Fallback to UTC.
+    """
+    if snapshot_arg and snapshot_arg != "auto":
+        return canon_snap_id(snapshot_arg)
+
+    # auto: inspect profile
+    profile_path = Path("data") / "config" / f"{pid}_profile.json"
+    tz_name = None
+    try:
+        if profile_path.exists():
+            d = json.loads(profile_path.read_text(encoding="utf-8"))
+            tz_name = d.get("home_tz")
+    except Exception:
+        tz_name = None
+
+    if tz_name:
+        try:
+            tz = get_tz(tz_name)
+            snap = datetime.now(tz).date().isoformat()
+            return snap
+        except Exception:
+            pass
+
+    # fallback to UTC
+    return datetime.utcnow().date().isoformat()
+
+
+def discover_sources(pid: str, auto_zip: bool = True) -> list[dict]:
+    """Discover latest candidate zips for apple (variants) and zepp.
+
+    Returns list of dicts: {vendor, variant, zip_path}
+    """
+    results: list[dict] = []
+    base = RAW_ARCHIVE / pid
+    if not base.exists():
+        return results
+
+    # Apple: search under data/raw/<pid>/apple/export or data/raw/<pid>/apple/**
+    apple_root = base / "apple"
+    apple_candidates = []
+    if apple_root.exists():
+        # first prefer export subfolder
+        exp = apple_root / "export"
+        search_root = exp if exp.exists() else apple_root
+        for p in search_root.rglob("*.zip"):
+            apple_candidates.append(p)
+
+    # classify apple zips into variants
+    variants = {"inapp": [], "itunes": [], "autoextract": []}
+    for z in apple_candidates:
+        try:
+            if zip_contains(z, ["apple_health_export/export.xml"]):
+                variants["inapp"].append(z)
+                continue
+            if zip_contains(z, ["manifest.db"]):
+                variants["itunes"].append(z)
+                continue
+            if zip_contains(z, ["autoexport", "auto-extract", "autoextract"]):
+                variants["autoextract"].append(z)
+                continue
+            # fallback: if a zip contains export.xml anywhere, treat as inapp
+            if zip_contains(z, ["export.xml"]):
+                variants["inapp"].append(z)
+        except Exception:
+            continue
+
+    def pick_latest(lst: list[Path]) -> Optional[Path]:
+        if not lst:
+            return None
+        lst.sort(key=lambda p: (p.stat().st_mtime, p.stat().st_size), reverse=True)
+        return lst[0]
+
+    for var, lst in variants.items():
+        z = pick_latest(lst)
+        if z:
+            results.append({"vendor": "apple", "variant": var, "zip_path": z})
+        else:
+            # no candidate -> skip entry
+            pass
+
+    # Zepp: any zip under data/raw/<pid>/zepp/export or zepp/**
+    zepp_root = base / "zepp"
+    zepp_candidates = []
+    if zepp_root.exists():
+        exp = zepp_root / "export"
+        search_root = exp if exp.exists() else zepp_root
+        for p in search_root.rglob("*.zip"):
+            zepp_candidates.append(p)
+    z = pick_latest(zepp_candidates)
+    if z:
+        results.append({"vendor": "zepp", "variant": "cloud", "zip_path": z})
+
+    return results
+
+
+def _ensure_outdir(pid: str, snapshot: str, vendor: str, variant: str) -> Path:
+    snap_iso = canon_snap_id(snapshot)
+    out = etl_snapshot_root(pid, snap_iso) / "extracted" / vendor / variant
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def _write_qc_rows(qc_rows: list[dict], qc_dir: Path) -> None:
+    qc_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = qc_dir / "extract_qc.csv"
+    # ensure deterministic column order
+    cols = ["vendor", "variant", "found_zip", "parsed_xml", "parsed_cda", "rows_out", "seconds", "status"]
+    # convert to DataFrame (pandas available)
+    try:
+        df = pd.DataFrame(qc_rows)
+        # ensure columns
+        for c in cols:
+            if c not in df.columns:
+                df[c] = None
+        _write_atomic_csv(df[cols], str(csv_path))
+    except Exception:
+        # fallback simple CSV
+        with open(csv_path, "w", encoding="utf-8") as f:
+            f.write(",".join(cols) + "\n")
+            for r in qc_rows:
+                f.write(",".join(str(r.get(c, "")) for c in cols) + "\n")
+
+
+def _write_manifest(manifest: dict, qc_dir: Path) -> None:
+    qc_dir.mkdir(parents=True, exist_ok=True)
+    path = qc_dir / "extract_manifest.json"
+    _write_atomic_json(manifest, str(path))
+
+
+class CDAParseWarning(Exception):
+    pass
+
+
+def _parse_export_xml(xml_path: Path) -> int:
+    """Lightweight parse of export.xml that counts top-level Record/Workout nodes.
+
+    Returns number of records found (approximation)."""
+    try:
+        # use a streaming iterparse to avoid loading whole file
+        count = 0
+        for event, elem in ET.iterparse(str(xml_path), events=("end",)):
+            if elem.tag.endswith("Record") or elem.tag.endswith("Workout"):
+                count += 1
+            # free memory
+            elem.clear()
+        return count
+    except Exception:
+        return 0
+
+
+def _parse_export_cda(xml_path: Path) -> tuple[int, list[str]]:
+    """Attempt a tolerant streaming parse of export_cda.xml.
+
+    Returns (rows_out, warnings)
+    """
+    warnings: list[str] = []
+    rows = 0
+    try:
+        # iterparse but guard against very large files
+        for event, elem in ET.iterparse(str(xml_path), events=("end",)):
+            if elem.tag.endswith("entry") or elem.tag.endswith("Section"):
+                rows += 1
+            elem.clear()
+            # yield time slice to avoid blocking UI
+        return rows, warnings
+    except Exception as e:
+        warnings.append(f"failed to parse CDA XML: {xml_path}")
+        return 0, warnings
+
+
+def extract_run(pid: str, snapshot_arg: str = "auto", auto_zip: bool = True, dry_run: bool = False) -> int:
+    """Unified extract run that processes Apple variants and Zepp under one canonical snapshot.
+
+    Returns exit code: 0 if any source produced artifacts (ok or warn), 2 if all failed/skipped.
+    """
+    started_at = datetime.utcnow().isoformat() + "Z"
+    snapshot = resolve_snapshot(snapshot_arg, pid)
+    sources = discover_sources(pid, auto_zip=auto_zip)
+    qc_rows: list[dict] = []
+    manifest: dict = {"pid": pid, "snapshot": snapshot, "home_tz": None, "started_at": started_at, "ended_at": None, "sources": [], "warnings": []}
+
+    if dry_run:
+        print(f"DRY RUN: discovered {len(sources)} sources for {pid} -> snapshot {snapshot}")
+        for s in sources:
+            print(f" - {s['vendor']}/{s['variant']}: {s['zip_path']}")
+        return 0 if sources else 2
+
+    any_ok = False
+    for s in sources:
+        vendor = s.get("vendor")
+        variant = s.get("variant")
+        zip_path: Path = s.get("zip_path")
+        t0 = time.time()
+        parsed_xml = 0
+        parsed_cda = 0
+        rows_out = 0
+        status = "skip"
+        found_zip = 1 if zip_path and zip_path.exists() else 0
+
+        out_dir = _ensure_outdir(pid, snapshot, vendor, variant)
+        try:
+            if not found_zip:
+                status = "skip"
+                elapsed = 0.0
+            else:
+                # extract into variant out_dir (idempotent: overwrite files)
+                # Use pyzipper for Zepp archives to support AES-encrypted ZIPs; fallback to zipfile for others
+                if vendor == "zepp":
+                    pwd = os.environ.get("ZEPP_ZIP_PASSWORD")
+                    if not pwd:
+                        print(f"WARNING: ZEPP_ZIP_PASSWORD not set; skipping Zepp {zip_path}")
+                        manifest["warnings"].append(f"Zepp skipped (no password): {zip_path}")
+                        status = "skip"
+                        elapsed = time.time() - t0
+                        qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": 0, "parsed_cda": 0, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
+                        continue
+                    try:
+                        import pyzipper
+
+                        with pyzipper.AESZipFile(str(zip_path)) as zf:
+                            if pwd:
+                                zf.pwd = pwd.encode("utf-8")
+                            for member in zf.namelist():
+                                target = out_dir / Path(member)
+                                if member.endswith('/'):
+                                    target.mkdir(parents=True, exist_ok=True)
+                                    continue
+                                target.parent.mkdir(parents=True, exist_ok=True)
+                                try:
+                                    data = zf.read(member)
+                                except RuntimeError:
+                                    # bad password or other runtime issue
+                                    print(f"WARNING: Zepp zip appears encrypted or bad password: {zip_path}; skipping")
+                                    manifest["warnings"].append(f"Zepp bad password: {zip_path}")
+                                    status = "skip"
+                                    elapsed = time.time() - t0
+                                    qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": 0, "parsed_cda": 0, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
+                                    raise
+                                with open(str(target), "wb") as fh:
+                                    fh.write(data)
+                    except RuntimeError:
+                        # already handled above and manifested
+                        continue
+                    except Exception as e:
+                        # any other extraction problem -> skip Zepp and warn
+                        print(f"WARNING: failed to extract Zepp zip {zip_path}: {e}; skipping")
+                        manifest["warnings"].append(f"Zepp extract failed: {zip_path}: {e}")
+                        status = "skip"
+                        elapsed = time.time() - t0
+                        qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": 0, "parsed_cda": 0, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
+                        continue
+                else:
+                    # regular zip extraction for Apple variants
+                    with zipfile.ZipFile(zip_path, "r") as zf:
+                        zf.extractall(path=str(out_dir))
+
+                # attempt to find export.xml and export_cda.xml inside out_dir
+                export_xml = None
+                cda_xml = None
+                cand1 = out_dir / EXPORT_XML
+                cand2 = out_dir / "apple_health_export" / EXPORT_XML
+                if cand1.exists():
+                    export_xml = cand1
+                elif cand2.exists():
+                    export_xml = cand2
+                else:
+                    found_any = list(out_dir.rglob(EXPORT_XML))
+                    if found_any:
+                        export_xml = found_any[0]
+
+                if export_xml:
+                    parsed_xml = _parse_export_xml(export_xml)
+                    print(f"extract: [{vendor}/{variant}] parse export.xml: {parsed_xml} records")
+                else:
+                    print(f"extract: [{vendor}/{variant}] no export.xml found in {out_dir}")
+
+                # check cda (non-fatal). Use the new CDA probe which produces a small QC summary.
+                cda_cand = out_dir / "apple_health_export" / "export_cda.xml"
+                if cda_cand.exists():
+                    # determine home_tz from participant profile if present
+                    home_tz = None
+                    try:
+                        prof_path = Path("data") / "config" / f"{pid}_profile.json"
+                        if prof_path.exists():
+                            prof = json.loads(prof_path.read_text(encoding="utf-8"))
+                            home_tz = prof.get("home_tz")
+                    except Exception:
+                        home_tz = None
+
+                    import logging
+                    logger = logging.getLogger("etl.extract")
+                    try:
+                        from domains.cda import parse_cda
+
+                        summary = parse_cda.cda_probe(cda_cand, home_tz=home_tz)
+                        parsed_cda = summary.get("n_observation", 0)
+                        if parsed_cda > 0:
+                            logger.info(
+                                f"CDA parsed: {summary.get('n_section',0)} sections, {parsed_cda} observations, {len(summary.get('codes',{}))} unique codes"
+                            )
+                        else:
+                            logger.warning(f"CDA parsed but empty: {cda_cand.name}")
+                        snapshot_root = etl_snapshot_root(pid, snapshot)
+                        parse_cda.write_cda_qc(snapshot_root, summary)
+                    except Exception as e:
+                        # attempt to write a minimal QC summary so users can inspect the error
+                        try:
+                            from domains.cda import parse_cda
+
+                            snapshot_root = etl_snapshot_root(pid, snapshot)
+                            summary = {"error": f"{type(e).__name__}: {e}", "n_section": 0, "n_observation": 0, "codes": {}}
+                            try:
+                                parse_cda.write_cda_qc(snapshot_root, summary)
+                            except Exception:
+                                pass
+                        except Exception:
+                            pass
+                        except Exception:
+                            pass
+                        logger.warning(f"CDA parse failed: {cda_cand.name} ({type(e).__name__}: {e})")
+
+                rows_out = parsed_xml + parsed_cda
+                status = "ok"
+                elapsed = time.time() - t0
+                any_ok = True
+
+            qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": parsed_xml, "parsed_cda": parsed_cda, "rows_out": rows_out, "seconds": round(elapsed, 2), "status": status})
+            manifest["sources"].append({"vendor": vendor, "variant": variant, "zip_path": str(zip_path), "out_dir": str(out_dir), "seconds": round(time.time() - t0, 2), "status": status})
+        except Exception as e:
+            elapsed = time.time() - t0
+            status = "fail"
+            qc_rows.append({"vendor": vendor, "variant": variant, "found_zip": found_zip, "parsed_xml": parsed_xml, "parsed_cda": parsed_cda, "rows_out": 0, "seconds": round(elapsed, 2), "status": status})
+            manifest.setdefault("warnings", []).append(f"extract failure {vendor}/{variant}: {e}")
+
+    # write QC & manifest
+    qc_dir = etl_snapshot_root(pid, canon_snap_id(snapshot)) / "qc"
+    _write_qc_rows(qc_rows, qc_dir)
+    manifest["ended_at"] = datetime.utcnow().isoformat() + "Z"
+    _write_manifest(manifest, qc_dir)
+
+    return 0 if any_ok else 2
+
+
 def ensure_extracted(pid: str, snapshot: str, zip_path: Path) -> Path:
     """Ensure export.xml is present under data/etl/<pid>/snapshots/<snapshot>/extracted/apple.
 
@@ -222,7 +580,7 @@ def ensure_extracted(pid: str, snapshot: str, zip_path: Path) -> Path:
     Returns the Path to the export.xml inside the extracted folder.
     """
     snap_iso = canon_snap_id(snapshot)
-    out = ETL_ROOT / pid / "snapshots" / snap_iso / "extracted" / "apple"
+    out = etl_snapshot_root(pid, snap_iso) / "extracted" / "apple"
     # Common layouts: either export.xml at out/ or under out/apple_health_export/export.xml
     candidate1 = out / EXPORT_XML
     candidate2 = out / "apple_health_export" / EXPORT_XML
@@ -545,6 +903,7 @@ def extract_apple_per_metric(
     with Timer("extract: parse export.xml"):
         total_records = _estimate_record_count(xml_file)
         # stream-parse the XML and update the bar per Record event
+    
     with progress_bar(
         total=total_records or None, desc="Parsing Records", unit="items"
     ) as _bar:
@@ -632,6 +991,13 @@ def extract_apple_per_metric(
                         "raw_value": value,
                     }
                 )
+            
+            # Progress update and memory cleanup
+            try:
+                _bar.update(1)
+            except Exception:
+                pass
+            elem.clear()
 
     written: Dict[str, str] = {}
 
@@ -1529,8 +1895,10 @@ def run_stage_labels_synthetic(
 
     Returns dict with output path and manifest path.
     """
-    # Prefer canonical ETL joined/features_daily.csv
-    features_path = snapshot_dir / "joined" / "features_daily.csv"
+    # Prefer canonical ETL new joined filename
+    # Resolve canonical joined features CSV (migrates legacy if present)
+    features_path = ensure_joined_snapshot(snapshot_dir)
+
     if not features_path.exists():
         # if data_ai has the snapshot content, attempt safe migration into data/etl
         pid = snapshot_dir.parts[-3] if len(snapshot_dir.parts) >= 3 else None
@@ -1542,7 +1910,7 @@ def run_stage_labels_synthetic(
         # re-evaluate
         if not features_path.exists():
             raise FileNotFoundError(
-                f"features_daily.csv not found in snapshot (joined): {features_path}"
+                f"joined_features_daily.csv not found in snapshot (joined): {features_path}"
             )
 
     synth_path = synthetic_path or (snapshot_dir / "state_of_mind_synthetic.csv")
@@ -2032,11 +2400,28 @@ def run_stage_labels(
     snapshot_dir: Path to data/etl/<PID>/snapshots/<SNAP>/
     Returns a manifest dict like the synthetic runner.
     """
-    # locate features base (prefer canonical ETL joined/features_daily.csv)
+    # locate features base (prefer canonical ETL joined filename)
     pid = snapshot_dir.parts[-3] if len(snapshot_dir.parts) >= 3 else None
     snap_iso = snapshot_dir.parts[-1] if len(snapshot_dir.parts) >= 1 else None
-    etl_joined = snapshot_dir / "joined" / "features_daily.csv"
+    joined_dir = snapshot_dir / "joined"
+    etl_joined = joined_dir / "joined_features_daily.csv"
+    old_joined = joined_dir / "features_daily.csv"
     ai_fallback = AI_ROOT / pid / "snapshots" / snap_iso / "features_daily_updated.csv"
+
+    # migrate old canonical name if present
+    if not etl_joined.exists() and old_joined.exists():
+        warnings.warn(
+            f"Found legacy joined/features_daily.csv at {old_joined}; migrating to {etl_joined}",
+            stacklevel=2,
+        )
+        try:
+            joined_dir.mkdir(parents=True, exist_ok=True)
+            old_joined.replace(etl_joined)
+        except Exception:
+            try:
+                shutil.copy2(old_joined, etl_joined)
+            except Exception:
+                pass
 
     if etl_joined.exists():
         features_path = etl_joined
@@ -2693,6 +3078,291 @@ def run_stage_labels(
     }
 
 
+def _generate_join_qc(merged: "pd.DataFrame", snap: Path, used_prejoin: dict[str, bool]) -> dict:
+    """Generate QC report for joined features.
+    
+    Returns dict with:
+    - n_rows: number of rows in joined
+    - date_min, date_max: period coverage
+    - coverage_activity: % non-null act_steps (if exists)
+    - coverage_cardio: % non-null hr_mean (if exists)
+    - coverage_sleep: % non-null sleep_total_h (if exists)
+    - used_prejoin_activity, used_prejoin_cardio: 1/0 flags
+    """
+    qc: dict[str, Any] = {
+        "n_rows": len(merged),
+        "date_min": None,
+        "date_max": None,
+        "coverage_activity": None,
+        "coverage_cardio": None,
+        "coverage_sleep": None,
+        "used_prejoin_activity": used_prejoin.get("activity", 0),
+        "used_prejoin_cardio": used_prejoin.get("cardio", 0),
+    }
+    
+    # Date coverage
+    if "date" in merged.columns:
+        try:
+            dates = pd.to_datetime(merged["date"], errors="coerce")
+            qc["date_min"] = str(dates.min().date()) if not pd.isna(dates.min()) else None
+            qc["date_max"] = str(dates.max().date()) if not pd.isna(dates.max()) else None
+        except Exception:
+            pass
+    
+    # Activity coverage: % non-null act_steps (or coalesced apple_steps/zepp_act_steps)
+    act_col = None
+    if "act_steps" in merged.columns:
+        act_col = "act_steps"
+    elif "apple_steps" in merged.columns:
+        act_col = "apple_steps"
+    elif "zepp_act_steps" in merged.columns:
+        act_col = "zepp_act_steps"
+    
+    if act_col and len(merged) > 0:
+        qc["coverage_activity"] = round(100.0 * merged[act_col].notna().sum() / len(merged), 2)
+    
+    # Cardio coverage: % non-null hr_mean
+    hr_col = None
+    if "hr_mean" in merged.columns:
+        hr_col = "hr_mean"
+    elif "apple_hr_mean" in merged.columns:
+        hr_col = "apple_hr_mean"
+    elif "zepp_hr_mean" in merged.columns:
+        hr_col = "zepp_hr_mean"
+    
+    if hr_col and len(merged) > 0:
+        qc["coverage_cardio"] = round(100.0 * merged[hr_col].notna().sum() / len(merged), 2)
+    
+    # Sleep coverage: % non-null sleep_total_h
+    sleep_col = None
+    if "sleep_total_h" in merged.columns:
+        sleep_col = "sleep_total_h"
+    elif "apple_slp_total_h" in merged.columns:
+        sleep_col = "apple_slp_total_h"
+    elif "zepp_slp_total_h" in merged.columns:
+        sleep_col = "zepp_slp_total_h"
+    
+    if sleep_col and len(merged) > 0:
+        qc["coverage_sleep"] = round(100.0 * merged[sleep_col].notna().sum() / len(merged), 2)
+    
+    return qc
+
+
+def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
+    """Orchestrate a minimal join of per-domain features into canonical joined CSV.
+
+    Current behaviour (P8+):
+    - Look for per-domain enriched files under <snapshot_dir>/enriched/prejoin/:
+      - enriched/prejoin/<domain>/<vendor>/<variant>/enriched_<domain>.csv
+    - If prejudoin enrichment files are not found, fallback to:
+      - features/<domain>/<vendor>/<variant>/features_daily.csv
+    - If those are not found, fallback to legacy interim joined/ per-domain files:
+      - features_cardiovascular.csv, features_activity.csv
+    - Each domain may have multiple vendor/variant combinations (e.g., apple/inapp, zepp/cloud)
+    - All vendor/variant files for a domain are read and concatenated before joining
+    - If both cardio and activity are present, concat them and merge
+      into the canonical joined features CSV.
+    - Use `ensure_joined_snapshot` and `write_joined_features` from
+      `lib.io_guards` to resolve and write the canonical joined path.
+
+    Returns 0 on success, 2 if no domain features found to merge.
+    """
+    snap = Path(snapshot_dir)
+    print(f"INFO: join_run start snapshot_dir={snap} dry_run={dry_run}")
+
+    jdir = snap / "joined"
+
+    # Collect ALL vendor/variant combinations for each domain (not just one)
+    domains_data: dict[str, list[tuple[Path, str, str]]] = {
+        "cardio": [],
+        "activity": [],
+    }
+    
+    for d in ["cardio", "activity"]:
+        # Priority 1: enriched/prejoin
+        enriched_dir = snap / "enriched" / "prejoin" / d
+        if enriched_dir.exists():
+            # Find all enriched_<domain>.csv files recursively
+            for enriched_file in enriched_dir.rglob(f"enriched_{d}.csv"):
+                domains_data[d].append((enriched_file, "enriched_prejoin"))
+        
+        # Priority 2: features/<domain>
+        if not domains_data[d]:  # Only if no enriched found
+            features_dir = snap / "features" / d
+            if features_dir.exists():
+                for features_file in features_dir.rglob("features_daily.csv"):
+                    domains_data[d].append((features_file, "canonical_features"))
+        
+        # Priority 3: legacy fallback joined/<domain>
+        if not domains_data[d]:  # Only if no enriched or features found
+            if d == "cardio":
+                legacy_file = jdir / "features_cardiovascular.csv"
+            else:
+                legacy_file = jdir / "features_activity.csv"
+            
+            if legacy_file.exists():
+                domains_data[d].append((legacy_file, "legacy_joined"))
+    
+    # Flatten: list of (domain, path, source_kind)
+    found: list[tuple[str, Path, str]] = []
+    for d, files in domains_data.items():
+        for fpath, source_kind in files:
+            found.append((d, fpath, source_kind))
+    
+    if not found:
+        # No per-domain files discovered
+        if dry_run:
+            print("[dry-run] nothing to join")
+            print("INFO: no per-domain feature files found (cardio/activity) -> nothing to join")
+            return 0
+        print("INFO: no per-domain feature files found (cardio/activity) -> nothing to join")
+        return 2
+
+    print("INFO: discovered domain feature files:")
+    for name, p, kind in found:
+        try:
+            df = pd.read_csv(p, parse_dates=["date"]) if p.exists() else pd.DataFrame()
+            print(f"  - {name}: {p.relative_to(snap)} rows={len(df)} (source={kind})")
+        except Exception:
+            print(f"  - {name}: {p.relative_to(snap)} (could not read) (source={kind})")
+
+    if dry_run:
+        out_path = ensure_joined_snapshot(snap)
+        print(f"DRY RUN: would write joined output -> {out_path}")
+        print("INFO: join_run end (dry-run)")
+        return 0
+
+    # read dataframes and group by domain
+    domain_dfs: dict[str, list[pd.DataFrame]] = {"cardio": [], "activity": []}
+    for name, p, kind in found:
+        try:
+            df = pd.read_csv(p, parse_dates=["date"]) if p.exists() else pd.DataFrame()
+            if not df.empty:
+                domain_dfs[name].append(df)
+        except Exception:
+            pass
+
+    # For each domain, concat all vendor/variant files and apply coalescence
+    parts = []
+    used_prejoin: dict[str, bool] = {}  # Track if prejoin was used per domain
+    
+    for domain_name in ["cardio", "activity"]:
+        if not domain_dfs[domain_name]:
+            continue
+        
+        # Concat all vendor/variant files for this domain
+        domain_df = pd.concat(domain_dfs[domain_name], ignore_index=True, sort=False)
+        domain_df = domain_df.copy()
+        
+        # Track if we used prejoin enrichment for this domain
+        # (infer from presence of _7d or _zscore columns)
+        used_prejoin[domain_name] = any(c.endswith(("_7d", "_zscore")) for c in domain_df.columns)
+        
+        # Apply coalescence for duplicate vendor/variant combinations
+        if domain_name == "cardio":
+            # hr_mean: coalesce(apple_hr_mean, zepp_hr_mean)
+            if "apple_hr_mean" in domain_df.columns and "zepp_hr_mean" in domain_df.columns:
+                domain_df["hr_mean"] = domain_df["apple_hr_mean"].fillna(domain_df["zepp_hr_mean"])
+            
+            # hr_std: coalesce(apple_hr_std, zepp_hr_std)
+            if "apple_hr_std" in domain_df.columns and "zepp_hr_std" in domain_df.columns:
+                domain_df["hr_std"] = domain_df["apple_hr_std"].fillna(domain_df["zepp_hr_std"])
+            
+            # n_hr: coalesce(apple_n_hr, zepp_n_hr)
+            if "apple_n_hr" in domain_df.columns and "zepp_n_hr" in domain_df.columns:
+                domain_df["n_hr"] = domain_df["apple_n_hr"].fillna(domain_df["zepp_n_hr"])
+        
+        elif domain_name == "activity":
+            # act_steps: coalesce(apple_steps, zepp_steps)
+            if "apple_steps" in domain_df.columns and "zepp_steps" in domain_df.columns:
+                domain_df["act_steps"] = domain_df["apple_steps"].fillna(domain_df["zepp_steps"])
+            
+            # act_active_min: coalesce(apple_exercise_min, zepp_exercise_min)
+            if "apple_exercise_min" in domain_df.columns and "zepp_exercise_min" in domain_df.columns:
+                domain_df["act_active_min"] = domain_df["apple_exercise_min"].fillna(domain_df["zepp_exercise_min"])
+
+        
+        # Add provenance columns
+        domain_df["source_domain"] = domain_name
+        parts.append(domain_df)
+
+    if not parts:
+        print("INFO: no readable domain dataframes to merge")
+        return 2
+
+    # concat per-domain rows (provenance preserved)
+    concat_df = pd.concat(parts, ignore_index=True, sort=False)
+
+    # Keep date as datetime64 until write (avoid mixed-type issues)
+    if "date" in concat_df.columns:
+        try:
+            concat_df["date"] = pd.to_datetime(concat_df["date"])
+        except Exception:
+            pass
+
+    # Merge into canonical joined features by outer merge on date
+    base_path = ensure_joined_snapshot(snap)
+    if base_path.exists():
+        try:
+            base = pd.read_csv(base_path, parse_dates=["date"]) if base_path.exists() else pd.DataFrame()
+        except Exception:
+            base = pd.DataFrame()
+    else:
+        base = pd.DataFrame()
+
+    # Merge base and concat_df; concat_df columns may overlap with base; prefer concat_df values (enriched)
+    merged = base.merge(concat_df.drop(columns=[c for c in ["source_domain"] if c in concat_df.columns], errors="ignore"), on="date", how="outer", suffixes=("_x", "_y")) if not base.empty else concat_df.copy()
+
+    # Resolve suffix conflicts: prefer _y (enriched) over _x (base)
+    if not base.empty:
+        for col in merged.columns:
+            if col.endswith("_x"):
+                col_y = col[:-2] + "_y"
+                if col_y in merged.columns:
+                    merged[col[:-2]] = merged[col_y].fillna(merged[col])
+                    merged = merged.drop(columns=[col, col_y], errors="ignore")
+
+    # finalize: sort and reset index, keep datetime64 until write
+    if "date" in merged.columns:
+        try:
+            merged = merged.sort_values("date").reset_index(drop=True)
+        except Exception:
+            pass
+
+    # Generate QC report
+    qc_record = _generate_join_qc(merged, snap, used_prejoin)
+
+    # write using canonical helper (this creates backup named joined_features_daily_prev.csv)
+    try:
+        # Convert datetime64 to date string before write
+        if "date" in merged.columns:
+            try:
+                merged["date"] = pd.to_datetime(merged["date"]).dt.strftime("%Y-%m-%d")
+            except Exception:
+                pass
+        
+        write_joined_features(merged, snap, dry_run=False)
+        print(f"INFO: wrote joined features -> {ensure_joined_snapshot(snap)}")
+    except Exception as e:
+        print(f"ERROR: failed to write joined features: {e}")
+        return 1
+
+    # Write QC report
+    try:
+        qc_dir = snap / "qc"
+        qc_dir.mkdir(parents=True, exist_ok=True)
+        qc_path = qc_dir / "join_qc.csv"
+        
+        qc_df = pd.DataFrame([qc_record])
+        qc_df.to_csv(qc_path, index=False)
+        print(f"INFO: wrote QC report -> {qc_path}")
+    except Exception as e:
+        print(f"WARNING: failed to write QC report: {e}")
+
+    print("INFO: join_run end")
+    return 0
+
+
 # ----------------------------------------------------------------------
 # CLI
 # ----------------------------------------------------------------------
@@ -2798,6 +3468,36 @@ def main():
         help="Do not write outputs; just report summary",
     )
 
+    # join
+    p_join = sub.add_parser("join", help="Join per-domain features into canonical joined CSV")
+    g_join = p_join.add_mutually_exclusive_group(required=True)
+    g_join.add_argument("--snapshot_dir", help=HELP_SNAPSHOT_DIR)
+    g_join.add_argument("--participant", help=HELP_PARTICIPANT)
+    p_join.add_argument("--snapshot", help=HELP_SNAPSHOT_ID)
+    p_join.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Dry-run: print discovered domain features and output paths; do not write",
+    )
+
+    # enrich-prejoin (pre-join enrichment)
+    p_prejoin = sub.add_parser("enrich-prejoin", help="Apply per-domain enrichment before join")
+    g_prejoin = p_prejoin.add_mutually_exclusive_group(required=True)
+    g_prejoin.add_argument("--snapshot_dir", help=HELP_SNAPSHOT_DIR)
+    g_prejoin.add_argument("--participant", help=HELP_PARTICIPANT)
+    p_prejoin.add_argument("--snapshot", help=HELP_SNAPSHOT_ID)
+    p_prejoin.add_argument(
+        "--max-records",
+        type=int,
+        default=None,
+        help="Limit records per vendor/variant (for testing)",
+    )
+    p_prejoin.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Dry-run: print what would be enriched; do not write",
+    )
+
     # aggregate
     p_agg = sub.add_parser(
         "aggregate",
@@ -2858,7 +3558,7 @@ def main():
         # Resolve snapshot directory and CDA path
         part = args.participant
         snap = args.snapshot
-        snap_dir = Path(f"data/etl/{part}/snapshots/{snap}")
+        snap_dir = etl_snapshot_root(part, snap)
         cda_path = (
             snap_dir / "extracted" / "apple" / "apple_health_export" / "export_cda.xml"
         )
@@ -2946,6 +3646,15 @@ def main():
 
     if args.cmd == "extract":
         pid, snap = args.participant, args.snapshot
+        # TEMP DEBUG: print incoming args and environment to help troubleshoot discovery
+        try:
+            print("DEBUG-TEMP: extract called with participant=", pid, "snapshot=", snap)
+            print("DEBUG-TEMP: flags: auto_zip=", getattr(args, 'auto_zip', False), "apple_zip=", getattr(args, 'apple_zip', None), "zepp_zip=", getattr(args, 'zepp_zip', None), "dry_run=", getattr(args, 'dry_run', False))
+            print("DEBUG-TEMP: PWD=", os.getcwd())
+            print("DEBUG-TEMP: RAW_ARCHIVE=", RAW_ARCHIVE)
+            print("DEBUG-TEMP: ETL_ROOT=", ETL_ROOT)
+        except Exception:
+            pass
         # If auto-zip discovery enabled, search under data/raw/<participant> only
         if args.auto_zip or args.apple_zip or args.zepp_zip:
             base_dir = RAW_ARCHIVE / pid
@@ -3070,11 +3779,11 @@ def main():
                 print("DRY RUN: planned actions:")
                 if apple_candidate:
                     print(
-                        f" - apple: would extract {apple_candidate} -> {ETL_ROOT/ pid / 'snapshots' / canon_snap_id(snap) / 'extracted' / 'apple'}"
+                        f" - apple: would extract {apple_candidate} -> {etl_snapshot_root(pid, canon_snap_id(snap)) / 'extracted' / 'apple'}"
                     )
                 if zepp_candidate:
                     print(
-                        f" - zepp: would extract {zepp_candidate} -> {ETL_ROOT/ pid / 'snapshots' / canon_snap_id(snap) / 'extracted' / 'zepp'}"
+                        f" - zepp: would extract {zepp_candidate} -> {etl_snapshot_root(pid, canon_snap_id(snap)) / 'extracted' / 'zepp'}"
                     )
                 return 0
 
@@ -3084,9 +3793,7 @@ def main():
             for device, cand in (("apple", apple_candidate), ("zepp", zepp_candidate)):
                 if not cand:
                     continue
-                target_dir = (
-                    ETL_ROOT / pid / "snapshots" / snap_iso / "extracted" / device
-                )
+                target_dir = etl_snapshot_root(pid, snap_iso) / "extracted" / device
                 sha_file = target_dir / f"{device}_zip.sha256"
                 cur_hash = sha256_path(cand)
                 prev_hash = read_sha256(sha_file)
@@ -3182,7 +3889,7 @@ def main():
                 xmls = list(extracted_apple_dir.rglob("export.xml"))
                 if xmls:
                     xml_path = xmls[0]
-                    outdir = ETL_ROOT / pid / "snapshots" / snap_iso
+                    outdir = etl_snapshot_root(pid, snap_iso)
                     # ensure outdir exists
                     outdir.mkdir(parents=True, exist_ok=True)
                     with Timer(f"extract (parse export.xml) [{pid}/{snap}]"):
@@ -3291,31 +3998,68 @@ def main():
                         cda_paths = list(extracted_apple_dir.rglob("export_cda.xml"))
                         if cda_paths:
                             cda = cda_paths[0]
-                            # build tz selector based on cutover
-                            y, m, d = map(int, args.cutover.split("-"))
-                            tz_sel = make_tz_selector(
-                                date(y, m, d), args.tz_before, args.tz_after
-                            )
-                            som_df = _parse_apple_cda_som(cda, tz_sel)
-                            # apply content filter to som_df before writing
-                            df_som_f = _filter_som_candidates(som_df)
-                            snapshot_dir = Path(outdir)
-                            out_som = (
-                                snapshot_dir / "normalized" / "apple_state_of_mind.csv"
-                            )
-                            out_som.parent.mkdir(parents=True, exist_ok=True)
-                            if df_som_f.empty:
-                                print(
-                                    "INFO: SoM candidates found but none passed filters; skipping write."
-                                )
-                            else:
-                                written_flag = _write_if_changed_df(df_som_f, out_som)
-                                if written_flag:
-                                    print(f"INFO: wrote apple SoM -> {out_som}")
+                            # determine home_tz from participant profile if present
+                            home_tz = None
+                            try:
+                                prof_path = Path("data") / "config" / f"{pid}_profile.json"
+                                if prof_path.exists():
+                                    prof = json.loads(prof_path.read_text(encoding="utf-8"))
+                                    home_tz = prof.get("home_tz")
+                            except Exception:
+                                home_tz = None
+
+                            # call the CDA probe in a non-fatal way and write QC
+                            import logging
+
+                            logger = logging.getLogger("etl.extract")
+                            try:
+                                from domains.cda import parse_cda
+
+                                summary = parse_cda.cda_probe(cda, home_tz=home_tz)
+                                n_obs = int(summary.get("n_observation", 0) or 0)
+                                snapshot_root = etl_snapshot_root(pid, snap_iso)
+                                # enrich summary with metadata
+                                enriched = dict(summary or {})
+                                enriched["snapshot_dir"] = str(snapshot_root)
+                                enriched["source_path"] = str(cda.resolve())
+                                enriched["home_tz"] = home_tz or "unknown"
+                                enriched["n_observation"] = n_obs
+                                enriched["n_section"] = int(enriched.get("n_section", 0) or 0)
+                                enriched["codes"] = enriched.get("codes", {}) or {}
+                                if n_obs > 0:
+                                    enriched["status"] = "ok"
+                                    logger.info(
+                                        "CDA parsed: %s (obs=%d) [snapshot=%s]",
+                                        str(cda.resolve()),
+                                        n_obs,
+                                        str(snapshot_root),
+                                    )
                                 else:
-                                    print(f"[SKIP] apple SoM unchanged -> {out_som}")
+                                    enriched["status"] = "empty"
+                                    logger.warning(
+                                        "CDA parsed but empty: %s [snapshot=%s]",
+                                        str(cda.resolve()),
+                                        str(snapshot_root),
+                                    )
+                                parse_cda.write_cda_qc(snapshot_root, enriched)
+                            except Exception as e:
+                                # write minimal QC summary on failure
+                                try:
+                                    from domains.cda import parse_cda
+
+                                    snapshot_root = etl_snapshot_root(pid, snap_iso)
+                                    summary = {"error": f"{type(e).__name__}: {e}", "n_section": 0, "n_observation": 0, "codes": {}}
+                                    try:
+                                        parse_cda.write_cda_qc(snapshot_root, summary)
+                                    except Exception:
+                                        pass
+                                except Exception:
+                                    pass
+                                logger.warning(f"CDA parse failed: {cda.name} ({type(e).__name__}: {e})")
                     except Exception as _e:
-                        print(f"WARNING: apple SoM parsing failed (non-fatal): {_e}")
+                        import logging
+
+                        logging.getLogger("etl.extract").warning(f"apple SoM parsing failed (non-fatal): {_e}")
 
             return 0
     if args.cmd == "cardio":
@@ -3415,7 +4159,7 @@ def main():
         # Otherwise run the full labels merger (Apple SoM + Zepp Emotion)
         # Prefer the ETL snapshot path (data/etl/...) as the canonical SNAP; pass it to the labels runner.
         etl_snapdir = (
-            ETL_ROOT / args.participant / "snapshots" / canon_snap_id(args.snapshot)
+            etl_snapshot_root(args.participant, canon_snap_id(args.snapshot))
             if args.participant and args.snapshot
             else snapdir
         )
@@ -3484,19 +4228,13 @@ def main():
         else:
             # explicit snapshot provided: look for export.xml under raw or fallback into data/etl extracted
             xml = find_export_xml(pid, snap)
-            # Fallback: some runs place the extracted Apple export under data/etl/<pid>/snapshots/<snap>/extracted/apple
+            # Fallback: some historic runs placed the extracted Apple export under
+            # data/etl/<pid>/snapshots/<snap>/extracted/apple. Prefer the canonical
+            # etl_snapshot_root (data/etl/<pid>/<snap>/...) but still tolerate the
+            # old layout via migrate_from_data_ai_if_present when appropriate.
             if xml is None:
-                alt_path = (
-                    ETL_ROOT
-                    / pid
-                    / "snapshots"
-                    / canon_snap_id(snap)
-                    / "extracted"
-                    / "apple"
-                )
-                xml_candidates = (
-                    list(alt_path.rglob("export.xml")) if alt_path.exists() else []
-                )
+                alt_path = etl_snapshot_root(pid, canon_snap_id(snap)) / "extracted" / "apple"
+                xml_candidates = list(alt_path.rglob("export.xml")) if alt_path.exists() else []
                 xml = xml_candidates[0] if xml_candidates else None
             if xml is None:
                 print("WARNING: export.xml não encontrado para:", pid, snap)
@@ -3522,8 +4260,42 @@ def main():
         print(res)
         return 0
 
+    if args.cmd == "join":
+        # determine snapshot_dir
+        if getattr(args, "snapshot_dir", None):
+            snap_dir = Path(args.snapshot_dir)
+        else:
+            pid = args.participant
+            snap = args.snapshot or "auto"
+            snap = canon_snap_id(snap) if snap != "auto" else snap
+            if snap == "auto":
+                snap = resolve_snapshot(snap, pid)
+            snap_dir = etl_snapshot_root(pid, snap)
+
+        rc = join_run(snap_dir, dry_run=bool(getattr(args, "dry_run", False)))
+        return int(rc)
+
+    if args.cmd == "enrich-prejoin":
+        # determine snapshot_dir
+        if getattr(args, "snapshot_dir", None):
+            snap_dir = Path(args.snapshot_dir)
+        else:
+            pid = args.participant
+            snap = args.snapshot or "auto"
+            snap = canon_snap_id(snap) if snap != "auto" else snap
+            if snap == "auto":
+                snap = resolve_snapshot(snap, pid)
+            snap_dir = etl_snapshot_root(pid, snap)
+
+        max_records = getattr(args, "max_records", None)
+        dry_run = bool(getattr(args, "dry_run", False))
+
+        rc = enrich_prejoin_run(snap_dir, dry_run=dry_run, max_records=max_records)
+        return int(rc)
+
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
+

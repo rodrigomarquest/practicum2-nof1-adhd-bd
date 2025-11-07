@@ -9,6 +9,7 @@
 # ================================
 
 .RECIPEPREFIX := >
+SHELL := /usr/bin/env bash
 
 # -------- Environment --------
 # Auto-detect venv Python (Windows vs POSIX); fallback to "python" if venv not found.
@@ -18,10 +19,25 @@ VENV_DIR := .venv
 PID ?= P000001
 SNAPSHOT ?= auto
 ETL_CMD ?= full
+DRY_RUN ?= 0
+REPO_ROOT ?= .
+ETL_TQDM ?= 0
+export ETL_TQDM
+# Compute platform path separator via the chosen Python executable and build a
+# PYTHONPATH value that works on both POSIX (:) and Windows (;) hosts. This
+# ensures child processes can import `src` when Make spawns a new Python.
+PATHSEP := $(shell $(PYTHON) -c "import os; print(os.pathsep)")
+PYTHONPATH_ETL := $(REPO_ROOT)$(PATHSEP)$(REPO_ROOT)/src
 # Fixed defaults requested
 CUTOVER ?= 2024-03-11
 TZ_BEFORE ?= America/Sao_Paulo
 TZ_AFTER  ?= Europe/Dublin
+
+ifeq ($(DRY_RUN),1)
+DRY_FLAG := --dry-run
+else
+DRY_FLAG :=
+endif
 
 # -------- Installation (centralized requirements/) --------
 .PHONY: install-base install-dev install-kaggle install-local
@@ -79,22 +95,152 @@ clean-all: clean clean-data clean-provenance
 # -------- Core workflows (ETL, labels, QC, packaging) --------
 .PHONY: etl labels qc pack-kaggle
 
+# Defaults (mantém compatibilidade)
+PID ?= P000001
+SNAPSHOT ?= auto
+DRY_RUN ?= 0
+REPO_ROOT ?= .
+
+
+# =========================
+# ETL namespace (v4.1.0)
+# =========================
+
+.PHONY: etl
 etl:
-> echo ">>> etl: running src.etl_pipeline"
-> PYTHONPATH="$$PWD" $(PYTHON) -m src.etl_pipeline $(ETL_CMD) \
->   --participant $(PID) \
+>	@echo "[ETL] namespace loaded (use: make etl extract|activity|join|enrich|full)"
+
+# Vars padrão (não sobrescreva se já existirem no arquivo)
+PID        ?= P000001
+SNAPSHOT   ?= auto
+DRY_RUN    ?= 1
+REPO_ROOT  ?= .
+MAX_RECORDS ?=
+ZEPP_ZIP_PASSWORD ?=
+
+# -------- extract --------
+.PHONY: extract
+extract:
+>	@echo "[ETL] extract PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) ZEPP_ZIP_PASSWORD=$(if $(ZEPP_ZIP_PASSWORD),[provided],)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m cli.etl_runner extract \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --auto-zip \
+>	  --dry-run $(DRY_RUN) \
+>	  $(if $(ZEPP_ZIP_PASSWORD),--zepp-zip-password $(ZEPP_ZIP_PASSWORD),)
+
+# -------- activity (seed per-domain) --------
+.PHONY: activity
+activity:
+>	@echo "[ETL] activity (seed) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m domains.activity.activity_from_extracted \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN) \
+>	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
+
+# -------- join --------
+.PHONY: join
+join:
+>	@echo "[ETL] join PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m cli.etl_runner join \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN)
+
+# -------- enrich-prejoin (per-domain) --------
+.PHONY: enrich-prejoin
+enrich-prejoin:
+>	@echo "[ETL] enrich-prejoin (seed) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m domains.enriched.pre.prejoin_enricher \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN) \
+>	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
+
+# -------- enrich-postjoin (cross-domain after join) --------
+.PHONY: enrich-postjoin
+enrich-postjoin:
+>	@echo "[ETL] enrich-postjoin (global) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m domains.enriched.post.postjoin_enricher \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN) \
+>	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
+
+# -------- aggregate (minimal) --------
+.PHONY: aggregate
+aggregate:
+> @echo "[ETL] aggregate PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+> PYTHONPATH=src \
+> $(PYTHON) -m src.tools.aggregate_joined \
+>   --pid $(PID) \
 >   --snapshot $(SNAPSHOT) \
->   --cutover $(CUTOVER) \
->   --tz_before $(TZ_BEFORE) \
->   --tz_after $(TZ_AFTER)
+>   --dry-run $(DRY_RUN)
+
+# -------- enrich --------
+.PHONY: enrich
+enrich:
+>	@echo "[ETL] enrich PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m cli.etl_runner enrich \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN)
+
+# -------- cardio --------
+.PHONY: cardio
+cardio:
+>	@echo "[ETL] cardio PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m domains.cardiovascular.cardio_from_extracted \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN) \
+>	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
+
+# -------- sleep --------
+.PHONY: sleep
+sleep:
+>	@echo "[ETL] sleep PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
+>	PYTHONPATH=src \
+>	$(PYTHON) -m domains.sleep.sleep_from_extracted \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT) \
+>	  --dry-run $(DRY_RUN) \
+>	  --allow-empty 1 \
+>	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
+
+# -------- truncate-export (para testes com poucos registros) --------
+.PHONY: truncate-export
+truncate-export:
+>	@if [ -z "$(MAX_RECORDS)" ]; then echo "ERROR: MAX_RECORDS not set (ex: make truncate-export MAX_RECORDS=20)"; exit 1; fi
+>	@echo "[ETL] truncate-export: limiting export.xml to $(MAX_RECORDS) records"
+>	@EXPORT_XML="data/etl/$(PID)/$(SNAPSHOT)/extracted/apple/inapp/apple_health_export/export.xml"; \
+>	if [ ! -f "$$EXPORT_XML" ]; then echo "ERROR: $$EXPORT_XML not found"; exit 1; fi; \
+>	$(PYTHON) scripts/truncate_export_xml.py "$$EXPORT_XML" "$$EXPORT_XML.limited" $(MAX_RECORDS) && \
+>	mv "$$EXPORT_XML" "$$EXPORT_XML.backup" && \
+>	mv "$$EXPORT_XML.limited" "$$EXPORT_XML" && \
+>	echo "[OK] export.xml truncated to $(MAX_RECORDS) records"
+
+# -------- full --------
+.PHONY: full
+full: extract activity cardio sleep join enrich
+>	@echo "[ETL] FULL completed for PID=$(PID) SNAPSHOT=$(SNAPSHOT) (DRY_RUN=$(DRY_RUN))"
 
 # Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
 labels:
-> @echo ">>> labels: running src.make_labels for $(PID) @ $(SNAPSHOT)"
+labels:
+> @echo ">>> labels: running src.make_labels for $(PID)@$(SNAPSHOT)"
 > @PYTHONPATH="$$PWD" $(PYTHON) -m src.make_labels \
 >   --rules config/label_rules.yaml \
->   --in data/etl/$(PID)/snapshots/$(SNAPSHOT)/joined/features_daily.csv \
->   --out data/etl/$(PID)/snapshots/$(SNAPSHOT)/joined/features_daily_labeled.csv
+>   --in data/etl/$(PID)/$(SNAPSHOT)/joined/joined_features_daily.csv \
+>   --out data/etl/$(PID)/$(SNAPSHOT)/joined/features_daily_labeled.csv
 
 
 
@@ -130,7 +276,7 @@ release-summary:
 	git commit -m "chore(release): add release notes for v$(RELEASE_VERSION)" || true; \
 	git push -u origin $$BR || true; \
 	mkdir -p dist; \
-	PR_BODY=dist/release_pr_body_$(RELEASE_VERSION).md; \
+	PR_BODY=dist/extra$(RELEASE_VERSION).md; \
 	cat docs/release_notes/release_notes_v$(RELEASE_VERSION).md > $$PR_BODY; \
 	if [ -n "$(ISSUES)" ]; then \
 	  for i in $(ISSUES); do echo "\nCloses #$$i" >> $$PR_BODY; done; \

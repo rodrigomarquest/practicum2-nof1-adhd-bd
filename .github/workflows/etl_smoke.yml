@@ -78,7 +78,7 @@ jobs:
         id: check_outputs
         run: |
           set -euo pipefail
-          base=data/etl/P000001/snapshots/2025-09-29/processed/apple
+          base=data/etl/P000001/2025-09-29/processed/apple
           files=("health_hr_daily.csv" "health_hrv_sdnn_daily.csv" "health_hrv_rmssd_daily.csv" "health_sleep_daily.csv")
           missing=0
           for f in "${files[@]}"; do
@@ -98,11 +98,11 @@ jobs:
         with:
           name: etl-smoke-artifacts
           path: |
-            data/etl/P000001/snapshots/2025-09-29/processed/**
-            data/etl/P000001/snapshots/2025-09-29/normalized/**
-            data/etl/P000001/snapshots/2025-09-29/joined/**
-            data/etl/P000001/snapshots/2025-09-29/**/manifests/**
-            data/ai/P000001/snapshots/2025-09-29/**
+            data/etl/P000001/2025-09-29/processed/**
+            data/etl/P000001/2025-09-29/normalized/**
+            data/etl/P000001/2025-09-29/joined/*
+            data/etl/P000001/2025-09-29/**/manifests/**
+            data/ai/P000001/2025-09-29/**       
             tests/fixtures/a6_a7_small/**
 
       - name: Success notice

@@ -17,10 +17,15 @@ def load_csv(path):
 
 
 def write_csv(df: pd.DataFrame, path):
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(p, index=False)
-    return p
+    try:
+        from lib.io_guards import write_csv as _write_csv  # type: ignore
+        _write_csv(df, Path(path))
+        return Path(path)
+    except Exception:
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(p, index=False)
+        return p
 
 
 def zscore_by_segment(df: pd.DataFrame, cols, segment_col="segment_id"):

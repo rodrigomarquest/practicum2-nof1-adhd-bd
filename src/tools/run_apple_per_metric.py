@@ -19,6 +19,10 @@ def canon_snap(s: str) -> str:
 
 def find_xml(pid: str, snap_iso: str):
     cands = [
+        # canonical ETL layout
+        etl_snapshot_root(pid, snap_iso) / "export.xml",
+        etl_snapshot_root(pid, snap_iso) / "extracted" / "apple" / "export.xml",
+        # legacy ETL_DIR layout
         RAW / pid / "snapshots" / snap_iso / "export.xml",
         RAW / pid / "snapshots" / snap_iso.replace("-", "") / "export.xml",
         RAW / pid / snap_iso / "export.xml",

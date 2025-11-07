@@ -45,7 +45,7 @@ def _load_notebook_module():
             if not hasattr(_mod, "INPUT_CSV"):
                 # find any joined/features_daily.csv under data/etl and pick the first
                 candidates = list(
-                    Path("data").glob("etl/*/snapshots/*/joined/features_daily.csv")
+                    Path("data").glob("etl/*/*/joined/features_daily.csv")
                 )
                 if candidates:
                     setattr(_mod, "INPUT_CSV", str(candidates[0]))

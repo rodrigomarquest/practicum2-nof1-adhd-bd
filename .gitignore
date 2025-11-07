@@ -112,3 +112,6 @@ tmp/
 notebooks/**/*
 !notebooks/*.ipynb
 !notebooks/README.md
+archive/
+../archive_legacy/
+archive/

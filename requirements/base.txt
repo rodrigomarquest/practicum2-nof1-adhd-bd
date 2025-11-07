@@ -3,3 +3,5 @@ numpy>=1.26
 pyyaml>=6.0
 scipy>=1.11
 matplotlib>=3.8
+pyzipper>=0.3.6
+lxml>=4.9.0

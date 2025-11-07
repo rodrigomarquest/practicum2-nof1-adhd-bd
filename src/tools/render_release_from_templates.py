@@ -163,7 +163,9 @@ def main() -> int:
     p.add_argument("--out", default=None)
     args = p.parse_args()
 
-    now = datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    # Use timezone-aware UTC datetime to avoid DeprecationWarning for utcnow()
+    # Format as ISO8601 and replace +00:00 with Z for compact UTC representation
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
     # compute last_tag: if explicit provided use it; otherwise pick the newest tag
     # that is not the target tag (args.tag). This avoids using the target tag as base

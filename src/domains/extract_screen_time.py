@@ -6,6 +6,16 @@ from dateutil import tz
 import pandas as pd
 import numpy as np
 
+try:
+    from lib.io_guards import write_csv  # type: ignore
+except Exception:
+    def write_csv(df, path, dry_run=False, backup_name=None):
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(p.suffix + ".tmp")
+        df.to_csv(tmp, index=False)
+        tmp.replace(p)
+
 
 def _normalize_dt_with_cutover(
     dt_str: str | None, cutover_str: str, tz_before: str, tz_after: str
@@ -65,7 +75,7 @@ def extract_apple_screen_time(
     output_csv_path.parent.mkdir(parents=True, exist_ok=True)
     if not agg_seconds:
         df_empty = pd.DataFrame(columns=["date", "screen_time_min", "source"])
-        df_empty.to_csv(output_csv_path, index=False)
+        write_csv(df_empty, output_csv_path)
         return df_empty
 
     df_usage = pd.DataFrame(
@@ -76,5 +86,5 @@ def extract_apple_screen_time(
         }
     ).sort_values("date")
     df_usage["source"] = "AppleHealth"
-    df_usage.to_csv(output_csv_path, index=False)
+    write_csv(df_usage, output_csv_path)
     return df_usage

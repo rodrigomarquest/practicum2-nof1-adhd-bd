@@ -7,6 +7,11 @@
 
 ---
 
+## Legacy Archive (moved outside repo)
+
+All old scripts and backups previously under `/archive` were moved to `../archive_legacy/` in v4.1.0+.
+These are preserved only for forensic or educational reference and are no longer scanned by tools.
+
 ## 1. 📁 Repository Structure (v4 Architecture)
 
 practicum2-nof1-adhd-bd/
@@ -94,14 +99,14 @@ The `Makefile` is simplified and grouped by purpose.
 ## 3. 🧩 Environment Management
 
 - Always create or refresh your virtual environment with:
- - Always create or refresh your virtual environment with:
+- Always create or refresh your virtual environment with:
 
-   ```bash
-   python -m venv .venv
-   make install-dev
-   ```
+  ```bash
+  python -m venv .venv
+  make install-dev
+  ```
 
-   Use `requirements/base.txt` for reproducibility across machines.
+  Use `requirements/base.txt` for reproducibility across machines.
 
 The Kaggle runtime uses requirements/kaggle.txt — keep it lightweight (no system-level deps).
 
@@ -128,9 +133,9 @@ v4.0.2 → environment centralization + developer documentation.
    Used to keep local data and transient files out of the repository.
 
 Category Example Rationale
-Raw data data/etl/, data/ai/, decrypted_output/ Contains personal or high-volume data.
+Raw data data/etl/, data/ai/, decrypted*output/ Contains personal or high-volume data.
 Cache & logs logs/, processed/, **pycache**/ Reproducible artifacts.
-Models _.h5, _.tflite, \*.pkl Large binary outputs, not source.
+Models *.h5, \_.tflite, \*.pkl Large binary outputs, not source.
 IDE / OS noise .vscode/, .DS_Store, .venv/ Environment-specific.
 
 “If it can be regenerated, it doesn’t belong in Git.”
@@ -217,4 +222,3 @@ Validation:
 1. Open Issue #2 manually.
 2. Run the command above and confirm the PR targets `main` with the PR body including `Closes #1` and `Closes #2`.
 3. After merge, verify GitHub Actions created the release and closed the issues.
-

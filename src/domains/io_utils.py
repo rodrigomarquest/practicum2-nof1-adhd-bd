@@ -8,6 +8,22 @@ import fnmatch
 from pathlib import Path, PurePosixPath
 import pandas as pd
 import pyzipper
+# Prefer canonical helpers from src.lib
+try:
+    from lib.io_guards import write_csv, atomic_backup_write  # type: ignore
+    from lib.df_utils import zscore, rolling_cv, safe_merge_on_date, ensure_columns  # type: ignore
+except Exception:
+    # best-effort fallback to existing utilities if lib isn't available
+    try:
+        from src.lib.io_guards import write_csv, atomic_backup_write  # type: ignore
+        from src.lib.df_utils import zscore, rolling_cv, safe_merge_on_date, ensure_columns  # type: ignore
+    except Exception:
+        write_csv = None
+        atomic_backup_write = None
+        zscore = None
+        rolling_cv = None
+        safe_merge_on_date = None
+        ensure_columns = None
 
 
 # ---------------- Exceptions ----------------

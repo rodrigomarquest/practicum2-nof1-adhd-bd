@@ -12,6 +12,17 @@ from pathlib import Path
 import pandas as pd
 from typing import Dict
 import importlib
+import os
+from tqdm import tqdm
+try:
+    from lib.io_guards import write_csv  # type: ignore
+except Exception:
+    def write_csv(df, path, dry_run=False, backup_name=None):
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(p.suffix + ".tmp")
+        df.to_csv(tmp, index=False)
+        tmp.replace(p)
 
 
 def export_per_metric(
@@ -20,8 +31,9 @@ def export_per_metric(
     cutover: str,
     tz_before: str,
     tz_after: str,
+    max_records: int = None,
 ) -> Dict[str, str]:
-    legacy = importlib.import_module("etl_pipeline_legacy")
+    legacy = importlib.import_module("etl_pipeline")
     out_pm = out_snapshot_dir / "per-metric"
     out_pm.mkdir(parents=True, exist_ok=True)
 
@@ -31,8 +43,11 @@ def export_per_metric(
     y, m, d = map(int, cutover.split("-"))
     tz_selector = legacy.make_tz_selector(date(y, m, d), tz_before, tz_after)
 
-    # Stream records
-    recs = legacy.iter_health_records(export_xml, tz_selector)
+    # Stream records with optional max_records limit
+    recs = legacy.iter_health_records(export_xml, tz_selector, max_records=max_records)
+    # progress control (disabled by default unless ETL_TQDM=1 and not CI)
+    disable = bool(os.getenv("ETL_TQDM", "0") == "0" or os.getenv("CI"))
+    recs_iter = tqdm(recs, desc=f"Parsing {export_xml.name}", disable=disable)
 
     hr_rows, hrv_rows, sleep_rows = [], [], []
     HR_ID = "HKQuantityTypeIdentifierHeartRate"
@@ -49,7 +64,7 @@ def export_per_metric(
         tz_name,
         src_ver,
         src_name,
-    ) in recs:
+    ) in recs_iter:
         if type_id == HR_ID and value is not None:
             hr_rows.append({"timestamp": s_local.isoformat(), "bpm": float(value)})
         elif type_id == HRV_ID and value is not None:
@@ -66,14 +81,14 @@ def export_per_metric(
     written = {}
     if hr_rows:
         p = out_pm / "apple_heart_rate.csv"
-        pd.DataFrame(hr_rows).sort_values("timestamp").to_csv(p, index=False)
+        write_csv(pd.DataFrame(hr_rows).sort_values("timestamp"), p)
         written["apple_heart_rate"] = str(p)
     if hrv_rows:
         p = out_pm / "apple_hrv_sdnn.csv"
-        pd.DataFrame(hrv_rows).sort_values("timestamp").to_csv(p, index=False)
+        write_csv(pd.DataFrame(hrv_rows).sort_values("timestamp"), p)
         written["apple_hrv_sdnn"] = str(p)
     if sleep_rows:
         p = out_pm / "apple_sleep_intervals.csv"
-        pd.DataFrame(sleep_rows).sort_values("start").to_csv(p, index=False)
+        write_csv(pd.DataFrame(sleep_rows).sort_values("start"), p)
         written["apple_sleep_intervals"] = str(p)
     return written
