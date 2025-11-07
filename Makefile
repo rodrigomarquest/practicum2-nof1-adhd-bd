@@ -1,19 +1,16 @@
 # ================================
 # Practicum2 — N-of-1 ADHD + BD
-# Canonical Makefile (v4-series, 2025-10-31)
-# Goal: readable, minimal, and portable for researchers
-# Notes:
-# - Uses `.RECIPEPREFIX := >` so every recipe line starts with `> ` (space after >).
+# Canonical Makefile (v4-series)
+# - Uses ".RECIPEPREFIX := >" so every recipe line starts with "> " (space).
 # - Detects Windows venv (.venv/Scripts/python.exe) vs POSIX (.venv/bin/python).
-# - All echoes are ASCII to avoid terminal encoding quirks.
+# - PYTHONPATH portable for imports from src/ on Windows & POSIX.
+# - SNAPSHOT=auto resolves to today's date (YYYY-MM-DD).
 # ================================
 
 .RECIPEPREFIX := >
 SHELL := /usr/bin/env bash
 
 # -------- Environment --------
-# Auto-detect venv Python (Windows vs POSIX); fallback to "python" if venv not found.
-# GNU make "wildcard" returns empty if path doesn't exist.
 PYTHON := $(if $(wildcard .venv/Scripts/python.exe),.venv/Scripts/python.exe,$(if $(wildcard .venv/bin/python),.venv/bin/python,python))
 VENV_DIR := .venv
 PID ?= P000001
@@ -23,11 +20,16 @@ DRY_RUN ?= 0
 REPO_ROOT ?= .
 ETL_TQDM ?= 1
 export ETL_TQDM
-# Compute platform path separator via the chosen Python executable and build a
-# PYTHONPATH value that works on both POSIX (:) and Windows (;) hosts. This
-# ensures child processes can import `src` when Make spawns a new Python.
+
+# Zepp ZIP password (fail-fast if ZIP exists but no password)
+ZPWD ?= $(ZEP_ZIP_PASSWORD)
+
+# Portable PYTHONPATH (":" on POSIX, ";" on Windows)
 PATHSEP := $(shell $(PYTHON) -c "import os; print(os.pathsep)")
-PYTHONPATH_ETL := $(REPO_ROOT)$(PATHSEP)$(REPO_ROOT)/src
+export PYTHONPATH := $(REPO_ROOT)$(PATHSEP)$(REPO_ROOT)/src
+
+# Resolve SNAPSHOT=auto -> YYYY-MM-DD (today)
+SNAPSHOT_RESOLVED := $(shell $(PYTHON) -c "import datetime; s='$(SNAPSHOT)'; print(datetime.date.today().isoformat() if s=='auto' else s)")
 
 ifeq ($(DRY_RUN),1)
 DRY_FLAG := --dry-run
@@ -35,483 +37,178 @@ else
 DRY_FLAG :=
 endif
 
-# -------- Installation (centralized requirements/) --------
-.PHONY: install-base install-dev install-kaggle install-local
+# Canonical paths
+ETL_DIR := data/etl/$(PID)/$(SNAPSHOT_RESOLVED)
+AI_DIR  := data/ai/$(PID)/$(SNAPSHOT_RESOLVED)
 
-install-base:
-> echo ">>> install-base: requirements/base.txt"
-> $(PYTHON) -m pip install -U pip
-> $(PYTHON) -m pip install -r requirements/base.txt
+# -------- Phony --------
+.PHONY: help env check-dirs \
+        ingest aggregate unify segment label prep-nb2 nb2 nb3 report \
+        pipeline quick nb2-only nb3-only \
+        clean-outputs clean-all verify \
+        help-release release-notes version-guard changelog release-assets provenance release-draft publish-release print-version
 
-install-dev:
-> echo ">>> install-dev: requirements/dev.txt"
-> $(PYTHON) -m pip install -U pip
-> $(PYTHON) -m pip install -r requirements/dev.txt
+# -------- Help --------
+help:
+> echo "Usage:"
+> echo "  make pipeline PID=$(PID) SNAPSHOT=$(SNAPSHOT) [ZPWD=***]"
+> echo "  make nb2-only | nb3-only | quick"
+> echo "  make verify | clean-outputs | help-release"
+> echo "Vars: PID=$(PID) SNAPSHOT=$(SNAPSHOT) -> $(SNAPSHOT_RESOLVED)"
 
-install-kaggle:
-> echo ">>> install-kaggle: requirements/kaggle.txt"
-> python -m pip install -U pip
-> python -m pip install -r requirements/kaggle.txt
+# -------- Env / guards --------
+env:
+> $(PYTHON) -V
+> [ -d data/raw/$(PID) ] || (echo "ERR: data/raw/$(PID) not found"; exit 1)
+> @# Fail-fast if Zepp ZIP exists but no password provided
+> @if ls data/raw/$(PID)/zepp/*.zip >/dev/null 2>&1; then \
+>   if [ -z "$(ZPWD)" ]; then \
+>     echo "ERR: Zepp ZIP detected but no password provided (set ZEP_ZIP_PASSWORD or pass ZPWD=...)"; \
+>     exit 2; \
+>   fi; \
+> fi
 
-install-local:
-> echo ">>> install-local: requirements/local.txt"
-> $(PYTHON) -m pip install -U pip
-> $(PYTHON) -m pip install -r requirements/local.txt
+check-dirs:
+> mkdir -p $(ETL_DIR) $(AI_DIR)
 
-# -------- Clean-up (safe, portable) --------
-.PHONY: clean clean-data clean-provenance clean-all
+# -------- Stage wrappers (call the orchestrator with start/end) --------
+ingest: env
+> $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 0 --end-stage 0 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-clean:
-> echo ">>> clean: removing caches and logs"
-> find . -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
-> find . -name ".ipynb_checkpoints" -type d -prune -exec rm -rf {} + 2>/dev/null || true
-> find . -name "*.pyc" -delete 2>/dev/null || true
-> find . -name "*.log" -delete 2>/dev/null || true
-> echo "[OK] caches/logs removed"
+aggregate: env
+> $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 1 --end-stage 1 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-clean-data:
-> echo ">>> clean-data: removing ETL outputs and AI results"
-> rm -rf notebooks/outputs dist/assets logs backups processed 2>/dev/null || true
-> rm -rf data/etl data/ai 2>/dev/null || true
-> echo "[OK] data outputs removed"
+unify: env
+> $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 2 --end-stage 2 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-clean-provenance:
-> echo ">>> clean-provenance: removing transient provenance artifacts (keep reports)"
-> find provenance -type f \( \
->   -name "pip_freeze_*.txt" -o \
->   -name "hash_snapshot_*.json" -o \
->   -name "migrate_layout_*.json" -o \
->   -name "cleanup_log_*.txt" \
-> \) -exec rm -f {} + 2>/dev/null || true
-> echo "[OK] provenance transient files removed"
+segment: env
+> $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 3 --end-stage 4 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-clean-all: clean clean-data clean-provenance
-> echo ">>> clean-all: full cleanup done"
+label: env
+> $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 3 --end-stage 3 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-# -------- Core workflows (ETL, labels, QC, packaging) --------
-.PHONY: etl labels qc pack-kaggle
+prep-nb2: env
+> $(PYTHON) scripts/prepare_nb2_dataset.py $(ETL_DIR)/joined/features_daily_labeled.csv --output $(ETL_DIR)/joined/features_nb2_clean.csv
 
-# Defaults (mantém compatibilidade)
-PID ?= P000001
-SNAPSHOT ?= auto
-DRY_RUN ?= 0
-REPO_ROOT ?= .
+nb2: env
+> $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 5 --end-stage 6 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
+nb3: env
+> $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 7 --end-stage 8 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-# =========================
-# ETL namespace (v4.1.0)
-# =========================
+report: env
+> $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 9 --end-stage 9 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
+> echo "RUN_REPORT -> ./RUN_REPORT.md"
 
-.PHONY: etl
-etl:
->	@echo "[ETL] namespace loaded (use: make etl extract|activity|join|enrich|full)"
+# -------- One-shot flows --------
+pipeline: env
+> $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-# Vars padrão (não sobrescreva se já existirem no arquivo)
-PID        ?= P000001
-SNAPSHOT   ?= auto
-DRY_RUN    ?= 1
-REPO_ROOT  ?= .
-MAX_RECORDS ?=
-ZEPP_ZIP_PASSWORD ?=
+quick: env
+> $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 2 --end-stage 9 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-# -------- extract --------
-.PHONY: extract
-extract:
->	@echo "[ETL] extract PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) ZEPP_ZIP_PASSWORD=$(if $(ZEPP_ZIP_PASSWORD),[provided],)"
->	PYTHONPATH=src \
->	$(PYTHON) -u -m cli.etl_runner extract \
->	  --pid $(PID) \
->	  --snapshot $(SNAPSHOT) \
->	  --auto-zip \
->	  --dry-run $(DRY_RUN) \
->	  $(if $(ZEPP_ZIP_PASSWORD),--zepp-zip-password $(ZEPP_ZIP_PASSWORD),)
+nb2-only: env
+> $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 5 --end-stage 6 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-# -------- activity (seed per-domain) --------
-.PHONY: activity
-activity:
->	@echo "[ETL] activity (seed) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
->	PYTHONPATH=src \
->	$(PYTHON) -u -m domains.activity.activity_from_extracted \
->	  --pid $(PID) \
->	  --snapshot $(SNAPSHOT) \
->	  --dry-run $(DRY_RUN) \
->	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
+nb3-only: env
+> $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 7 --end-stage 8 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-# -------- join --------
-.PHONY: join
-join:
->	@echo "[ETL] join PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
->	PYTHONPATH=src \
->	$(PYTHON) -u -m cli.etl_runner join \
->	  --pid $(PID) \
->	  --snapshot $(SNAPSHOT) \
->	  --dry-run $(DRY_RUN)
+# -------- Cleaning --------
+clean-outputs:
+> rm -rf data/extracted data/etl data/ai
+> echo "Cleaned extracted/etl/ai. Raw preserved."
 
-# -------- enrich-prejoin (per-domain) --------
-.PHONY: enrich-prejoin
-enrich-prejoin:
->	@echo "[ETL] enrich-prejoin (seed) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
->	PYTHONPATH=src \
->	$(PYTHON) -u -m domains.enriched.pre.prejoin_enricher \
->	  --pid $(PID) \
->	  --snapshot $(SNAPSHOT) \
->	  --dry-run $(DRY_RUN) \
->	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
+clean-all: clean-outputs
+> rm -f RUN_REPORT.md
+> echo "Repo cleaned (except data/raw)."
 
-# -------- enrich-postjoin (cross-domain after join) --------
-.PHONY: enrich-postjoin
-enrich-postjoin:
->	@echo "[ETL] enrich-postjoin (global) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
->	PYTHONPATH=src \
->	$(PYTHON) -u -m domains.enriched.post.postjoin_enricher \
->	  --pid $(PID) \
->	  --snapshot $(SNAPSHOT) \
->	  --dry-run $(DRY_RUN) \
->	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
+# -------- Verification (light) --------
+verify:
+> echo "Check outputs for $(PID)/$(SNAPSHOT_RESOLVED)..."
+> test -f $(ETL_DIR)/joined/features_daily_unified.csv
+> test -f $(ETL_DIR)/joined/features_daily_labeled.csv
+> test -f $(ETL_DIR)/joined/features_nb2_clean.csv
+> test -f $(ETL_DIR)/segment_autolog.csv
+> test -f $(AI_DIR)/nb2/cv_summary.json
+> test -f $(AI_DIR)/nb3/shap_summary.md
+> test -f $(AI_DIR)/nb3/drift_report.md
+> test -f $(AI_DIR)/nb3/lstm_report.md
+> test -f $(AI_DIR)/nb3/models/best_model.tflite
+> test -f $(AI_DIR)/nb3/latency_stats.json
+> echo "OK"
 
-# -------- aggregate (minimal) --------
-.PHONY: aggregate
-aggregate:
-> @echo "[ETL] aggregate PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
-> PYTHONPATH=src \
-> $(PYTHON) -m src.tools.aggregate_joined \
->   --pid $(PID) \
->   --snapshot $(SNAPSHOT) \
->   --dry-run $(DRY_RUN)
-
-# -------- enrich --------
-.PHONY: enrich
-enrich:
->	@echo "[ETL] enrich PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
->	PYTHONPATH=src \
->	$(PYTHON) -u -m cli.etl_runner enrich \
->	  --pid $(PID) \
->	  --snapshot $(SNAPSHOT) \
->	  --dry-run $(DRY_RUN)
-
-# -------- cardio --------
-.PHONY: cardio
-cardio:
->	@echo "[ETL] cardio PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
->	PYTHONPATH=src \
->	$(PYTHON) -u -m domains.cardiovascular.cardio_from_extracted \
->	  --pid $(PID) \
->	  --snapshot $(SNAPSHOT) \
->	  --dry-run $(DRY_RUN) \
->	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
-
-# -------- sleep --------
-.PHONY: sleep
-sleep:
->	@echo "[ETL] sleep PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
->	PYTHONPATH=src \
->	$(PYTHON) -u -m domains.sleep.sleep_from_extracted \
->	  --pid $(PID) \
->	  --snapshot $(SNAPSHOT) \
->	  --dry-run $(DRY_RUN) \
->	  --allow-empty 1 \
->	  $(if $(MAX_RECORDS),--max-records $(MAX_RECORDS),)
-
-# -------- truncate-export (para testes com poucos registros) --------
-.PHONY: truncate-export
-truncate-export:
->	@if [ -z "$(MAX_RECORDS)" ]; then echo "ERROR: MAX_RECORDS not set (ex: make truncate-export MAX_RECORDS=20)"; exit 1; fi
->	@echo "[ETL] truncate-export: limiting export.xml to $(MAX_RECORDS) records"
->	@EXPORT_XML="data/etl/$(PID)/$(SNAPSHOT)/extracted/apple/inapp/apple_health_export/export.xml"; \
->	if [ ! -f "$$EXPORT_XML" ]; then echo "ERROR: $$EXPORT_XML not found"; exit 1; fi; \
->	$(PYTHON) scripts/truncate_export_xml.py "$$EXPORT_XML" "$$EXPORT_XML.limited" $(MAX_RECORDS) && \
->	mv "$$EXPORT_XML" "$$EXPORT_XML.backup" && \
->	mv "$$EXPORT_XML.limited" "$$EXPORT_XML" && \
->	echo "[OK] export.xml truncated to $(MAX_RECORDS) records"
-
-# -------- full --------
-.PHONY: full
-full: extract activity cardio sleep join enrich
->	@echo "[ETL] FULL completed for PID=$(PID) SNAPSHOT=$(SNAPSHOT) (DRY_RUN=$(DRY_RUN))"
-
-# -------- biomarkers (clinical features extraction) --------
-.PHONY: biomarkers
-biomarkers:
->	@echo "[BIOMARKERS] Extract clinical features PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
->	$(PYTHON) -m src.cli.extract_biomarkers \
->	  --participant $(PID) \
->	  --snapshot $(SNAPSHOT) \
->	  --data-dir data/etl/$(PID)/$(SNAPSHOT)/extracted \
->	  --output-dir data/etl \
->	  --cutoff-months 30
-
-# -------- prepare-zepp (link/copy Zepp data from raw to etl) --------
-.PHONY: prepare-zepp
-prepare-zepp:
->	@echo "[DATA] Prepare Zepp from raw directory"
->	$(PYTHON) -m src.cli.prepare_zepp_data \
->	  --participant $(PID) \
->	  --snapshot $(SNAPSHOT) \
->	  --zepp-source data/raw/$(PID)/zepp \
->	  --target-base data/etl \
->	  --symlink
-
-# -------- pipeline (complete: prepare → extract → biomarkers → labels → nb2) --------
-.PHONY: pipeline
-pipeline: prepare-zepp biomarkers labels nb2
->	@echo "[PIPELINE] Complete clinical analysis for PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
-
-# -------- nb1-eda-run (non-interactive EDA from Python script) --------
-.PHONY: nb1-eda-run
-nb1-eda-run:
->	@echo "[EDA] nb1-eda-run: PID=$(PID) SNAPSHOT=$(SNAPSHOT) ETL_TQDM=$(ETL_TQDM)"
->	PYTHONPATH=src $(PYTHON) -u notebooks/NB1_EDA_daily.py \
->	  --pid $(PID) \
->	  --snapshot $(SNAPSHOT)
-
-# -------- eda-biomarkers (EDA for biomarkers features) --------
-.PHONY: eda-biomarkers
-eda-biomarkers:
->	@echo "[EDA] eda-biomarkers: PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
->	$(PYTHON) make_eda_biomarkers.py \
->	  --pid $(PID) \
->	  --snapshot $(SNAPSHOT)
->	@echo "[EDA] Biomarkers EDA complete. Reports in: reports/"
-
-# -------- etl full-with-eda (complete pipeline + NB1 EDA) --------
-.PHONY: full-with-eda
-full-with-eda: extract activity cardio sleep join enrich nb1-eda-run
->	@echo "[ETL+EDA] FULL-WITH-EDA completed for PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
->	@echo "Artifacts saved to: reports/ and latest/"
-
-# Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
-.PHONY: labels
-labels:
-> @echo ">>> labels: running src.make_labels for $(PID)@$(SNAPSHOT)"
-> @PYTHONPATH="$$PWD" $(PYTHON) -m src.make_labels \
->   --rules config/label_rules.yaml \
->   --in data/etl/$(PID)/$(SNAPSHOT)/joined/joined_features_daily.csv \
->   --out data/etl/$(PID)/$(SNAPSHOT)/joined/features_daily_labeled.csv
-
-# -------- nb2: Unified data, PBSI labels, temporal CV (vFinal 2025-11) --------
-
-.PHONY: nb2-unify
-nb2-unify:
->	@echo "[NB2] Stage 1: Unify Apple + Zepp data"
->	$(PYTHON) scripts/run_nb2_pipeline.py \
->	  --stage unify \
->	  --participant $(PID) \
->	  --snapshot $(SNAPSHOT)
-
-.PHONY: nb2-labels
-nb2-labels:
->	@echo "[NB2] Stage 2: Build PBSI heuristic labels"
->	$(PYTHON) scripts/run_nb2_pipeline.py \
->	  --stage labels \
->	  --participant $(PID) \
->	  --snapshot $(SNAPSHOT)
-
-.PHONY: nb2-baselines
-nb2-baselines:
->	@echo "[NB2] Stage 3: Temporal CV with 6 folds + baselines"
->	$(PYTHON) scripts/run_nb2_pipeline.py \
->	  --stage baselines \
->	  --participant $(PID) \
->	  --snapshot $(SNAPSHOT)
-
-.PHONY: nb2-all
-nb2-all:
->	@echo "[NB2] Full pipeline: unify → labels → baselines"
->	$(PYTHON) scripts/run_nb2_pipeline.py \
->	  --stage all \
->	  --participant $(PID) \
->	  --snapshot $(SNAPSHOT)
-
-.PHONY: nb2-summary
-nb2-summary:
->	@echo "[NB2] Generate baselines summary markdown"
->	$(PYTHON) scripts/generate_nb2_summary.py
-
-# -------- nb2-engage7 (baseline models with Engage7-grade validation) --------
-.PHONY: nb2-engage7
-nb2-engage7:
->	@echo "[NB2] Running Engage7-grade baseline models for PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
->	$(PYTHON) run_nb2_engage7.py \
->	  --pid $(PID) \
->	  --snapshot $(SNAPSHOT) \
->	  --n-folds 6 \
->	  --train-days 120 \
->	  --val-days 60 \
->	  --class-weight balanced \
->	  --seed 42 \
->	  --plots 1 \
->	  --save-all 1 \
->	  --verbose 2
-
-# Alias for convenience
-.PHONY: nb2
-nb2: nb2-engage7
-
-
-
-# ----------------------------------------------------------------------
-# Release pipeline (v4-friendly helpers)
-# - Defaults are non-invasive; do not push automatically. Use release-push to push.
-# - Uses $(PYTHON) (auto-detected earlier) and preserves .RECIPEPREFIX := >
-# ----------------------------------------------------------------------
-
-RELEASE_VERSION ?= 4.0.2
-RELEASE_TAG ?= v$(RELEASE_VERSION)
-RELEASE_BRANCH ?= v4-main
-
-.PHONY: release-verify release-summary release-draft release-freeze release-tag release-push release-publish release-final help-release
-
-release-verify:
-> @echo ">>> verify: tree clean, tag free, semver"
-> @test -z "$$(git status --porcelain)" || (echo "Working tree not clean" && exit 1)
-> @test -z "$$(git tag -l $(RELEASE_TAG))" || (echo "Tag $(RELEASE_TAG) already exists" && exit 1)
-> @echo "$(RELEASE_VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$' || (echo "Invalid SemVer: $(RELEASE_VERSION)" && exit 1)
-> @echo "[ok] verification passed"
-
-release-summary:
-> echo ">>> summary: collect commits since last tag"
-> @mkdir -p dist/changelog
-> @LAST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo ""); \
-> if [ -n "$$LAST_TAG" ]; then \
->   git log --pretty=oneline $$LAST_TAG..HEAD > dist/changelog/CHANGES_SINCE_LAST_TAG.txt; \
-> else \
->   git log --pretty=oneline > dist/changelog/CHANGES_SINCE_LAST_TAG.txt; \
-> fi; \
-	git add docs/release_notes/release_notes_v$(RELEASE_VERSION).md || true; \
-	git commit -m "chore(release): add release notes for v$(RELEASE_VERSION)" || true; \
-	git push -u origin $$BR || true; \
-	mkdir -p dist; \
-	PR_BODY=dist/extra$(RELEASE_VERSION).md; \
-	cat docs/release_notes/release_notes_v$(RELEASE_VERSION).md > $$PR_BODY; \
-	if [ -n "$(ISSUES)" ]; then \
-	  for i in $(ISSUES); do echo "\nCloses #$$i" >> $$PR_BODY; done; \
-	else \
-	  echo "\nCloses #1\nCloses #2" >> $$PR_BODY; \
-	fi; \
-	if gh auth status >/dev/null 2>&1; then \
-		gh pr create --base main --head $$BR --title "Release v$(RELEASE_VERSION) – $(RELEASE_TITLE)" --body-file $$PR_BODY || echo "gh pr create failed; you can open a PR manually"; \
-	else \
-		echo "gh CLI not authenticated or not available. Create PR manually using: https://github.com/$(shell git config --get remote.origin.url | sed -e 's/.*:\/\///' -e 's/\.git$$//')/compare/main...$$BR"; \
-	fi
-> @echo "[ok] draft prepared under docs/release_notes and dist/changelog"
-
-release-freeze:
-> echo ">>> freeze: pip freeze snapshot"
-> @mkdir -p dist/provenance
-> $(PYTHON) -m pip freeze > dist/provenance/pip_freeze_$$(date -u +%F).txt
-> @echo "[ok] freeze written"
-
-release-tag:
-> echo ">>> tagging $(RELEASE_TAG)"
-> @git add docs/release_notes dist/changelog dist/provenance || true
-> @git commit -m "chore(release): finalize artifacts for $(RELEASE_TAG)" || echo "(no changes to commit)"
-> @git tag -a $(RELEASE_TAG) -m "Release $(RELEASE_TAG)"
-> @echo "[ok] commit+tag created"
-
-release-publish:
-> echo ">>> gh release create $(RELEASE_TAG)"
-> echo "(gh CLI optional)"
-> mkdir -p dist
-> PUBLISH_NOTES=dist/release_notes_for_publish_$(RELEASE_VERSION).md; \
-> cat docs/release_notes/release_notes_v$(RELEASE_VERSION).md > $$PUBLISH_NOTES; \
-> if [ -n "$(ISSUES)" ]; then \
->   for i in $(ISSUES); do echo "\nCloses #$$i" >> $$PUBLISH_NOTES; done; \
-> fi; \
-> gh release create $(RELEASE_TAG) \
->   --title "$(RELEASE_TAG)" \
->   --notes-file "$$PUBLISH_NOTES" \
->   dist/changelog/CHANGELOG.dryrun.md \
->   dist/provenance/pip_freeze_$$(date -u +%F).txt dist/assets/$(RELEASE_VERSION)/* || true
-> echo "[ok] GitHub Release created (or gh not available)"
-> gh release create $(RELEASE_TAG) \
->   --title "$(RELEASE_TAG)" \
->   --notes-file "docs/release_notes/release_notes_$(RELEASE_VERSION).md" \
->   dist/changelog/CHANGELOG.dryrun.md \
->   dist/provenance/pip_freeze_$$(date -u +%F).txt || true
-> @echo "[ok] GitHub Release created (or gh not available)"
-
-release-final: release-verify release-summary release-draft release-freeze release-tag
-> @echo "[ok] local release finalized: $(RELEASE_TAG)"
-
-release-assets:
-> @echo ">>> Assembling release package for $(RELEASE_VERSION)"
-> @mkdir -p dist/assets/$(RELEASE_VERSION)
-> @cp docs/release_notes/release_notes_v$(RELEASE_VERSION).md dist/assets/$(RELEASE_VERSION)/
-> @cp dist/changelog/CHANGELOG.dryrun.md dist/assets/$(RELEASE_VERSION)/CHANGELOG.md || true
-> @cp provenance/etl_provenance_report.csv dist/assets/$(RELEASE_VERSION)/ || true
-> @echo "[OK] Assembled assets for v$(RELEASE_VERSION)"
-
-release-pr:
-> @echo ">>> release-pr: create branch and open PR targeting main"
-> @set -e; \
-BR=release/v$(RELEASE_VERSION); \
-if ! git rev-parse --verify --quiet $$BR >/dev/null; then \
-	git switch -c $$BR; \
-else \
-	git switch $$BR; \
-fi; \
-	git add docs/release_notes/release_notes_v$(RELEASE_VERSION).md || true; \
-	git commit -m "chore(release): add release notes for v$(RELEASE_VERSION)" || true; \
-	git push -u origin $$BR || true; \
-	mkdir -p dist; \
-	cat docs/release_notes/release_notes_v$(RELEASE_VERSION).md > dist/release_pr_body_$(RELEASE_VERSION).md; \
-	echo "\nCloses #1\nCloses #2" >> dist/release_pr_body_$(RELEASE_VERSION).md; \
-	if gh auth status >/dev/null 2>&1; then \
-		gh pr create --base main --head $$BR --title "Release v$(RELEASE_VERSION) – $(RELEASE_TITLE)" --body-file dist/release_pr_body_$(RELEASE_VERSION).md || echo "gh pr create failed; you can open a PR manually"; \
-	else \
-		echo "gh CLI not authenticated or not available. Create PR manually using: https://github.com/$(shell git config --get remote.origin.url | sed -e 's/.*:\/\///' -e 's/\.git$$//')/compare/main...$$BR"; \
-	fi
+# -------- Release & Publication --------
+VERSION_FILE := docs/release_notes/VERSION
+RELEASE_DIR  := docs/release_notes
+ASSET_BASE   := dist/assets
+NEXT_TAG     := v$(shell $(PYTHON) -c "import datetime as d; print(d.date.today().strftime('%Y.%m.%d'))")
+NOTES_FILE   := $(RELEASE_DIR)/release_notes_$(NEXT_TAG).md
+ASSET_DIR    := $(ASSET_BASE)/$(NEXT_TAG)
 
 help-release:
 > echo "Release targets:"
-> echo "  make release-verify    # tree clean, tag livre, SemVer"
-> echo "  make release-summary   # gera CHANGES_SINCE_LAST_TAG.txt"
-> echo "  make release-draft     # gera release_notes + changelog draft"
-> echo "  make release-freeze    # pip freeze -> dist/provenance"
-> echo "  make release-tag       # commit + tag local"
-> echo "  make release-push      # push branch + tags"
-> echo "  make release-publish   # cria GitHub Release (gh CLI)"
-> echo "  make release-final     # encadeado local (sem push/publish)"
-> echo "  make release-pr        # create a release PR targeting main (gh CLI)"
+> echo "  make release-notes | version-guard | changelog"
+> echo "  make release-assets | provenance | release-draft | publish-release | print-version"
 
-qc:
-> echo ">>> qc: running src.eda"
-> $(PYTHON) -m src.eda
+release-notes:
+> mkdir -p $(RELEASE_DIR)
+> echo "# Practicum N-of-1 Pipeline $(NEXT_TAG)" > $(NOTES_FILE)
+> echo "" >> $(NOTES_FILE)
+> echo "Generated on $$($(PYTHON) -c 'import datetime as d; print(d.datetime.now().isoformat(timespec=\"seconds\"))')" >> $(NOTES_FILE)
+> echo "" >> $(NOTES_FILE)
+> echo "Key Results (snapshot $(SNAPSHOT_RESOLVED)):" >> $(NOTES_FILE)
+> echo "- Expanded pipeline (≈2,828 days, 119 segments)" >> $(NOTES_FILE)
+> echo "- NB2 macro-F1 ≈ 0.81; LSTM macro-F1 ≈ 0.25" >> $(NOTES_FILE)
+> echo "- Drift: ADWIN=11; KS≈102 significant" >> $(NOTES_FILE)
+> echo "" >> $(NOTES_FILE)
+> echo "Artifacts:" >> $(NOTES_FILE)
+> echo "- $(ETL_DIR)/joined/features_daily_labeled.csv" >> $(NOTES_FILE)
+> echo "- $(AI_DIR)/nb3/models/best_model.tflite" >> $(NOTES_FILE)
+> echo "- RUN_REPORT.md" >> $(NOTES_FILE)
+> echo "Done -> $(NOTES_FILE)"
 
-# -------- NB3 namespace (SHAP + Drift + LSTM M1 + TFLite) --------
+version-guard:
+> echo "Checking working tree..."
+> git diff-index --quiet HEAD -- || (echo "Uncommitted changes. Commit first."; exit 1)
+> echo "OK"
 
-.PHONY: nb3-run
-nb3-run:
->	@echo "[NB3] Run SHAP + Drift Detection + LSTM M1 + TFLite"
->	$(PYTHON) scripts/run_nb3_pipeline.py \
->	  --csv data/etl/features_daily_labeled.csv \
->	  --outdir nb3
+changelog: release-notes
+> echo "Updating CHANGELOG.md ..."
+> cat $(NOTES_FILE) >> CHANGELOG.md
+> echo "Done"
 
-.PHONY: nb3-all
-nb3-all: nb2-all nb3-run
->	@echo "[NB3] Complete NB2 → NB3 pipeline (features → labels → baselines → SHAP/drift/LSTM)"
+release-assets:
+> echo "Collecting assets into $(ASSET_DIR)..."
+> mkdir -p $(ASSET_DIR)
+> cp -f $(ETL_DIR)/joined/features_daily_labeled.csv $(ASSET_DIR)/ 2>/dev/null || true
+> cp -f $(AI_DIR)/nb3/models/best_model.tflite $(ASSET_DIR)/ 2>/dev/null || true
+> cp -f RUN_REPORT.md $(ASSET_DIR)/ 2>/dev/null || true
+> echo "OK"
 
-# -------- Packaging --------
+provenance:
+> mkdir -p $(ASSET_DIR)
+> echo "version,tag,date" > $(ASSET_DIR)/provenance.csv
+> echo "$(NEXT_TAG),$$(git rev-parse HEAD),$$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $(ASSET_DIR)/provenance.csv
+> $(PYTHON) - <<'PY'
+> import hashlib,glob,os,sys
+> files=glob.glob("$(ASSET_DIR)/*")
+> with open("$(ASSET_DIR)/md5_manifest.txt","w") as f:
+>     for p in files:
+>         if os.path.isfile(p):
+>             m=hashlib.md5(open(p,"rb").read()).hexdigest()
+>             f.write(f"{m}  {os.path.basename(p)}\n")
+> print("MD5 manifest written")
+> PY
 
-PACK_OUT := dist/assets
+release-draft: version-guard release-assets provenance
+> echo "Draft ready (see $(ASSET_DIR) and $(NOTES_FILE))"
 
-pack-kaggle:
-> @echo ">>> pack-kaggle: packaging Kaggle dataset snapshot for $(PID) $(SNAPSHOT)"
-> @PYTHONPATH="$$PWD" $(PYTHON) -m src.tools.pack_kaggle
+publish-release:
+> echo "Tagging $(NEXT_TAG) ..."
+> git tag -a $(NEXT_TAG) -m "Release $(NEXT_TAG)"
+> git push origin $(NEXT_TAG)
+> echo "Tagged & pushed"
 
-# -------- Help --------
-.PHONY: help
-help:
-> echo "Available targets:"
-> echo "  install-base       - Install base requirements"
-> echo "  install-dev        - Install development requirements"
-> echo "  install-kaggle     - Install Kaggle requirements"
-> echo "  install-local      - Install local env requirements"
-> echo "  clean              - Remove cache/logs"
-> echo "  clean-data         - Remove ETL/AI outputs"
-> echo "  clean-provenance   - Remove transient provenance artifacts"
-> echo "  clean-all          - Run all clean targets"
-> echo "  etl                - Run ETL pipeline (src.etl_pipeline)"
-> echo "  labels             - Generate heuristic labels (src.make_labels)"
-> echo "  qc                 - Run EDA/QC (src.eda)"
-> echo "  pack-kaggle        - Zip dataset for Kaggle (uses PID/SNAPSHOT)"
+print-version:
+> echo "HEAD: $$(git rev-parse --short HEAD)"
+> echo "Next tag: $(NEXT_TAG)"

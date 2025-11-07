@@ -20,25 +20,34 @@ class DailyUnifier:
     """Merge Apple + Zepp daily metrics into unified daily dataset."""
     
     def __init__(self, extracted_dir: str = "data/extracted", participant: str = "P000001"):
-        """Initialize with paths to extracted Apple/Zepp data."""
+        """Initialize with paths to extracted Apple/Zepp data.
+        
+        CANONICAL PATHS (no intermediate PID directory):
+        - data/etl/<PID>/<SNAPSHOT>/extracted/apple/daily_*.csv
+        - data/etl/<PID>/<SNAPSHOT>/extracted/zepp/daily_*.csv
+        """
         self.extracted_dir = Path(extracted_dir)
         self.participant = participant
-        self.apple_dir = self.extracted_dir / "apple" / participant
-        self.zepp_dir = self.extracted_dir / "zepp" / participant
+        # CANONICAL paths - NO /participant/ subdirectory
+        self.apple_dir = self.extracted_dir / "apple"
+        self.zepp_dir = self.extracted_dir / "zepp"
         
         logger.info(f"[Unify] Initializing for {participant}")
         logger.info(f"[Unify] Apple dir: {self.apple_dir}")
         logger.info(f"[Unify] Zepp dir: {self.zepp_dir}")
     
     def _load_metric(self, source: str, metric: str) -> pd.DataFrame:
-        """Load daily metric from Apple or Zepp."""
+        """Load daily metric from Apple or Zepp.
+        
+        NO FALLBACK READING - only canonical paths.
+        """
         if source == "apple":
             path = self.apple_dir / f"daily_{metric}.csv"
         else:
             path = self.zepp_dir / f"daily_{metric}.csv"
         
         if not path.exists():
-            logger.warning(f"[Unify] File not found: {path}")
+            logger.warning(f"[WARN] Missing {source} daily_{metric} at canonical path: {path}")
             return pd.DataFrame()
         
         df = pd.read_csv(path)

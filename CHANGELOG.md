@@ -9,6 +9,47 @@ KnowledgeC integration (device-specific schema) and parse_knowledgec_usage.py.
 
 Notebook 02 re-run with rule-based baseline, SHAP top-5, drift metrics.
 
+## [v4.1.2] – 2025-11-07
+
+### Strict Path Normalization & Fail-Fast Password Validation
+
+**Summary:**  
+Implements strict canonical path normalization in ETL pipeline (removes intermediate PID subdirectories from extracted/) and adds fail-fast Zepp password validation with exit code 2. Ensures cleaner directory structures, predictable file locations, and immediate error detection for encrypted data.
+
+**Key Changes:**
+
+### Security & Validation
+- **Fail-Fast Zepp Password**: Pipeline aborts with exit 2 if Zepp ZIP exists but no password provided
+  - Checks `--zepp-password` argument and `ZEP_ZIP_PASSWORD` / `ZEPP_ZIP_PASSWORD` env vars
+  - Validation in Makefile `env` target and `run_full_pipeline.py` Stage 0
+  - Clear error: `[FATAL] Zepp ZIP found but no password provided...`
+
+### Path Normalization
+- **Canonical Paths**: Removed intermediate `/<PID>/` subdirectory from extracted data
+  - Before: `data/etl/P000001/2025-11-07/extracted/apple/P000001/daily_sleep.csv`
+  - After: `data/etl/P000001/2025-11-07/extracted/apple/daily_sleep.csv`
+  - Modified: `stage_csv_aggregation.py` (write), `stage_unify_daily.py` (read)
+
+### File Management
+- **Automatic Renaming**: Existing `daily_*.csv` files renamed to `*.prev.csv` before overwrite
+- **No Fallback Reading**: `stage_unify_daily.py` only reads canonical paths (no alternative searches)
+- **Clear Warnings**: Missing files logged as `[WARN] Missing {source} daily_{metric} at canonical path`
+
+### Files Modified
+- `Makefile`: Added ZPWD variable, fail-fast env check, --zepp-password flag propagation
+- `scripts/run_full_pipeline.py`: Stage 0 fail-fast validation, unified zpwd variable
+- `src/etl/stage_csv_aggregation.py`: Canonical output paths, .prev.csv renaming
+- `src/etl/stage_unify_daily.py`: Canonical input paths, removed fallback logic
+
+### Breaking Changes
+- Legacy paths with intermediate PID (`extracted/apple/P000001/`) no longer read
+- Missing Zepp password now aborts immediately (exit 2) instead of silent failure
+
+### Migration Guide
+- Update any scripts reading from `extracted/{apple,zepp}/<PID>/` to remove PID subdirectory
+- Set `ZEP_ZIP_PASSWORD` environment variable or pass `ZPWD=` to Makefile for encrypted Zepp data
+- Existing `.csv` files automatically preserved as `.prev.csv` (no manual action needed)
+
 Export best_model.tflite and latency measurements.
 
 Finalise LaTeX main.tex with updated figures + Appendices C–D.

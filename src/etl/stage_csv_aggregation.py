@@ -443,13 +443,20 @@ def run_csv_aggregation(participant: str = "P000001",
             agg_apple = AppleHealthAggregator(str(xml_path))
             results["apple"] = agg_apple.aggregate_all()
             
-            # Save to CSV
-            apple_output_dir = Path(output_dir) / "apple" / participant
+            # Save to CSV (canonical paths: data/etl/<PID>/<SNAPSHOT>/extracted/apple/daily_*.csv)
+            # NO intermediate PID directory!
+            apple_output_dir = Path(output_dir) / "apple"
             apple_output_dir.mkdir(parents=True, exist_ok=True)
             
             for metric_name, df in results["apple"].items():
                 if len(df) > 0:
+                    # Rename existing file to .prev.csv if it exists
                     out_path = apple_output_dir / f"{metric_name}.csv"
+                    if out_path.exists():
+                        prev_path = apple_output_dir / f"{metric_name}.prev.csv"
+                        out_path.rename(prev_path)
+                        logger.info(f"[RENAME] {out_path.name} -> {prev_path.name}")
+                    
                     df.to_csv(out_path, index=False)
                     logger.info(f"[OK] Saved {metric_name}: {out_path} ({len(df)} rows)")
                 else:
@@ -471,13 +478,20 @@ def run_csv_aggregation(participant: str = "P000001",
             agg_zepp = ZeppHealthAggregator(str(zepp_dir))
             results["zepp"] = agg_zepp.aggregate_all()
             
-            # Save to CSV (always to participant dir for consistency)
-            zepp_output_dir = Path(output_dir) / "zepp" / participant
+            # Save to CSV (canonical paths: data/etl/<PID>/<SNAPSHOT>/extracted/zepp/daily_*.csv)
+            # NO intermediate PID directory!
+            zepp_output_dir = Path(output_dir) / "zepp"
             zepp_output_dir.mkdir(parents=True, exist_ok=True)
             
             for metric_name, df in results["zepp"].items():
                 if len(df) > 0:
+                    # Rename existing file to .prev.csv if it exists
                     out_path = zepp_output_dir / f"{metric_name}.csv"
+                    if out_path.exists():
+                        prev_path = zepp_output_dir / f"{metric_name}.prev.csv"
+                        out_path.rename(prev_path)
+                        logger.info(f"[RENAME] {out_path.name} -> {prev_path.name}")
+                    
                     df.to_csv(out_path, index=False)
                     logger.info(f"[OK] Saved {metric_name}: {out_path} ({len(df)} rows)")
                 else:

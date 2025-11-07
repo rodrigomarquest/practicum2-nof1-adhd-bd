@@ -105,8 +105,15 @@ def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) ->
         raw_participant_dir = ctx.raw_dir / ctx.participant
         
         # Get Zepp password from env or parameter
-        if zepp_password is None:
-            zepp_password = os.getenv("ZEPP_ZIP_PASSWORD")
+        zpwd = zepp_password or os.getenv("ZEP_ZIP_PASSWORD") or os.getenv("ZEPP_ZIP_PASSWORD")
+        
+        # FAIL-FAST: Check if Zepp ZIPs exist but no password provided
+        zepp_raw_dir = raw_participant_dir / "zepp"
+        if zepp_raw_dir.exists():
+            zepp_zips = list(zepp_raw_dir.glob("*.zip"))
+            if zepp_zips and not zpwd:
+                logger.error("[FATAL] Zepp ZIP found but no password provided. Use --zepp-password or set ZEP_ZIP_PASSWORD.")
+                sys.exit(2)
         
         # Extract Apple ZIPs
         apple_raw_dir = raw_participant_dir / "apple" / "export"
@@ -120,7 +127,6 @@ def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) ->
             logger.warning(f"[SKIP] Apple export dir not found: {apple_raw_dir}")
         
         # Extract Zepp ZIPs
-        zepp_raw_dir = raw_participant_dir / "zepp"
         if zepp_raw_dir.exists():
             for zip_file in zepp_raw_dir.glob("*.zip"):
                 logger.info(f"[Zepp] Extracting: {zip_file.name}")
@@ -129,8 +135,8 @@ def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) ->
                     if HAS_PYZIPPER:
                         try:
                             with pyzipper.AESZipFile(zip_file, 'r') as z:
-                                if zepp_password:
-                                    z.extractall(ctx.extracted_dir / "zepp", pwd=zepp_password.encode('utf-8'))
+                                if zpwd:
+                                    z.extractall(ctx.extracted_dir / "zepp", pwd=zpwd.encode('utf-8'))
                                 else:
                                     z.extractall(ctx.extracted_dir / "zepp")
                         except Exception as e:
