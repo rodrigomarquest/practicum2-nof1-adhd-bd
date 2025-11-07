@@ -1111,10 +1111,10 @@ def extract_apple_per_metric(
 # ----------------------------------------------------------------------
 # Apple CDA (State of Mind) parser
 # ----------------------------------------------------------------------
-def _parse_apple_cda_som(cda_xml_path: Path, tz_selector) -> pd.DataFrame:
+def _parse_apple_cda_som(cda_xml_path: Path) -> pd.DataFrame:
     """Parse export_cda.xml (CCDA-like) to extract Mood / State of Mind observations.
 
-    Returns DataFrame with columns: timestamp_utc (ISO UTC), date (YYYY-MM-DD in project tz),
+    Returns DataFrame with columns: timestamp_utc (ISO UTC), date (YYYY-MM-DD UTC),
     source (apple_som), value_raw, value_norm, notes
 
     Heuristic mapping for value_norm (documented):
@@ -1124,6 +1124,8 @@ def _parse_apple_cda_som(cda_xml_path: Path, tz_selector) -> pd.DataFrame:
 
     The parser is intentionally tolerant: if the file is missing or no mood-like
     observations are found, returns an empty DataFrame.
+    
+    Note: All timestamps are returned in UTC. Daily binning is at UTC midnight.
     """
     rows = []
     if not cda_xml_path.exists():
@@ -1269,7 +1271,7 @@ def _parse_apple_cda_som(cda_xml_path: Path, tz_selector) -> pd.DataFrame:
                 else:
                     value_norm = None
 
-            # convert timestamp to UTC ISO and date in project tz
+            # convert timestamp to UTC ISO
             try:
                 ts_parsed = pd.to_datetime(ts)
                 # assume naive -> UTC
@@ -1279,19 +1281,13 @@ def _parse_apple_cda_som(cda_xml_path: Path, tz_selector) -> pd.DataFrame:
             except Exception:
                 ts_utc = pd.Timestamp.utcnow()
 
-            # project date in tz_selector (if provided)
-            try:
-                proj_tz = (
-                    tz_selector(ts_parsed) if tz_selector is not None else get_tz("UTC")
-                )
-                date_proj = ts_parsed.astimezone(proj_tz).date()
-            except Exception:
-                date_proj = ts_utc.date()
+            # date in UTC
+            date_utc = ts_utc.date()
 
             rows.append(
                 {
                     "timestamp_utc": ts_utc.isoformat(),
-                    "date": date_proj.isoformat(),
+                    "date": date_utc.isoformat(),
                     "source": "apple_som",
                     "value_raw": value_raw,
                     "value_norm": int(value_norm) if value_norm is not None else pd.NA,
@@ -1424,20 +1420,13 @@ def _parse_apple_cda_som_lxml(
                 except Exception:
                     ts_utc = pd.Timestamp.utcnow()
 
-                try:
-                    proj_tz = (
-                        tz_selector(ts_parsed)
-                        if tz_selector is not None
-                        else get_tz("UTC")
-                    )
-                    date_proj = ts_parsed.astimezone(proj_tz).date()
-                except Exception:
-                    date_proj = ts_utc.date()
+                # date in UTC
+                date_utc = ts_utc.date()
 
                 rows.append(
                     {
                         "timestamp_utc": ts_utc.isoformat(),
-                        "date": date_proj.isoformat(),
+                        "date": date_utc.isoformat(),
                         "source": "apple_som",
                         "value_raw": value_raw,
                         "value_norm": (
