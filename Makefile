@@ -28,10 +28,6 @@ export ETL_TQDM
 # ensures child processes can import `src` when Make spawns a new Python.
 PATHSEP := $(shell $(PYTHON) -c "import os; print(os.pathsep)")
 PYTHONPATH_ETL := $(REPO_ROOT)$(PATHSEP)$(REPO_ROOT)/src
-# Fixed defaults requested
-CUTOVER ?= 2024-03-11
-TZ_BEFORE ?= America/Sao_Paulo
-TZ_AFTER  ?= Europe/Dublin
 
 ifeq ($(DRY_RUN),1)
 DRY_FLAG := --dry-run

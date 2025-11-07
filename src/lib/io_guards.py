@@ -36,18 +36,6 @@ import re
 import importlib.util
 
 
-# Tokens scanned by ``guard_no_cutover_flags``. Keep both underscore and
-# hyphen variants so the lightweight source scan finds either style when used
-# in code or documentation.
-_CUTOVER_TZ_TOKENS = (
-    "CUTOVER",
-    "TZ_BEFORE",
-    "TZ_AFTER",
-    "TZ-BEFORE",
-    "TZ-AFTER",
-)
-
-
 
 def _should_warn_data_ai() -> bool:
     """Return True if writes into data_ai/ should emit a warning.
@@ -131,74 +119,6 @@ def _compute_backup_path(p: Path, backup_name: Optional[str]) -> Path:
         return p.with_name(bn)
     # otherwise treat as suffix token
     return p.with_name(p.stem + "_" + bn + p.suffix)
-
-
-def guard_no_cutover_flags() -> None:
-    """Lightweight scan of source files under `src/` for CUTOVER/TZ flags.
-
-    Environment controls:
-    - ETL_TZ_GUARD=0 -> disable the scan entirely (silent no-op).
-    - ETL_STRICT_TZ=1 or CI=true -> the argv-level guard (in CLI) will
-      treat detections as hard-fail (exit code 2). This function itself
-      does not exit; it only emits a consolidated warning.
-
-    The scan walks packages under the repository `src/` folder and searches
-    for occurrences of the tokens in ``_CUTOVER_TZ_TOKENS``. It emits a
-    single consolidated warning (de-duplicated) listing up to 8 file paths
-    and the total count if more were found. The scan is intentionally
-    light-weight and does not import scanned modules.
-    """
-    # respect explicit opt-out
-    if os.getenv("ETL_TZ_GUARD") == "0":
-        return
-
-    try:
-        root = Path(__file__).resolve().parents[1]
-    except Exception:
-        return
-
-    # build a case-insensitive regex from the token list
-    tok_pattern = r"\b(" + "|".join(re.escape(t) for t in _CUTOVER_TZ_TOKENS) + r")\b"
-    bad_re = re.compile(tok_pattern, flags=re.IGNORECASE)
-    seen = set()
-
-    # Use pkgutil to discover module names under the src/ root; then locate
-    # their source files (if any) and scan the file contents for bad tokens.
-    for modinfo in pkgutil.walk_packages([str(root)]):
-        name = modinfo.name
-        try:
-            spec = importlib.util.find_spec(name)
-            if not spec or not getattr(spec, "origin", None):
-                continue
-            origin = Path(spec.origin)
-            # only scan files inside our src root
-            try:
-                origin.relative_to(root)
-            except Exception:
-                continue
-            # avoid scanning compiled/large files
-            if origin.suffix not in (".py", ".pyw"):
-                continue
-            text = origin.read_text(encoding="utf-8", errors="ignore")
-            if bad_re.search(text):
-                seen.add(str(origin))
-        except Exception:
-            # best-effort scan; skip problematic modules
-            continue
-
-    if seen:
-        seen_list = sorted(seen)
-        count = len(seen_list)
-        shown = seen_list[:8]
-        more = count - len(shown)
-        msg_lines = [
-            "Found CUTOVER/TZ flags in source files (avoid passing these at runtime):",
-            f"Found in {count} file(s). Showing up to 8:",
-        ]
-        msg_lines.extend(shown)
-        if more > 0:
-            msg_lines.append(f"... and {more} more files")
-        warnings.warn("\n".join(msg_lines), stacklevel=2)
 
 
 def write_csv(df: pd.DataFrame, path: Path, *, dry_run: bool = False, backup_name: Optional[str] = None) -> None:
@@ -288,12 +208,4 @@ if __name__ == "__main__":
     b = _compute_backup_path(t, "joined_features_daily_prev.csv")
     # The backup filename must be exactly the provided backup_name
     assert b.name == "joined_features_daily_prev.csv", f"backup name mismatch: {b.name}"
-    # quick unit-style assertion: ensure guard token list contains both
-    # underscore and hyphen variants for TZ_BEFORE/TZ_AFTER.
-    assert "TZ_BEFORE" in _CUTOVER_TZ_TOKENS and "TZ-BEFORE" in _CUTOVER_TZ_TOKENS, (
-        "token variants for TZ_BEFORE missing"
-    )
-    assert "TZ_AFTER" in _CUTOVER_TZ_TOKENS and "TZ-AFTER" in _CUTOVER_TZ_TOKENS, (
-        "token variants for TZ_AFTER missing"
-    )
     print("io_guards: backup-name self-check OK ->", b)
