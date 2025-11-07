@@ -51,6 +51,8 @@ processed/
 dist/assets/
 reports/
 latest/
+# --- Explicitly ignore aggregates (dynamic outputs)
+reports/aggregates/
 # --- Keep empty release staging structure ---
 !dist/assets/.keep
 !dist/changelog/
