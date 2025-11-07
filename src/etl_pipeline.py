@@ -3167,9 +3167,10 @@ def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
     domains_data: dict[str, list[tuple[Path, str, str]]] = {
         "cardio": [],
         "activity": [],
+        "sleep": [],
     }
     
-    for d in ["cardio", "activity"]:
+    for d in ["cardio", "activity", "sleep"]:
         # Priority 1: enriched/prejoin
         enriched_dir = snap / "enriched" / "prejoin" / d
         if enriched_dir.exists():
@@ -3224,7 +3225,7 @@ def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
         return 0
 
     # read dataframes and group by domain
-    domain_dfs: dict[str, list[pd.DataFrame]] = {"cardio": [], "activity": []}
+    domain_dfs: dict[str, list[pd.DataFrame]] = {"cardio": [], "activity": [], "sleep": []}
     for name, p, kind in found:
         try:
             df = pd.read_csv(p, parse_dates=["date"]) if p.exists() else pd.DataFrame()
@@ -3237,7 +3238,7 @@ def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
     parts = []
     used_prejoin: dict[str, bool] = {}  # Track if prejoin was used per domain
     
-    for domain_name in ["cardio", "activity"]:
+    for domain_name in ["cardio", "activity", "sleep"]:
         if not domain_dfs[domain_name]:
             continue
         
