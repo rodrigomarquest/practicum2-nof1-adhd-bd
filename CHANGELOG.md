@@ -30,6 +30,7 @@ Hotfix release addressing tqdm progress bar visibility in Git Bash/MSYS2 termina
 ### Added
 
 - **NB1_EDA_daily.py:** Non-interactive Python version of NB1_EDA_daily.ipynb
+
   - Generates nb1_eda_summary.md, nb1_feature_stats.csv, nb1_manifest.json
   - Saves 5+ PNG visualizations (coverage, signals, correlations, labels)
   - CLI args: --pid, --snapshot, --repo-root
@@ -37,19 +38,23 @@ Hotfix release addressing tqdm progress bar visibility in Git Bash/MSYS2 termina
   - Useful for CI pipelines, GitHub Actions, batch processing
 
 - **Makefile targets for EDA automation:**
+
   - `make nb1-eda-run`: Execute NB1_EDA_daily.py with ETL_TQDM=1
   - `make full-with-eda`: Complete pipeline (extract→join→enrich→nb1-eda)
 
 - **tqdm Git Bash/MSYS2 detection:**
-  - Improved _should_show_tqdm() with MSYSTEM/TERM environment detection
+  - Improved \_should_show_tqdm() with MSYSTEM/TERM environment detection
   - Fallback detection for interactive terminals where isatty() fails
   - Environment variable control: ETL_TQDM=1 (force), ETL_TQDM=0 (disable)
 
 ### Changed
 
-- `.gitignore`: Whitelist notebooks/*.py for EDA/modeling scripts
+- `.gitignore`: Whitelist notebooks/\*.py for EDA/modeling scripts
 - `.gitignore`: Add reports/ and latest/ to outputs exclusion list
 - Progress bar display logic: Now respects Git Bash/MSYS2 terminals
+- **Makefile default behavior:** ETL_TQDM now defaults to 1 (progress bars enabled by default)
+  - Users can override with `make <target> ETL_TQDM=0` to disable progress bars if needed
+  - Ensures full pipeline visibility and user feedback without explicit flags
 
 ### Fixed
 
