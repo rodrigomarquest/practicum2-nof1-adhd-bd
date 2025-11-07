@@ -762,19 +762,10 @@ def parse_device_string(device_str: str) -> Dict[str, str]:
     return mapped
 
 
-def make_tz_selector(cutover: date, tz_before: str, tz_after: str):
-    tz_b = get_tz(tz_before)
-    tz_a = get_tz(tz_after)
-
-    def selector(dt_aware: datetime):
-        day_utc = dt_aware.astimezone(get_tz("UTC")).date()
-        return tz_a if day_utc >= cutover else tz_b
-
-    return selector
 
 
 def iter_health_records(
-    xml_source: Union[Path, io.BufferedReader], tz_selector
+    xml_source: Union[Path, io.BufferedReader]
 ) -> Iterable[
     Tuple[
         str,
@@ -790,6 +781,8 @@ def iter_health_records(
 ]:
     """
     xml_source: Path OU file-like binário (ex.: ProgressFile)
+    
+    Note: All timestamps are returned in UTC. Daily binning is computed at UTC midnight.
     """
     src = xml_source if hasattr(xml_source, "read") else str(xml_source)
     context = ET.iterparse(src, events=("end",))
@@ -810,9 +803,9 @@ def iter_health_records(
         sdt = parse_dt(s)
         edt = parse_dt(e) if e else None
 
-        tz = tz_selector(sdt)
-        s_local = sdt.astimezone(tz)
-        e_local = edt.astimezone(tz) if edt else None
+        # Convert to UTC (all timestamps are tz-aware after parse_dt)
+        s_utc = sdt.astimezone(get_tz("UTC"))
+        e_utc = edt.astimezone(get_tz("UTC")) if edt else None
 
         unit = elem.attrib.get("unit")
         val_raw = elem.attrib.get("value")
@@ -826,11 +819,11 @@ def iter_health_records(
                 value = None
 
         device = parse_device_string(elem.attrib.get("device", ""))
-        tz_name = getattr(tz, "key", getattr(tz, "zone", str(tz)))
+        tz_name = "UTC"  # Always UTC now
         source_version = elem.attrib.get("sourceVersion", "")
         source_name = elem.attrib.get("sourceName", "")
 
-        yield type_id, value, s_local, e_local, unit, device, tz_name, source_version, source_name
+        yield type_id, value, s_utc, e_utc, unit, device, tz_name, source_version, source_name
         elem.clear()
 
 
@@ -890,13 +883,14 @@ def build_segments_from_versions(vdf: pd.DataFrame) -> pd.DataFrame:
 # Apple → per-metric (extract)
 # ----------------------------------------------------------------------
 def extract_apple_per_metric(
-    xml_file: Path, outdir: Path, cutover_str: str, tz_before: str, tz_after: str
+    xml_file: Path, outdir: Path
 ) -> Dict[str, str]:
+    """Extract Apple health records to per-metric CSVs in UTC.
+    
+    All timestamps are converted to UTC; daily binning is at UTC midnight.
+    """
     out_pm = outdir / "per-metric"
     out_pm.mkdir(parents=True, exist_ok=True)
-
-    y, m, d = map(int, cutover_str.split("-"))
-    tz_selector = make_tz_selector(date(y, m, d), tz_before, tz_after)
 
     hr_rows, hrv_rows, sleep_rows, version_rows = [], [], [], []
     HR_ID = "HKQuantityTypeIdentifierHeartRate"
@@ -957,9 +951,9 @@ def extract_apple_per_metric(
                 continue
 
             edt = parse_dt(e) if e else None
-            tz = tz_selector(sdt)
-            s_local = sdt.astimezone(tz)
-            e_local = edt.astimezone(tz) if edt else None
+            # Convert to UTC
+            s_utc = sdt.astimezone(get_tz("UTC"))
+            e_utc = edt.astimezone(get_tz("UTC")) if edt else None
 
             unit = elem.attrib.get("unit")
             val_raw = elem.attrib.get("value")
@@ -973,12 +967,12 @@ def extract_apple_per_metric(
                     value = None
 
             device = parse_device_string(elem.attrib.get("device", ""))
-            tz_name = getattr(tz, "key", getattr(tz, "zone", str(tz)))
+            tz_name = "UTC"
             src_ver = elem.attrib.get("sourceVersion", "")
             src_name = elem.attrib.get("sourceName", "")
 
-            # now map into outputs (same logic as earlier)
-            day = s_local.date()
+            # now map into outputs (UTC day = UTC midnight bucket)
+            day = s_utc.date()
             ios_ver = device.get("ios_version", "") or src_ver
             if ios_ver or device:
                 version_rows.append(
@@ -992,16 +986,16 @@ def extract_apple_per_metric(
                     }
                 )
             if type_id == HR_ID and value is not None:
-                hr_rows.append({"timestamp": s_local.isoformat(), "bpm": float(value)})
+                hr_rows.append({"timestamp": s_utc.isoformat(), "bpm": float(value)})
             elif type_id == HRV_ID and value is not None:
                 hrv_rows.append(
-                    {"timestamp": s_local.isoformat(), "sdnn_ms": float(value)}
+                    {"timestamp": s_utc.isoformat(), "sdnn_ms": float(value)}
                 )
-            elif type_id == SLEEP_ID and e_local is not None:
+            elif type_id == SLEEP_ID and e_utc is not None:
                 sleep_rows.append(
                     {
-                        "start": s_local.isoformat(),
-                        "end": e_local.isoformat(),
+                        "start": s_utc.isoformat(),
+                        "end": e_utc.isoformat(),
                         "raw_value": value,
                     }
                 )
@@ -1075,9 +1069,7 @@ def extract_apple_per_metric(
         "type": "extract",
         "export_xml": str(xml_file),
         "params": {
-            "cutover": cutover_str,
-            "tz_before": tz_before,
-            "tz_after": tz_after,
+            "timezone": "UTC"
         },
         "outputs": {},
     }
@@ -1098,9 +1090,7 @@ def extract_apple_per_metric(
         "type": "extract",
         "export_xml": str(xml_file),
         "params": {
-            "cutover": cutover_str,
-            "tz_before": tz_before,
-            "tz_after": tz_after,
+            "timezone": "UTC"
         },
         "outputs": {},
     }
@@ -1326,11 +1316,13 @@ def _parse_apple_cda_som(cda_xml_path: Path, tz_selector) -> pd.DataFrame:
 
 
 def _parse_apple_cda_som_lxml(
-    cda_xml_path: Path, tz_selector, parser=None
+    cda_xml_path: Path, parser=None
 ) -> pd.DataFrame:
     """Attempt parsing using lxml.iterparse with recover=True for robustness.
 
     Falls back to standard heuristics similar to _parse_apple_cda_som.
+    
+    Note: All timestamps are returned in UTC.
     """
     try:
         import lxml.etree as LET
@@ -1722,12 +1714,14 @@ def _filter_som_candidates(df_som: pd.DataFrame) -> pd.DataFrame:
 # Zepp HEALTH_DATA emotion/stress parser
 # ----------------------------------------------------------------------
 def _parse_zepp_health_emotion(
-    health_csv_paths: Iterable[Union[str, Path]], tz_selector
+    health_csv_paths: Iterable[Union[str, Path]]
 ) -> pd.DataFrame:
     """Parse Zepp HEALTH_DATA CSVs to extract emotion and stress information.
 
     Returns DataFrame with columns: timestamp_utc, date, source, emotion_raw, emotion_norm, stress_raw, stress_norm, notes
     Mapping heuristics: common emotion labels mapped to {-1,0,1} where possible; stress_norm scaled to [0..1] per-file.
+    
+    Note: All timestamps are returned in UTC.
     """
     rows = []
     paths = [Path(p) for p in health_csv_paths] if health_csv_paths else []
@@ -1798,19 +1792,13 @@ def _parse_zepp_health_emotion(
                 ts = pd.to_datetime(tval, errors="coerce")
                 if pd.isna(ts):
                     continue
-                # localize naive -> assume UTC, then convert
+                # localize naive -> assume UTC
                 if ts.tzinfo is None:
                     ts = ts.tz_localize("UTC")
                 ts_utc = ts.astimezone(pd.Timestamp.utcnow().tz)
 
-                # project date
-                try:
-                    proj_tz = (
-                        tz_selector(ts) if tz_selector is not None else get_tz("UTC")
-                    )
-                    date_proj = ts.astimezone(proj_tz).date()
-                except Exception:
-                    date_proj = ts_utc.date()
+                # date in UTC
+                date_utc = ts_utc.date()
 
                 emotion_raw = ""
                 emotion_norm = pd.NA
@@ -1848,7 +1836,7 @@ def _parse_zepp_health_emotion(
                 rows.append(
                     {
                         "timestamp_utc": ts_utc.isoformat(),
-                        "date": date_proj.isoformat(),
+                        "date": date_utc.isoformat(),
                         "source": "zepp",
                         "emotion_raw": emotion_raw,
                         "emotion_norm": (
@@ -3394,9 +3382,6 @@ def main():
     p_ext.add_argument(
         "--snapshot", required=False, default="auto", help=HELP_SNAPSHOT_ID
     )
-    p_ext.add_argument("--cutover", required=True)
-    p_ext.add_argument("--tz_before", required=True)
-    p_ext.add_argument("--tz_after", required=True)
     p_ext.add_argument(
         "--auto-zip",
         action="store_true",
@@ -3443,9 +3428,6 @@ def main():
     p_full.add_argument(
         "--snapshot", required=False, default="auto", help=HELP_SNAPSHOT_ID
     )
-    p_full.add_argument("--cutover", required=True)
-    p_full.add_argument("--tz_before", required=True)
-    p_full.add_argument("--tz_after", required=True)
     p_full.add_argument(
         "--zepp_dir", help="Diretório fixo com CSVs processados do Zepp (evita _latest)"
     )
@@ -3534,9 +3516,6 @@ def main():
     )
     p_som.add_argument("--participant", required=True)
     p_som.add_argument("--snapshot", required=True)
-    p_som.add_argument("--cutover", required=True)
-    p_som.add_argument("--tz_before", required=True)
-    p_som.add_argument("--tz_after", required=True)
     p_som.add_argument(
         "--trace", action="store_true", help="Print traceback on parse errors"
     )
@@ -3581,16 +3560,15 @@ def main():
             return 1
 
         print(f"INFO: scanning CDA for SoM → {cda_path}")
-        tz_sel = make_tz_selector(args.cutover, args.tz_before, args.tz_after)
         df = pd.DataFrame()
         parse_exc = None
 
-        # 1) Try lxml if available
+        # 1) Try lxml if available (parsing in UTC)
         try:
             try:
                 import lxml.etree as LET  # presence check
 
-                df = _parse_apple_cda_som_lxml(cda_path, tz_sel)
+                df = _parse_apple_cda_som_lxml(cda_path)
             except ImportError:
                 df = pd.DataFrame()
         except Exception as e:
@@ -3911,9 +3889,6 @@ def main():
                             written = extract_apple_per_metric(
                                 xml_file=xml_path,
                                 outdir=outdir,
-                                cutover_str=args.cutover,
-                                tz_before=args.tz_before,
-                                tz_after=args.tz_after,
                             )
                         except Exception as e:
                             print(f"ERROR parsing export.xml: {e}")
@@ -3933,12 +3908,9 @@ def main():
                                 {str(p): p for p in health_files}.values()
                             )
                             if health_files:
-                                y, m, d = map(int, args.cutover.split("-"))
-                                tz_sel = make_tz_selector(
-                                    date(y, m, d), args.tz_before, args.tz_after
-                                )
+                                # Parse Zepp health data in UTC
                                 zepp_df = _parse_zepp_health_emotion(
-                                    health_files, tz_sel
+                                    health_files
                                 )
                                 norm_dir = outdir / "normalized" / "zepp"
                                 norm_dir.mkdir(parents=True, exist_ok=True)
@@ -4259,9 +4231,6 @@ def main():
             written = extract_apple_per_metric(
                 xml_file=xml,
                 outdir=outdir,
-                cutover_str=args.cutover,
-                tz_before=args.tz_before,
-                tz_after=args.tz_after,
             )
         print("[OK] extract concluído")
         for k, v in written.items():

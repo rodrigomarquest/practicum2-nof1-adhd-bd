@@ -28,28 +28,6 @@ def main(argv: list[str] | None = None) -> int:
         lvl = logging.INFO
     logging.basicConfig(level=lvl)
 
-    # argv-level guard: detect deprecated TZ/CUTOVER runtime flags passed on
-    # the command line (case-insensitive). If present, warn and optionally
-    # hard-fail when running under strict CI or when ETL_STRICT_TZ=1.
-    argv_flags_to_check = [
-        "--cutover",
-        "--tz-before",
-        "--tz_before",
-        "--tz-after",
-        "--tz_after",
-    ]
-    # inspect the raw sys.argv (includes the program name) per spec
-    for raw_arg in sys.argv:
-        larg = raw_arg.lower()
-        for flag in argv_flags_to_check:
-            if larg == flag or larg.startswith(flag + "="):
-                print(f"[warn] Deprecated TZ/CUTOVER argument detected: {raw_arg} (ignored; TZ is auto-profiled)")
-                if os.getenv("ETL_STRICT_TZ") == "1" or os.getenv("CI") == "true":
-                    # hard-fail requested by environment (CI or strict toggle)
-                    sys.exit(2)
-                # continue scanning but do not raise here
-                break
-
     parser = argparse.ArgumentParser(prog="etl_runner")
     sub = parser.add_subparsers(dest="cmd")
 

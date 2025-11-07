@@ -373,10 +373,15 @@ def compute_stats(df: pd.DataFrame, out_dir: Path) -> pd.DataFrame:
 
     stats_df = pd.DataFrame(stats_rows).sort_values('missing_pct', ascending=False)
 
-    # Save to CSV
+    # Timestamped output to keep historic runs
+    ts = datetime.now().strftime('%Y%m%dT%H%M%S')
+    stats_path_ts = out_dir / f"nb1_feature_stats_{ts}.csv"
+    stats_df.to_csv(stats_path_ts, index=False)
+    # Also write a stable name for quick access
     stats_path = out_dir / "nb1_feature_stats.csv"
     stats_df.to_csv(stats_path, index=False)
-    logger.info(f"✓ Saved nb1_feature_stats.csv ({len(stats_df)} columns)")
+
+    logger.info(f"✓ Saved nb1_feature_stats.csv and {stats_path_ts.name} ({len(stats_df)} columns)")
 
     return stats_df
 
@@ -583,6 +588,9 @@ def generate_manifest_and_summary(
     """Generate manifest and summary markdown."""
     logger.info("=== GENERATING MANIFEST & SUMMARY ===")
 
+    # timestamp for this run (used to version artifacts)
+    run_ts = datetime.now().strftime('%Y%m%dT%H%M%S')
+
     # Build manifest
     manifest = {
         'pid': pid,
@@ -609,11 +617,14 @@ def generate_manifest_and_summary(
         'notebook_version': '1.0',
     }
 
-    # Save manifest
+    # Save manifest (timestamped + stable copy)
+    manifest_path_ts = out_dir / f"nb1_manifest_{run_ts}.json"
+    with open(manifest_path_ts, 'w', encoding='utf-8') as f:
+        json.dump(manifest, f, indent=2)
     manifest_path = out_dir / "nb1_manifest.json"
     with open(manifest_path, 'w', encoding='utf-8') as f:
         json.dump(manifest, f, indent=2)
-    logger.info(f"✓ Saved manifest: {manifest_path}")
+    logger.info(f"✓ Saved manifest: {manifest_path.name} and {manifest_path_ts.name}")
 
     # Generate summary markdown
     activity_msg = f"   - {df['act_steps'].mean():.0f} mean steps/day (sigma={df['act_steps'].std():.0f})" if 'act_steps' in df.columns else "   - No activity data"
@@ -645,11 +656,14 @@ def generate_manifest_and_summary(
 
     summary_md = "\n".join(summary_lines)
 
-    # Save summary
+    # Save summary (timestamped + stable copy)
+    summary_path_ts = out_dir / f"nb1_eda_summary_{run_ts}.md"
+    with open(summary_path_ts, 'w', encoding='utf-8') as f:
+        f.write(summary_md)
     summary_path = out_dir / "nb1_eda_summary.md"
     with open(summary_path, 'w', encoding='utf-8') as f:
         f.write(summary_md)
-    logger.info(f"✓ Saved summary: {summary_path}")
+    logger.info(f"✓ Saved summary: {summary_path.name} and {summary_path_ts.name}")
 
     return manifest, summary_md
 
@@ -662,33 +676,22 @@ def setup_latest_mirror(out_dir: Path, plots_dir: Path, latest_dir: Path) -> Non
     """Mirror key artifacts to latest/."""
     logger.info("=== SETTING UP LATEST/ MIRROR ===")
 
-    key_artifacts = [
-        (out_dir / "nb1_eda_summary.md", "nb1_eda_summary.md"),
-        (out_dir / "nb1_feature_stats.csv", "nb1_feature_stats.csv"),
-        (out_dir / "nb1_manifest.json", "nb1_manifest.json"),
-    ]
-
-    for src, name in key_artifacts:
-        if src.exists():
-            dst = latest_dir / name
-            shutil.copy2(src, dst)
-            logger.info(f"  Copied {name} → latest/")
+    # Copy any NB1 artifacts (both stable and timestamped) to latest/
+    for p in sorted(out_dir.glob('nb1_*')):
+        if p.is_file():
+            try:
+                dst = latest_dir / p.name
+                shutil.copy2(p, dst)
+                logger.info(f"  Copied {p.name} → latest/")
+            except Exception as e:
+                logger.warning(f"  Could not copy {p.name} → latest/: {e}")
 
     # Copy key plots
-    key_plots = [
-        "00_coverage_worst15.png",
-        "00_date_continuity.png",
-        "01_activity_steps.png",
-        "02_cardio_hr_mean_std.png",
-        "03_sleep_total_components.png",
-    ]
-
-    for plot_name in key_plots:
-        src = plots_dir / plot_name
-        if src.exists():
-            dst = latest_dir / plot_name
-            shutil.copy2(src, dst)
-            logger.info(f"  Copied {plot_name} → latest/")
+    for p in sorted(plots_dir.glob('*.png')):
+        if p.is_file():
+            dst = latest_dir / p.name
+            shutil.copy2(p, dst)
+            logger.info(f"  Copied {p.name} → latest/")
 
     logger.info("✓ Latest/ mirror ready")
 

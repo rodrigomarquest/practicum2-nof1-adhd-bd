@@ -43,6 +43,7 @@ Hotfix release addressing tqdm progress bar visibility in Git Bash/MSYS2 termina
   - `make full-with-eda`: Complete pipeline (extract→join→enrich→nb1-eda)
 
 - **tqdm Git Bash/MSYS2 detection:**
+
   - Improved \_should_show_tqdm() with MSYSTEM/TERM environment detection
   - Fallback detection for interactive terminals where isatty() fails
   - Environment variable control: ETL_TQDM=1 (force), ETL_TQDM=0 (disable)
