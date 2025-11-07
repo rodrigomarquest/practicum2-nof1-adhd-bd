@@ -123,7 +123,7 @@ ZEPP_ZIP_PASSWORD ?=
 extract:
 >	@echo "[ETL] extract PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) ZEPP_ZIP_PASSWORD=$(if $(ZEPP_ZIP_PASSWORD),[provided],)"
 >	PYTHONPATH=src \
->	$(PYTHON) -m cli.etl_runner extract \
+>	$(PYTHON) -u -m cli.etl_runner extract \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT) \
 >	  --auto-zip \
@@ -135,7 +135,7 @@ extract:
 activity:
 >	@echo "[ETL] activity (seed) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
 >	PYTHONPATH=src \
->	$(PYTHON) -m domains.activity.activity_from_extracted \
+>	$(PYTHON) -u -m domains.activity.activity_from_extracted \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT) \
 >	  --dry-run $(DRY_RUN) \
@@ -146,7 +146,7 @@ activity:
 join:
 >	@echo "[ETL] join PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
 >	PYTHONPATH=src \
->	$(PYTHON) -m cli.etl_runner join \
+>	$(PYTHON) -u -m cli.etl_runner join \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT) \
 >	  --dry-run $(DRY_RUN)
@@ -156,7 +156,7 @@ join:
 enrich-prejoin:
 >	@echo "[ETL] enrich-prejoin (seed) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
 >	PYTHONPATH=src \
->	$(PYTHON) -m domains.enriched.pre.prejoin_enricher \
+>	$(PYTHON) -u -m domains.enriched.pre.prejoin_enricher \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT) \
 >	  --dry-run $(DRY_RUN) \
@@ -167,7 +167,7 @@ enrich-prejoin:
 enrich-postjoin:
 >	@echo "[ETL] enrich-postjoin (global) PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
 >	PYTHONPATH=src \
->	$(PYTHON) -m domains.enriched.post.postjoin_enricher \
+>	$(PYTHON) -u -m domains.enriched.post.postjoin_enricher \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT) \
 >	  --dry-run $(DRY_RUN) \
@@ -188,7 +188,7 @@ aggregate:
 enrich:
 >	@echo "[ETL] enrich PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN)"
 >	PYTHONPATH=src \
->	$(PYTHON) -m cli.etl_runner enrich \
+>	$(PYTHON) -u -m cli.etl_runner enrich \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT) \
 >	  --dry-run $(DRY_RUN)
@@ -198,7 +198,7 @@ enrich:
 cardio:
 >	@echo "[ETL] cardio PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
 >	PYTHONPATH=src \
->	$(PYTHON) -m domains.cardiovascular.cardio_from_extracted \
+>	$(PYTHON) -u -m domains.cardiovascular.cardio_from_extracted \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT) \
 >	  --dry-run $(DRY_RUN) \
@@ -209,7 +209,7 @@ cardio:
 sleep:
 >	@echo "[ETL] sleep PID=$(PID) SNAPSHOT=$(SNAPSHOT) DRY_RUN=$(DRY_RUN) MAX_RECORDS=$(MAX_RECORDS)"
 >	PYTHONPATH=src \
->	$(PYTHON) -m domains.sleep.sleep_from_extracted \
+>	$(PYTHON) -u -m domains.sleep.sleep_from_extracted \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT) \
 >	  --dry-run $(DRY_RUN) \
@@ -237,7 +237,7 @@ full: extract activity cardio sleep join enrich
 .PHONY: nb1-eda-run
 nb1-eda-run:
 >	@echo "[EDA] nb1-eda-run: PID=$(PID) SNAPSHOT=$(SNAPSHOT) ETL_TQDM=$(ETL_TQDM)"
->	PYTHONPATH=src $(PYTHON) notebooks/NB1_EDA_daily.py \
+>	PYTHONPATH=src $(PYTHON) -u notebooks/NB1_EDA_daily.py \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT)
 
