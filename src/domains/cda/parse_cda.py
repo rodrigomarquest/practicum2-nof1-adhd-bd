@@ -76,24 +76,17 @@ def cda_probe(path: Path, home_tz: Optional[str] = None) -> Dict:
     except ET.ParseError as pe:
         logger.warning("CDA strict parse failed (%s); attempting recovery", pe)
 
-        # 2) try lxml recover if available
+        # 2) try lxml recover if available (with streaming to avoid memory overload)
         try:
             from lxml import etree as LET  # type: ignore
 
-            with open(path, 'rb') as fh:
-                data = fh.read()
+            # Use iterparse (streaming) for large files to avoid loading entire XML into memory
             try:
-                parser = LET.XMLParser(recover=True)
-                root = LET.fromstring(data, parser=parser)
-            except Exception as e_lxml:
-                logger.warning("lxml recovery failed: %s", e_lxml)
-                root = None
-            if root is not None:
-                # iterate over elements
+                it = _tqdm(LET.iterparse(str(path), events=("end",)), desc="CDA recovery (iterparse)", disable=disable)
                 n_s = 0
                 n_o = 0
                 cs: Dict[str, int] = {}
-                for elem in root.iter():
+                for _, elem in it:
                     tag = _strip_ns(elem.tag) if getattr(elem, 'tag', None) else ''
                     if tag.lower().endswith('section'):
                         n_s += 1
@@ -108,34 +101,115 @@ def cda_probe(path: Path, home_tz: Optional[str] = None) -> Dict:
                         if code_elem is not None:
                             code = code_elem.attrib.get('code') or code_elem.attrib.get('displayName') or 'unknown'
                             cs[code] = cs.get(code, 0) + 1
-                logger.warning("CDA recovered using lxml.recover: sections=%d obs=%d", n_s, n_o)
+                    # Clear element to free memory
+                    elem.clear()
+                
+                logger.warning("CDA recovered using lxml.iterparse: sections=%d obs=%d", n_s, n_o)
                 return {
                     "n_section": n_s,
                     "n_observation": n_o,
                     "codes": cs,
-                    "recover": {"used": True, "method": "lxml", "notes": "recover=True used"},
+                    "recover": {"used": True, "method": "lxml.iterparse", "notes": "streaming parse used"},
                     "error": None,
                     "error_type": None,
                     "error_msg": None,
                 }
-        except Exception:
-            # lxml not available; fallthrough to salvage
+            except Exception as e_iterparse:
+                logger.warning("lxml.iterparse recovery also failed: %s; attempting recover=True fallback", e_iterparse)
+                # Fallback to recover=True but with memory-limited approach:
+                # Try to parse in chunks or with recovery mode
+                try:
+                    # Open file and attempt parse with recover=True
+                    # This is a last-ditch effort; it may still fail on very large files
+                    parser = LET.XMLParser(recover=True)
+                    # Use iterparse with recover parser
+                    it = _tqdm(LET.iterparse(str(path), events=("end",), recover=True), desc="CDA recovery (recover mode)", disable=disable)
+                    n_s = 0
+                    n_o = 0
+                    cs: Dict[str, int] = {}
+                    for _, elem in it:
+                        tag = _strip_ns(elem.tag) if getattr(elem, 'tag', None) else ''
+                        if tag.lower().endswith('section'):
+                            n_s += 1
+                        if tag.lower().endswith('observation'):
+                            n_o += 1
+                            code_elem = None
+                            for child in elem:
+                                t = _strip_ns(child.tag)
+                                if t.lower() == 'code':
+                                    code_elem = child
+                                    break
+                            if code_elem is not None:
+                                code = code_elem.attrib.get('code') or code_elem.attrib.get('displayName') or 'unknown'
+                                cs[code] = cs.get(code, 0) + 1
+                        elem.clear()
+                    
+                    logger.warning("CDA recovered using lxml.recover mode: sections=%d obs=%d", n_s, n_o)
+                    return {
+                        "n_section": n_s,
+                        "n_observation": n_o,
+                        "codes": cs,
+                        "recover": {"used": True, "method": "lxml.recover", "notes": "recover=True with streaming"},
+                        "error": None,
+                        "error_type": None,
+                        "error_msg": None,
+                    }
+                except Exception as e_recover:
+                    logger.warning("lxml recover mode failed: %s", e_recover)
+                    # Both lxml methods failed, try salvage
+                    pass
+        except ImportError:
+            logger.warning("lxml not available; attempting salvage parse")
+            pass
+        except Exception as e_lxml:
+            logger.warning("lxml recovery setup failed: %s", e_lxml)
             pass
 
-        # 3) salvage: strip BOM and keep first ClinicalDocument block
+        # 3) salvage: stream the file and extract first ClinicalDocument block
         try:
-            raw = Path(path).read_bytes()
-            if raw.startswith(b'\xef\xbb\xbf'):
-                raw = raw[3:]
-            text = raw.decode('utf-8', errors='replace')
-            end_tag = '</ClinicalDocument>'
-            idx = text.find(end_tag)
-            if idx != -1:
-                salvaged = text[: idx + len(end_tag)]
-            else:
-                salvaged = text
+            # Stream-read the file in chunks to avoid loading entire 4GB into memory
+            chunk_size = 1024 * 1024  # 1MB chunks
+            salvaged_text = ""
+            found_end = False
+            
+            with open(path, 'rb') as fh:
+                # Read first chunk to check for BOM
+                first_chunk = fh.read(chunk_size)
+                if first_chunk.startswith(b'\xef\xbb\xbf'):
+                    first_chunk = first_chunk[3:]
+                
+                salvaged_text = first_chunk.decode('utf-8', errors='replace')
+                
+                # Check if we found the end tag in first chunk
+                end_tag = '</ClinicalDocument>'
+                if end_tag in salvaged_text:
+                    found_end = True
+                    idx = salvaged_text.find(end_tag)
+                    salvaged_text = salvaged_text[: idx + len(end_tag)]
+                else:
+                    # Continue reading until we find the end tag or reach max reasonable size
+                    max_size = 500 * 1024 * 1024  # Limit to 500MB to prevent excessive memory use
+                    bytes_read = len(first_chunk)
+                    
+                    while bytes_read < max_size and not found_end:
+                        chunk = fh.read(chunk_size)
+                        if not chunk:
+                            break
+                        chunk_text = chunk.decode('utf-8', errors='replace')
+                        salvaged_text += chunk_text
+                        bytes_read += len(chunk)
+                        
+                        if end_tag in chunk_text:
+                            found_end = True
+                            idx = salvaged_text.find(end_tag)
+                            salvaged_text = salvaged_text[: idx + len(end_tag)]
+                            break
+            
+            if not salvaged_text:
+                salvaged_text = ""
+            
             try:
-                root = ET.fromstring(salvaged)
+                root = ET.fromstring(salvaged_text)
             except Exception as e_salv:
                 logger.warning("Salvage parse failed: %s", e_salv)
                 # indicate salvage was attempted but failed
@@ -148,6 +222,7 @@ def cda_probe(path: Path, home_tz: Optional[str] = None) -> Dict:
                     "error_type": type(pe).__name__,
                     "error_msg": str(pe),
                 }
+            
             n_s, n_o, cs = _count_from_iterable(root.iter())
             logger.warning("CDA recovered using salvage_first_root: sections=%d obs=%d", n_s, n_o)
             return {
