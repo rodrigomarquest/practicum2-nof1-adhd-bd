@@ -59,6 +59,7 @@ python scripts/run_full_pipeline.py --participant P000001 --snapshot 2025-11-07
 ```
 
 Pipeline Stages:
+
 - Stage 0: Ingest (Apple Health + Zepp extraction)
 - Stage 1: CSV Aggregation (daily metrics)
 - Stage 2: Unify Daily (canonical features)
