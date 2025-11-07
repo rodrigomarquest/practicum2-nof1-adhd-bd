@@ -236,10 +236,8 @@ full: extract activity cardio sleep join enrich
 # -------- nb1-eda-run (non-interactive EDA from Python script) --------
 .PHONY: nb1-eda-run
 nb1-eda-run:
->	@echo "[EDA] nb1-eda-run: PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
->	PYTHONPATH=src \
->	ETL_TQDM=1 \
->	$(PYTHON) notebooks/NB1_EDA_daily.py \
+>	@echo "[EDA] nb1-eda-run: PID=$(PID) SNAPSHOT=$(SNAPSHOT) ETL_TQDM=$(ETL_TQDM)"
+>	PYTHONPATH=src $(PYTHON) notebooks/NB1_EDA_daily.py \
 >	  --pid $(PID) \
 >	  --snapshot $(SNAPSHOT)
 
