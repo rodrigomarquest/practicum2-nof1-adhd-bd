@@ -2,6 +2,7 @@
 from __future__ import annotations
 import io
 import os
+import sys
 import time
 from contextlib import contextmanager
 from typing import Optional, IO
@@ -10,6 +11,42 @@ try:
     from tqdm import tqdm  # type: ignore
 except Exception:
     tqdm = None  # fallback sem dependência
+
+
+def _should_show_tqdm() -> bool:
+    """Determine if tqdm should be shown.
+    
+    Checks environment variables and TTY detection with fallback:
+    - ETL_TQDM=1 forces display
+    - ETL_TQDM=0 disables
+    - CI environment disables
+    - Otherwise check if stdout is a TTY (with fallback for Git Bash/MSYS)
+    """
+    # Explicit force enable/disable
+    if os.getenv("ETL_TQDM") == "1":
+        return True
+    if os.getenv("ETL_TQDM") == "0":
+        return False
+    
+    # Disable in CI environments
+    if os.getenv("CI"):
+        return False
+    
+    # Check if stdout is a TTY
+    # On Windows/Git Bash, isatty() may return False even in an interactive terminal
+    # So we add additional heuristics: check for common Git Bash/MSYS env vars
+    try:
+        if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
+            return True
+    except Exception:
+        pass
+    
+    # Git Bash / MSYS2 detection: check for MSYSTEM or TERM env vars
+    if os.getenv("MSYSTEM") or os.getenv("TERM"):
+        # Likely in an interactive terminal even if isatty() fails
+        return True
+    
+    return False
 
 
 class Timer:
@@ -59,18 +96,26 @@ def progress_bar(total: Optional[int], desc: str = "", unit: str = "B"):
     unit: unit string for tqdm. Default is 'B' (bytes) to preserve
     backward compatibility. If unit == 'B' then unit_scale is True.
     Callers that update by item count should pass unit='items'.
+    
+    Progress bar visibility is controlled by:
+    - ETL_TQDM=1 (force show)
+    - ETL_TQDM=0 (force hide)
+    - Automatic detection via isatty() with Git Bash/MSYS2 fallback
     """
     if tqdm is None:
         bar = _NoOpBar(total, desc)
         yield bar
     else:
+        # Decide whether to show the bar based on environment and TTY detection
+        disable = not _should_show_tqdm()
+        
         # Explicitly call tqdm with the parameters we need to avoid mypy
         # confusion from dynamic kwargs. For bytes mode enable scaling.
         if unit == "B":
-            with tqdm(total=total, desc=desc, unit="B", unit_scale=True) as bar:
+            with tqdm(total=total, desc=desc, unit="B", unit_scale=True, disable=disable) as bar:
                 yield bar
         else:
-            with tqdm(total=total, desc=desc, unit=unit, unit_scale=False) as bar:
+            with tqdm(total=total, desc=desc, unit=unit, unit_scale=False, disable=disable) as bar:
                 yield bar
 
 

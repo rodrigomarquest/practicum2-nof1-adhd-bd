@@ -233,6 +233,22 @@ truncate-export:
 full: extract activity cardio sleep join enrich
 >	@echo "[ETL] FULL completed for PID=$(PID) SNAPSHOT=$(SNAPSHOT) (DRY_RUN=$(DRY_RUN))"
 
+# -------- nb1-eda-run (non-interactive EDA from Python script) --------
+.PHONY: nb1-eda-run
+nb1-eda-run:
+>	@echo "[EDA] nb1-eda-run: PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
+>	PYTHONPATH=src \
+>	ETL_TQDM=1 \
+>	$(PYTHON) notebooks/NB1_EDA_daily.py \
+>	  --pid $(PID) \
+>	  --snapshot $(SNAPSHOT)
+
+# -------- etl full-with-eda (complete pipeline + NB1 EDA) --------
+.PHONY: full-with-eda
+full-with-eda: extract activity cardio sleep join enrich nb1-eda-run
+>	@echo "[ETL+EDA] FULL-WITH-EDA completed for PID=$(PID) SNAPSHOT=$(SNAPSHOT)"
+>	@echo "Artifacts saved to: reports/ and latest/"
+
 # Labels usam PARTICIPANT/SNAPSHOT (defaults em config/settings.yaml)
 labels:
 labels:

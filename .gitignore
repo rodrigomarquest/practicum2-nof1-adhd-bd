@@ -49,6 +49,8 @@ logs/
 backups/
 processed/
 dist/assets/
+reports/
+latest/
 # --- Keep empty release staging structure ---
 !dist/assets/.keep
 !dist/changelog/
@@ -111,6 +113,7 @@ tmp/
 # --- Notebooks: só raiz visível (NB1/NB2). Subpastas/artefatos ignorados.
 notebooks/**/*
 !notebooks/*.ipynb
+!notebooks/*.py
 !notebooks/README.md
 archive/
 ../archive_legacy/
