@@ -31,11 +31,13 @@ Hotfix release addressing tqdm progress bar visibility in Git Bash/MSYS2 termina
 **Key technical improvements:**
 
 1. **Binary regex streaming for XML parsing** (150x faster)
+
    - Bypasses full XML parsing overhead
    - Processes 3.9GB Apple export.xml in ~2.5 minutes vs indefinite hang
    - Memory efficient: 10MB chunk streaming with minimal buffer
 
 2. **Native datetime parsing** (100x faster than pandas)
+
    - Replaces `pd.to_datetime()` which was causing indefinite stalls
    - Direct `datetime.strptime()` + timezone offset calculation
    - 51,000 records/second parsing throughput
