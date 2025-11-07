@@ -3302,6 +3302,12 @@ def join_run(snapshot_dir: Path | str, *, dry_run: bool = False) -> int:
     else:
         base = pd.DataFrame()
 
+    # Ensure date column is datetime64 in both frames before merge
+    if "date" in base.columns and not base.empty:
+        base["date"] = pd.to_datetime(base["date"], errors="coerce")
+    if "date" in concat_df.columns and not concat_df.empty:
+        concat_df["date"] = pd.to_datetime(concat_df["date"], errors="coerce")
+
     # Merge base and concat_df; concat_df columns may overlap with base; prefer concat_df values (enriched)
     merged = base.merge(concat_df.drop(columns=[c for c in ["source_domain"] if c in concat_df.columns], errors="ignore"), on="date", how="outer", suffixes=("_x", "_y")) if not base.empty else concat_df.copy()
 
