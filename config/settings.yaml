@@ -1,3 +1,7 @@
+# Global ETL settings.
+# Includes time zone, file system paths, HR bounds, and flags that influence
+# how stages (aggregation, unify, label) behave across participants.
+
 seed: 42
 cv:
   train_days: 120

@@ -1,3 +1,7 @@
+# Label rules configuration for daily mood/affect.
+# This file defines how raw mood fields (e.g. Apple State of Mind, PBSI items)
+# are mapped into the ternary label space: -1 (worse), 0 (same), +1 (better).
+
 meta: { version: 1, label_source: heuristic_v1, conflict_priority: [hypomanic_irritable, anxious_stress, dysphoric_depressive, euthymic] }
 features: {}
 zscore_columns: []

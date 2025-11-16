@@ -1,3 +1,7 @@
+# Participant registry for the N-of-1 pipeline.
+# Each entry defines a participant ID, aliases, and ETL paths for snapshots.
+# The pipeline uses this file to resolve which folders to read/write for each PID.
+
 participants:
   - id: P000001
     label: primary
