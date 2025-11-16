@@ -59,16 +59,19 @@ All changes maintain backward compatibility while enforcing cleaner, more predic
 ### Modified Files
 
 1. **Makefile**
+
    - Added `ZPWD` variable for Zepp password
    - `env` target: fail-fast check for missing password
    - All pipeline targets: pass `--zepp-password` when `ZPWD` set
 
 2. **scripts/run_full_pipeline.py**
+
    - Stage 0: fail-fast validation before extraction
    - Unified `zpwd` variable (accepts both env var names)
    - Exit code 2 for missing password
 
 3. **src/etl/stage_csv_aggregation.py**
+
    - Removed `/ participant` from output paths
    - Added automatic `.prev.csv` renaming
    - Clear logging for renamed files

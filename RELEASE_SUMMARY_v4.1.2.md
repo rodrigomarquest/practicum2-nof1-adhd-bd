@@ -22,6 +22,7 @@
 ## 📊 Release Metrics
 
 - **Files Modified:** 4 core files
+
   - Makefile
   - scripts/run_full_pipeline.py
   - src/etl/stage_csv_aggregation.py
@@ -29,6 +30,7 @@
 
 - **Lines Changed:** ~85 lines
 - **Files Added:** 2
+
   - docs/release_notes/release_notes_v4.1.2.md
   - RUN_REPORT.md
 
@@ -41,24 +43,29 @@
 ## 🎯 Key Features
 
 ### 1. Fail-Fast Password Validation
+
 - **Exit Code 2** when Zepp ZIP detected without password
 - Checks both `--zepp-password` and `ZEP_ZIP_PASSWORD` / `ZEPP_ZIP_PASSWORD`
 - Validation at 2 levels: Makefile `env` target + Stage 0
 
 ### 2. Canonical Path Normalization
+
 **Before:**
+
 ```
 data/etl/P000001/2025-11-07/extracted/apple/P000001/daily_sleep.csv
                                            ^^^^^^^^ (unwanted)
 ```
 
 **After:**
+
 ```
 data/etl/P000001/2025-11-07/extracted/apple/daily_sleep.csv
                                            (clean!)
 ```
 
 ### 3. File Management
+
 - Automatic `.prev.csv` renaming for existing files
 - No fallback path reading (strict enforcement)
 - Clear warning logs for missing canonical files
@@ -68,6 +75,7 @@ data/etl/P000001/2025-11-07/extracted/apple/daily_sleep.csv
 ## 🔗 Assets Published
 
 **GitHub Release Assets:**
+
 1. `provenance.csv` - Version metadata and commit hash
 2. `manifest.json` - Detailed change manifest
 3. `release_notes_v4.1.2.md` - Full release documentation
@@ -81,12 +89,14 @@ data/etl/P000001/2025-11-07/extracted/apple/daily_sleep.csv
 ### For Existing Installations
 
 1. **Update from v4.1.1 to v4.1.2:**
+
    ```bash
    git pull origin main
    git checkout v4.1.2
    ```
 
 2. **Set Zepp Password (if using encrypted ZIPs):**
+
    ```bash
    export ZEP_ZIP_PASSWORD="your_password"
    # OR
@@ -101,6 +111,7 @@ data/etl/P000001/2025-11-07/extracted/apple/daily_sleep.csv
 ### For New Installations
 
 1. **Clone repository:**
+
    ```bash
    git clone https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd.git
    cd practicum2-nof1-adhd-bd
@@ -108,6 +119,7 @@ data/etl/P000001/2025-11-07/extracted/apple/daily_sleep.csv
    ```
 
 2. **Install dependencies:**
+
    ```bash
    python -m venv .venv
    source .venv/bin/activate  # Windows: .venv\Scripts\activate
@@ -124,6 +136,7 @@ data/etl/P000001/2025-11-07/extracted/apple/daily_sleep.csv
 ## 🧪 Testing Performed
 
 ### Manual Testing
+
 - ✅ Pipeline with Zepp password (successful)
 - ✅ Pipeline without Zepp password (exit 2 as expected)
 - ✅ Canonical paths verified (no intermediate PID)
@@ -131,6 +144,7 @@ data/etl/P000001/2025-11-07/extracted/apple/daily_sleep.csv
 - ✅ RUN_REPORT.md consistency maintained
 
 ### Edge Cases Validated
+
 - ✅ Missing password with Zepp ZIP present
 - ✅ Existing `.csv` files (renamed to `.prev.csv`)
 - ✅ Missing canonical files (warning logged, empty DataFrame)
@@ -141,12 +155,14 @@ data/etl/P000001/2025-11-07/extracted/apple/daily_sleep.csv
 ## 🔄 Next Steps
 
 ### Immediate (v4.1.3 candidates)
+
 - [ ] Add integration tests for fail-fast behavior
 - [ ] Verify no legacy path references in other modules
 - [ ] Add canonical path structure to README.md
 - [ ] Test with real encrypted Zepp ZIPs
 
 ### Future Enhancements
+
 - [ ] Add pre-commit hook for path validation
 - [ ] CI/CD pipeline for automated testing
 - [ ] Performance benchmarks for Stage 0-9
@@ -173,4 +189,4 @@ data/etl/P000001/2025-11-07/extracted/apple/daily_sleep.csv
 
 **🎉 Release v4.1.2 Successfully Deployed!**
 
-*Generated: 2025-11-07 16:50:00 UTC*
+_Generated: 2025-11-07 16:50:00 UTC_
