@@ -5,6 +5,7 @@ This folder contains **AI-assisted session logs, completion reports, implementat
 ## Purpose
 
 These documents serve as:
+
 - **Development provenance** – tracking decisions, iterations, and problem-solving sessions
 - **Execution logs** – detailed records of refactoring phases, fixes, and releases
 - **Historical context** – understanding how the codebase evolved over time
@@ -12,6 +13,7 @@ These documents serve as:
 ## What's Here
 
 **32+ AI-assisted documents** covering:
+
 - Phase summaries (Phase 2, Phase 3, Phase 7, etc.)
 - Implementation reports (Period Expansion, Vendor/Variant, Biomarkers)
 - Release execution plans (v4.1.0)
@@ -21,9 +23,10 @@ These documents serve as:
 
 ## Important Note
 
-⚠️ These are **NOT canonical design documents**. They document the *process* of building the pipeline, not the *result*.
+⚠️ These are **NOT canonical design documents**. They document the _process_ of building the pipeline, not the _result_.
 
 For **canonical architecture and research documentation**, see:
+
 - `docs/ETL_ARCHITECTURE_COMPLETE.md` – Complete ETL architecture
 - `docs/ETL_EDA_MODELING_PLAN.md` – EDA and modeling plan
 - `docs/PHASE2_ENRICHED_PREJOIN_ARCHITECTURE.md` – Phase 2 design
@@ -35,6 +38,7 @@ For **canonical architecture and research documentation**, see:
 ## Organization
 
 All files in this folder follow naming conventions:
+
 - `*_SUMMARY.md` – Phase or feature summaries
 - `*_REPORT.md` – Completion or execution reports
 - `*_IMPLEMENTATION.md` – Implementation details

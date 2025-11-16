@@ -50,17 +50,20 @@ Structural refactoring to archive unused and duplicate modules without any behav
 ### Modules Archived (Phase 3A/B/C - Root-Level Legacy)
 
 **Phase 3A: NB2/NB3 Prototypes** (Commit: 65f6935)
+
 - `src/models_nb2.py` → Baseline model prototype (1598 lines, replaced by `nb3_analysis.py`)
 - `src/models_nb3.py` → Notebook wrapper (replaced by `nb3_analysis.py`)
 - `src/nb3_run.py` → NB3 prototype with SHAP/Drift (699 lines, replaced by `nb3_analysis.py`)
 - `src/eda.py` → EDA notebook wrapper (not in canonical pipeline)
 
 **Phase 3B: Legacy ETL Pipeline** (Commit: 929c396)
+
 - `src/etl_pipeline.py` → Legacy CLI with `discover_sources()` (163KB, replaced by `run_full_pipeline.py`)
 - `tests/test_cli_extract_logging.py` → Test for legacy CLI (moved to `archive/tests_legacy/`)
 - Created `pytest.ini` to exclude `archive/` from test collection
 
 **Phase 3C: Legacy Labeling** (Commit: 859376b)
+
 - `src/make_labels.py` → Legacy labeling CLI (replaced by `stage_apply_labels.py`)
 - `src/utils.py` → Utility functions for `make_labels.py`
 
@@ -69,12 +72,43 @@ Structural refactoring to archive unused and duplicate modules without any behav
 ### Tests Archived (Phase Tests - Pre-v4 Layout)
 
 **Phase Tests: Legacy Test Clean-up** (Commit: 13577cf)
+
 - `tests/test_aggregate_features_daily.py` → Used `etl_tools` (pre-v4 package)
 - `tests/test_cda_in_pipeline.py` → Used bare `domains.cda` import
 - `tests/test_cda_probe.py` → Used bare `domains.cda` import
 - `tests/test_io_utils.py` → Used `etl_modules` (pre-v4 package)
 
 **Result**: All pre-v4 import errors eliminated. Pytest now collects only v4.1.x compatible tests (13 tests).
+
+### Finishing Pass: Documentation & Cleanup (Commits: 7692ddd, 4f02959, 9be9a81)
+
+**Step A: AI-Assisted Documentation** (Commit: 7692ddd)
+- Moved 31 AI-assisted session logs from `docs/` to `docs/copilot/`
+  - Implementation summaries, phase reports, release execution plans
+  - Session logs, handoff docs, fix reports
+- Updated `docs/copilot/README.md` with clear organization
+- **Result**: `docs/` now contains only canonical architecture and research documents
+
+**Step B: Provenance Consolidation** (Commit: 4f02959)
+- Created `.keep` files for `dist/assets/` and `dist/provenance/`
+- Canonical provenance remains in `/provenance` (audit CSVs, reports)
+- `dist/provenance/` for release staging only (ignored except `.keep`)
+- **Result**: Clear separation between canonical provenance and release artifacts
+
+**Step C: Archive Untracking** (Commit: 9be9a81)
+- Untracked 26 files (32MB) from `archive/` using `git rm -r --cached`
+- Files remain on disk for local reference
+- Accessible in Git history via previous commits
+- **Result**: Clean HEAD focused on v4.1.x, smaller clone size
+
+**Step D-E: Smoke Test & Unused Modules Report** (Documentation only)
+- Created `SMOKETEST_PIPELINE.md` - Quick validation guide for pipeline
+  - Commands for stages 0-5 (core ETL)
+  - Expected outputs, runtime estimates, troubleshooting
+- Created `UNUSED_MODULES_REPORT.md` - Informational analysis
+  - Identified 8 folders (`src/features/`, `src/io/`, etc.) potentially unused
+  - No moves/deletions performed - report only
+- **Result**: Clear validation and future refactoring guidance
 
 ### Documentation Added
 
@@ -83,12 +117,15 @@ Structural refactoring to archive unused and duplicate modules without any behav
   - Documents import graph and dependency tree
   - Provides deletion safety rules
 - **docs/ARCHIVE_PLAN.md**: Detailed refactoring plan and execution log
+- **SMOKETEST_PIPELINE.md**: Pipeline validation guide (stages 0-5)
+- **UNUSED_MODULES_REPORT.md**: Analysis of potentially unused modules (informational)
+- **docs/copilot/README.md**: Organization of AI-assisted documentation
 
 ### Validation
 
 - ✅ All imports from canonical modules still resolve
-- ✅ `pytest` passes (if run)
-- ✅ `make verify` target still functional
+- ✅ `pytest` collects 13 tests (no pre-v4 errors)
+- ✅ `python -m scripts.run_full_pipeline --help` works
 - ✅ No changes to pipeline behavior or outputs
 
 ### Breaking Changes
