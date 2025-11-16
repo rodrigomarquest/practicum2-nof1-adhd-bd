@@ -66,6 +66,16 @@ Structural refactoring to archive unused and duplicate modules without any behav
 
 **Total Phase 3**: 7 root-level modules (256KB) + 1 test archived to `archive/src_root_legacy/` and `archive/tests_legacy/`
 
+### Tests Archived (Phase Tests - Pre-v4 Layout)
+
+**Phase Tests: Legacy Test Clean-up** (Commit: 13577cf)
+- `tests/test_aggregate_features_daily.py` → Used `etl_tools` (pre-v4 package)
+- `tests/test_cda_in_pipeline.py` → Used bare `domains.cda` import
+- `tests/test_cda_probe.py` → Used bare `domains.cda` import
+- `tests/test_io_utils.py` → Used `etl_modules` (pre-v4 package)
+
+**Result**: All pre-v4 import errors eliminated. Pytest now collects only v4.1.x compatible tests (13 tests).
+
 ### Documentation Added
 
 - **CANONICAL_ENTRYPOINTS.md**: Single source of truth for protected modules

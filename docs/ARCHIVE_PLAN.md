@@ -550,5 +550,73 @@ python -m scripts.run_full_pipeline --help    # Expected: 0 (canonical pipeline)
 
 ---
 
+## Phase Tests: Legacy Test Clean-up (Pre-v4 Layout)
+
+**Status**: ✅ Complete (Commit: 13577cf)
+
+### Problem
+
+After Phase 3, pytest still had 4 collection errors from tests using pre-v4 import paths:
+- `from etl_tools.aggregate_features_daily import run`
+- `from domains.cda import parse_cda` (bare import, not `src.domains.cda`)
+- `from etl_modules.io_utils import read_csv_sniff`
+
+These imports belonged to an older project layout incompatible with v4.1.x canonical pipeline.
+
+### Archived Legacy Tests
+
+Moved 4 tests to `archive/tests_legacy/`:
+
+1. **`test_aggregate_features_daily.py`** (3.0KB)
+   - **Tested**: Old `etl_tools.aggregate_features_daily.run()` function
+   - **Legacy Import**: `from etl_tools.aggregate_features_daily import run`
+   - **Replaced by**: `src/etl/stage_csv_aggregation.py` (Stage 7 in canonical pipeline)
+
+2. **`test_cda_in_pipeline.py`** (6.3KB)
+   - **Tested**: CDA parsing integration with bare `domains` import
+   - **Legacy Import**: `from domains.cda import parse_cda`
+   - **Replaced by**: `src/domains/cda.py` (imported as `from src.domains.cda import parse_cda`)
+
+3. **`test_cda_probe.py`** (865 bytes)
+   - **Tested**: CDA XML parsing probe
+   - **Legacy Import**: `from domains.cda import parse_cda`
+   - **Replaced by**: `src/domains/cda.py` (same function, proper import path)
+
+4. **`test_io_utils.py`** (850 bytes)
+   - **Tested**: CSV reading from encrypted ZIP files (ZipCrypto + AES)
+   - **Legacy Import**: `from etl_modules.io_utils import read_csv_sniff`
+   - **Replaced by**: `etl_modules/io_utils.py` with proper import: `from etl_modules.io_utils import ...`
+
+### Configuration
+
+- ✅ `pytest.ini` already configured from Phase 3B
+  - `testpaths = tests` → Only collect from `tests/` directory
+  - `norecursedirs = archive .git __pycache__ *.egg-info` → Exclude archive
+
+### Validation Results
+
+**Before archival**:
+```
+pytest --collect-only
+ERROR tests/test_aggregate_features_daily.py - ModuleNotFoundError: No module named 'etl_tools'
+ERROR tests/test_cda_in_pipeline.py - ModuleNotFoundError: No module named 'domains'
+ERROR tests/test_cda_probe.py - ModuleNotFoundError: No module named 'domains'
+ERROR tests/test_io_utils.py - ModuleNotFoundError: No module named 'etl_modules'
+4 errors during collection
+```
+
+**After archival**:
+```
+pytest --collect-only
+13 tests collected in 0.73s
+✓ No more etl_tools, etl_modules, or bare domains.* import errors
+```
+
+**Total Archived Tests**: 5 files in `archive/tests_legacy/`
+- Phase 3B: `test_cli_extract_logging.py` (etl_pipeline.py dependency)
+- Phase Tests: 4 tests with pre-v4 imports
+
+---
+
 **Maintainer:** Rodrigo Marques Teixeira  
-**Last Update:** 2025-11-16 (Phase 3A/B/C completed)
+**Last Update:** 2025-11-16 (Phase 3A/B/C + Phase Tests completed)
