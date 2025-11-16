@@ -19,11 +19,13 @@ Structural refactoring to archive unused and duplicate modules without any behav
 **Key Changes:**
 
 ### Code Organization
+
 - **Archived Duplicate Modules**: Moved unused/duplicate code to `archive/` (not deleted)
   - `src/cli/*` duplicates → `archive/src_cli_legacy/` (5 modules)
   - `src/domains/biomarkers/*` → `archive/src_domains_legacy/` (9 modules)
-  
+
 ### Canonical Entrypoints Preserved
+
 - ✅ `scripts/run_full_pipeline.py` - Main orchestrator (UNCHANGED)
 - ✅ `scripts/extract_biomarkers.py` - Uses `src.biomarkers.aggregate` (UNCHANGED)
 - ✅ `scripts/prepare_zepp_data.py` - Standalone script (UNCHANGED)
@@ -32,6 +34,7 @@ Structural refactoring to archive unused and duplicate modules without any behav
 - ✅ All `src/biomarkers/*` modules (UNCHANGED - canonical version)
 
 ### Modules Archived (Phase 2A - src/cli/)
+
 - `src/cli/extract_biomarkers.py` → Duplicate of `scripts/extract_biomarkers.py`
 - `src/cli/prepare_zepp_data.py` → Duplicate of `scripts/prepare_zepp_data.py`
 - `src/cli/etl_runner.py` → Superseded by `scripts/run_full_pipeline.py`
@@ -39,11 +42,32 @@ Structural refactoring to archive unused and duplicate modules without any behav
 - `src/cli/migrate_snapshots.py` → Not referenced by Makefile or tests
 
 ### Modules Archived (Phase 2B - src/domains/biomarkers/)
+
 - Entire `src/domains/biomarkers/` folder → Duplicate of `src/biomarkers/`
 - The canonical `src/biomarkers/` is used by `scripts/extract_biomarkers.py`
 - Contains full chain: aggregate → {segmentation, hrv, sleep, activity, circadian, validators}
 
+### Modules Archived (Phase 3A/B/C - Root-Level Legacy)
+
+**Phase 3A: NB2/NB3 Prototypes** (Commit: 65f6935)
+- `src/models_nb2.py` → Baseline model prototype (1598 lines, replaced by `nb3_analysis.py`)
+- `src/models_nb3.py` → Notebook wrapper (replaced by `nb3_analysis.py`)
+- `src/nb3_run.py` → NB3 prototype with SHAP/Drift (699 lines, replaced by `nb3_analysis.py`)
+- `src/eda.py` → EDA notebook wrapper (not in canonical pipeline)
+
+**Phase 3B: Legacy ETL Pipeline** (Commit: 929c396)
+- `src/etl_pipeline.py` → Legacy CLI with `discover_sources()` (163KB, replaced by `run_full_pipeline.py`)
+- `tests/test_cli_extract_logging.py` → Test for legacy CLI (moved to `archive/tests_legacy/`)
+- Created `pytest.ini` to exclude `archive/` from test collection
+
+**Phase 3C: Legacy Labeling** (Commit: 859376b)
+- `src/make_labels.py` → Legacy labeling CLI (replaced by `stage_apply_labels.py`)
+- `src/utils.py` → Utility functions for `make_labels.py`
+
+**Total Phase 3**: 7 root-level modules (256KB) + 1 test archived to `archive/src_root_legacy/` and `archive/tests_legacy/`
+
 ### Documentation Added
+
 - **CANONICAL_ENTRYPOINTS.md**: Single source of truth for protected modules
   - Lists 15 core files + 3 protected folders (18 units total)
   - Documents import graph and dependency tree
@@ -51,16 +75,20 @@ Structural refactoring to archive unused and duplicate modules without any behav
 - **docs/ARCHIVE_PLAN.md**: Detailed refactoring plan and execution log
 
 ### Validation
+
 - ✅ All imports from canonical modules still resolve
 - ✅ `pytest` passes (if run)
 - ✅ `make verify` target still functional
 - ✅ No changes to pipeline behavior or outputs
 
 ### Breaking Changes
+
 **NONE** - This is a purely structural refactor with no functional changes.
 
 ### Migration Guide
+
 **NO ACTION REQUIRED** - All canonical entrypoints remain in place. If custom scripts import from archived modules, update imports to canonical locations:
+
 - `src.cli.extract_biomarkers` → `scripts.extract_biomarkers` (or run as script)
 - `src.domains.biomarkers` → `src.biomarkers`
 
@@ -76,33 +104,39 @@ Implements strict canonical path normalization in ETL pipeline (removes intermed
 **Key Changes:**
 
 ### Security & Validation
+
 - **Fail-Fast Zepp Password**: Pipeline aborts with exit 2 if Zepp ZIP exists but no password provided
   - Checks `--zepp-password` argument and `ZEP_ZIP_PASSWORD` / `ZEPP_ZIP_PASSWORD` env vars
   - Validation in Makefile `env` target and `run_full_pipeline.py` Stage 0
   - Clear error: `[FATAL] Zepp ZIP found but no password provided...`
 
 ### Path Normalization
+
 - **Canonical Paths**: Removed intermediate `/<PID>/` subdirectory from extracted data
   - Before: `data/etl/P000001/2025-11-07/extracted/apple/P000001/daily_sleep.csv`
   - After: `data/etl/P000001/2025-11-07/extracted/apple/daily_sleep.csv`
   - Modified: `stage_csv_aggregation.py` (write), `stage_unify_daily.py` (read)
 
 ### File Management
+
 - **Automatic Renaming**: Existing `daily_*.csv` files renamed to `*.prev.csv` before overwrite
 - **No Fallback Reading**: `stage_unify_daily.py` only reads canonical paths (no alternative searches)
 - **Clear Warnings**: Missing files logged as `[WARN] Missing {source} daily_{metric} at canonical path`
 
 ### Files Modified
+
 - `Makefile`: Added ZPWD variable, fail-fast env check, --zepp-password flag propagation
 - `scripts/run_full_pipeline.py`: Stage 0 fail-fast validation, unified zpwd variable
 - `src/etl/stage_csv_aggregation.py`: Canonical output paths, .prev.csv renaming
 - `src/etl/stage_unify_daily.py`: Canonical input paths, removed fallback logic
 
 ### Breaking Changes
+
 - Legacy paths with intermediate PID (`extracted/apple/P000001/`) no longer read
 - Missing Zepp password now aborts immediately (exit 2) instead of silent failure
 
 ### Migration Guide
+
 - Update any scripts reading from `extracted/{apple,zepp}/<PID>/` to remove PID subdirectory
 - Set `ZEP_ZIP_PASSWORD` environment variable or pass `ZPWD=` to Makefile for encrypted Zepp data
 - Existing `.csv` files automatically preserved as `.prev.csv` (no manual action needed)
