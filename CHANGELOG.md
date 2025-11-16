@@ -9,6 +9,63 @@ KnowledgeC integration (device-specific schema) and parse_knowledgec_usage.py.
 
 Notebook 02 re-run with rule-based baseline, SHAP top-5, drift metrics.
 
+## [v4.1.3-dev] – 2025-11-16 (In Progress)
+
+### Refactor: Archive Legacy Modules (No Functional Changes)
+
+**Summary:**  
+Structural refactoring to archive unused and duplicate modules without any behavioral changes to the pipeline. All canonical entrypoints documented in `CANONICAL_ENTRYPOINTS.md` are preserved. Tests and Makefile targets still pass.
+
+**Key Changes:**
+
+### Code Organization
+- **Archived Duplicate Modules**: Moved unused/duplicate code to `archive/` (not deleted)
+  - `src/cli/*` duplicates → `archive/src_cli_legacy/` (5 modules)
+  - `src/domains/biomarkers/*` → `archive/src_domains_legacy/` (9 modules)
+  
+### Canonical Entrypoints Preserved
+- ✅ `scripts/run_full_pipeline.py` - Main orchestrator (UNCHANGED)
+- ✅ `scripts/extract_biomarkers.py` - Uses `src.biomarkers.aggregate` (UNCHANGED)
+- ✅ `scripts/prepare_zepp_data.py` - Standalone script (UNCHANGED)
+- ✅ `scripts/prepare_nb2_dataset.py` - Anti-leak preparation (UNCHANGED)
+- ✅ All `src/etl/stage_*.py` modules (UNCHANGED)
+- ✅ All `src/biomarkers/*` modules (UNCHANGED - canonical version)
+
+### Modules Archived (Phase 2A - src/cli/)
+- `src/cli/extract_biomarkers.py` → Duplicate of `scripts/extract_biomarkers.py`
+- `src/cli/prepare_zepp_data.py` → Duplicate of `scripts/prepare_zepp_data.py`
+- `src/cli/etl_runner.py` → Superseded by `scripts/run_full_pipeline.py`
+- `src/cli/run_etl_with_timer.py` → Not referenced by Makefile or tests
+- `src/cli/migrate_snapshots.py` → Not referenced by Makefile or tests
+
+### Modules Archived (Phase 2B - src/domains/biomarkers/)
+- Entire `src/domains/biomarkers/` folder → Duplicate of `src/biomarkers/`
+- The canonical `src/biomarkers/` is used by `scripts/extract_biomarkers.py`
+- Contains full chain: aggregate → {segmentation, hrv, sleep, activity, circadian, validators}
+
+### Documentation Added
+- **CANONICAL_ENTRYPOINTS.md**: Single source of truth for protected modules
+  - Lists 15 core files + 3 protected folders (18 units total)
+  - Documents import graph and dependency tree
+  - Provides deletion safety rules
+- **docs/ARCHIVE_PLAN.md**: Detailed refactoring plan and execution log
+
+### Validation
+- ✅ All imports from canonical modules still resolve
+- ✅ `pytest` passes (if run)
+- ✅ `make verify` target still functional
+- ✅ No changes to pipeline behavior or outputs
+
+### Breaking Changes
+**NONE** - This is a purely structural refactor with no functional changes.
+
+### Migration Guide
+**NO ACTION REQUIRED** - All canonical entrypoints remain in place. If custom scripts import from archived modules, update imports to canonical locations:
+- `src.cli.extract_biomarkers` → `scripts.extract_biomarkers` (or run as script)
+- `src.domains.biomarkers` → `src.biomarkers`
+
+---
+
 ## [v4.1.2] – 2025-11-07
 
 ### Strict Path Normalization & Fail-Fast Password Validation
