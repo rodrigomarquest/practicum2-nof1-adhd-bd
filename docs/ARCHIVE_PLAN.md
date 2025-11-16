@@ -402,13 +402,14 @@ git commit -m "refactor: archive src/domains/biomarkers (src/biomarkers is canon
 
 ---
 
-## Phase 3: Root-Level Module Analysis (src/*.py)
+## Phase 3: Root-Level Module Analysis (src/\*.py)
 
 **Status**: ✅ Analysis Complete, ⏳ Awaiting User Decision
 
 ### 3.1 Inventory
 
 Found **7 root-level modules** in `src/`:
+
 1. `make_labels.py` (71 lines) - CLI labeling tool
 2. `etl_pipeline.py` (large) - Legacy ETL pipeline
 3. `models_nb2.py` (1598 lines!) - Baseline models script
@@ -430,18 +431,21 @@ Found **7 root-level modules** in `src/`:
 #### ✅ Safe to Archive (4 modules)
 
 1. **`models_nb2.py`** (1598 lines)
+
    - **Purpose**: "NB2 — Baseline models and LSTM scaffold"
    - **Replacement**: `src/etl/nb3_analysis.py` (implements NB2 CV logic)
    - **Risk**: Low (prototype superseded by canonical implementation)
    - **Destination**: `archive/src_root_legacy/models_nb2.py`
 
 2. **`models_nb3.py`** (small wrapper)
+
    - **Purpose**: Dynamic loader for `notebooks/NB3_DeepLearning.py`
    - **Replacement**: `src/etl/nb3_analysis.py` (canonical NB3)
    - **Risk**: Low (wrapper for old notebook, canonical version exists)
    - **Destination**: `archive/src_root_legacy/models_nb3.py`
 
 3. **`nb3_run.py`** (699 lines)
+
    - **Purpose**: "NB3 — Logistic SHAP + Drift Detection + LSTM M1 + TFLite Export"
    - **Features**: ADWIN drift (δ=0.002), KS test, SHAP, LSTM training
    - **Replacement**: `src/etl/nb3_analysis.py` (used by run_full_pipeline.py Stage 9)
@@ -471,6 +475,7 @@ Found **7 root-level modules** in `src/`:
 #### ⚠️ Dependency Chain (2 modules)
 
 6. **`make_labels.py`** (71 lines)
+
    - **Purpose**: CLI labeling with YAML rules
    - **Usage**: `python -m src.make_labels --rules config/label_rules.yaml ...`
    - **Imports**: `from .utils import zscore_by_segment, write_csv`
@@ -493,6 +498,7 @@ Found **7 root-level modules** in `src/`:
 ### 3.4 Recommendation Summary
 
 **Immediate Actions (Low Risk)**:
+
 ```bash
 # Archive 4 safe modules (NB2/NB3 prototypes + notebook wrappers)
 mkdir -p archive/src_root_legacy
@@ -506,6 +512,7 @@ git commit -m "refactor(Phase3A): archive legacy NB2/NB3 prototype modules"
 **User Decision Required**:
 
 1. **`etl_pipeline.py` + Test**:
+
    - [ ] Option A: Update `test_cli_extract_logging.py` to use canonical pipeline
    - [ ] Option B: Delete obsolete test (if functionality no longer relevant)
    - [ ] Option C: Keep both as legacy test dependency (not recommended)
@@ -515,6 +522,7 @@ git commit -m "refactor(Phase3A): archive legacy NB2/NB3 prototype modules"
    - [ ] Option B: Keep both for manual labeling experiments
 
 **Validation After Phase 3A**:
+
 ```bash
 pytest                                        # Expected: test_cli_extract_logging may fail
 python -m scripts.run_full_pipeline --help    # Expected: 0 (canonical pipeline)
@@ -523,6 +531,7 @@ python -m scripts.run_full_pipeline --help    # Expected: 0 (canonical pipeline)
 ### 3.5 Execution Summary
 
 ✅ **Phase 3A: NB2/NB3 Prototypes** (Commit: 65f6935)
+
 - `src/models_nb2.py` → `archive/src_root_legacy/` (58KB, 1598-line baseline model prototype)
 - `src/models_nb3.py` → `archive/src_root_legacy/` (1.1KB, notebook wrapper)
 - `src/nb3_run.py` → `archive/src_root_legacy/` (25KB, 699-line NB3 prototype with SHAP/Drift)
@@ -530,12 +539,14 @@ python -m scripts.run_full_pipeline --help    # Expected: 0 (canonical pipeline)
 - **Replaced by**: `src/etl/nb3_analysis.py` (canonical NB3 implementation)
 
 ✅ **Phase 3B: Legacy ETL Pipeline** (Commit: 929c396)
+
 - `src/etl_pipeline.py` → `archive/src_root_legacy/` (163KB, legacy CLI with discover_sources())
 - `tests/test_cli_extract_logging.py` → `archive/tests_legacy/` (2.4KB, test for legacy CLI)
 - **Replaced by**: `scripts/run_full_pipeline.py` + `src/etl/stage_*.py`
 - **Note**: Created `pytest.ini` to exclude `archive/` from test collection
 
 ✅ **Phase 3C: Legacy Labeling** (Commit: 859376b)
+
 - `src/make_labels.py` → `archive/src_root_legacy/` (2.1KB, legacy labeling CLI)
 - `src/utils.py` → `archive/src_root_legacy/` (1.4KB, utility functions for make_labels)
 - **Replaced by**: `src/etl/stage_apply_labels.py` (canonical labeling stage)
@@ -543,6 +554,7 @@ python -m scripts.run_full_pipeline --help    # Expected: 0 (canonical pipeline)
 **Total Archived**: 7 root-level modules (256KB) + 1 test file
 
 **Validation Results**:
+
 - ✅ `python -m scripts.run_full_pipeline --help` → OK (canonical pipeline works)
 - ⚠️ `pytest` → 4 pre-existing import errors unrelated to archived modules
   - Errors: `ModuleNotFoundError: No module named 'etl_tools'`, `'domains'`
@@ -557,6 +569,7 @@ python -m scripts.run_full_pipeline --help    # Expected: 0 (canonical pipeline)
 ### Problem
 
 After Phase 3, pytest still had 4 collection errors from tests using pre-v4 import paths:
+
 - `from etl_tools.aggregate_features_daily import run`
 - `from domains.cda import parse_cda` (bare import, not `src.domains.cda`)
 - `from etl_modules.io_utils import read_csv_sniff`
@@ -568,16 +581,19 @@ These imports belonged to an older project layout incompatible with v4.1.x canon
 Moved 4 tests to `archive/tests_legacy/`:
 
 1. **`test_aggregate_features_daily.py`** (3.0KB)
+
    - **Tested**: Old `etl_tools.aggregate_features_daily.run()` function
    - **Legacy Import**: `from etl_tools.aggregate_features_daily import run`
    - **Replaced by**: `src/etl/stage_csv_aggregation.py` (Stage 7 in canonical pipeline)
 
 2. **`test_cda_in_pipeline.py`** (6.3KB)
+
    - **Tested**: CDA parsing integration with bare `domains` import
    - **Legacy Import**: `from domains.cda import parse_cda`
    - **Replaced by**: `src/domains/cda.py` (imported as `from src.domains.cda import parse_cda`)
 
 3. **`test_cda_probe.py`** (865 bytes)
+
    - **Tested**: CDA XML parsing probe
    - **Legacy Import**: `from domains.cda import parse_cda`
    - **Replaced by**: `src/domains/cda.py` (same function, proper import path)
@@ -596,6 +612,7 @@ Moved 4 tests to `archive/tests_legacy/`:
 ### Validation Results
 
 **Before archival**:
+
 ```
 pytest --collect-only
 ERROR tests/test_aggregate_features_daily.py - ModuleNotFoundError: No module named 'etl_tools'
@@ -606,6 +623,7 @@ ERROR tests/test_io_utils.py - ModuleNotFoundError: No module named 'etl_modules
 ```
 
 **After archival**:
+
 ```
 pytest --collect-only
 13 tests collected in 0.73s
@@ -613,10 +631,52 @@ pytest --collect-only
 ```
 
 **Total Archived Tests**: 5 files in `archive/tests_legacy/`
+
 - Phase 3B: `test_cli_extract_logging.py` (etl_pipeline.py dependency)
 - Phase Tests: 4 tests with pre-v4 imports
 
 ---
 
-**Maintainer:** Rodrigo Marques Teixeira  
-**Last Update:** 2025-11-16 (Phase 3A/B/C + Phase Tests completed)
+## Archive Tracking Decision (Finishing Pass - Step C)
+
+**Date**: 2025-11-16  
+**Status**: ✅ Untracked from HEAD, preserved in Git history
+
+### Rationale
+
+The `archive/` folder contains 26 files (32MB) of legacy code that has been safely moved out of the active codebase:
+- **Phase 2**: 14 modules (src/cli/, src/domains/biomarkers/)
+- **Phase 3**: 7 root-level modules + 5 tests
+- All modules replaced by canonical v4.1.x components
+
+### Decision: Untrack but Preserve
+
+**Trade-off Analysis**:
+- ✅ **Keep in Git history** – All archived code remains accessible in previous commits
+- ✅ **Untrack from HEAD** – Clean working tree focused on v4.1.x canonical code
+- ✅ **Local reference** – Files remain on disk for developers who need them
+- ✅ **Smaller clone size** – New clones won't download archived legacy code
+
+**Implementation**:
+```bash
+# Untrack archive/ from Git (keeps files on disk)
+git rm -r --cached archive/
+
+# Add to .gitignore (already present)
+# archive/
+
+# Verify files still exist locally
+ls archive/
+```
+
+**How to Access Archived Code**:
+1. **From Git history**: `git log --all --full-history -- archive/`
+2. **Checkout old commit**: `git checkout <commit-hash> -- archive/`
+3. **Local disk**: Files remain in working tree for current developers
+
+**Note**: This is a **reversible decision**. If needed, archived code can be re-tracked with `git add -f archive/`.
+
+---
+
+**Maintainer:** Rodrigo Marques Teixeira
+**Last Update:** 2025-11-16 (Phase 3A/B/C + Phase Tests + Finishing Pass)
