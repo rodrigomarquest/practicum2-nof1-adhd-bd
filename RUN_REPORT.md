@@ -1,6 +1,6 @@
 # RUN_REPORT.md - Pipeline Execution Summary
 
-**Generated**: 2025-11-07 16:39:01
+**Generated**: 2025-11-18 22:30:49
 **Participant**: P000001
 **Snapshot**: 2025-11-07
 
@@ -12,55 +12,47 @@
 
 ## Label Distribution
 
-- **Label -1 (Unstable)**: 1737 (61.4%)
-- **Label +0 (Neutral)**: 284 (10.0%)
-- **Label +1 (Stable)**: 807 (28.5%)
+- **Label -1 (Unstable)**: 65 (2.3%)
+- **Label +0 (Neutral)**: 2552 (90.2%)
+- **Label +1 (Stable)**: 211 (7.5%)
 
 ## NB2: Logistic Regression (Temporal Calendar CV)
 
 - **CV Type**: temporal_calendar_6fold
 - **Train/Val**: 4mo / 2mo
-- **Mean Macro-F1**: 0.7066 ± 0.1699
+- **Mean Macro-F1**: 1.0000 ± 0.0000
 
 ### Per-Fold Results
 
-- **Fold 1** (2021-09-16 → 2021-11-16): F1=0.7938, BA=0.7516
-- **Fold 2** (2022-03-16 → 2022-05-16): F1=0.8611, BA=0.8611
-- **Fold 3** (2022-09-16 → 2022-11-16): F1=0.8644, BA=0.8949
-- **Fold 4** (2023-03-16 → 2023-05-16): F1=0.4433, BA=0.5833
-- **Fold 5** (2023-09-16 → 2023-11-16): F1=0.5705, BA=0.5465
+- **Fold 1** (2019-01-19 → 2019-03-19): F1=1.0000, BA=1.0000
 
 ## NB3: SHAP Feature Importance (Global Top-10)
 
-1. **sleep_quality_score**: 18.5418
-2. **total_steps**: 11.0671
-3. **total_active_energy**: 6.6438
-4. **hr_samples**: 5.7602
-5. **total_distance**: 5.2239
-6. **hr_max**: 2.2310
-7. **hr_mean**: 2.0244
-8. **hr_min**: 1.5292
-9. **sleep_hours**: 0.7664
-10. **hr_std**: 0.3785
+1. **total_steps**: 1.7372
+2. **total_distance**: 0.0000
+3. **hr_mean**: 0.0000
+4. **hr_std**: 0.0000
+5. **hr_max**: 0.0000
+6. **hr_min**: 0.0000
+7. **sleep_hours**: 0.0000
+8. **hr_samples**: 0.0000
+9. **total_active_energy**: 0.0000
+10. **sleep_quality_score**: 0.0000
 
 ## NB3: Drift Detection
 
-- **ADWIN Changes Detected (δ=0.002)**: 11
+- **ADWIN Changes Detected (δ=0.002)**: 5
 - **KS Significant Tests (p<0.05)**: 102
 
 ## NB3: LSTM M1
 
 - **Architecture**: LSTM(32) -> Dense(32) -> Dropout(0.2) -> Softmax(3)
 - **Sequence Length**: 14 days
-- **Mean Macro-F1**: 0.2812
+- **Mean Macro-F1**: 1.0000
 
 ### Per-Fold LSTM Results
 
-- **Fold 1**: F1=0.3655, Loss=1.0107, Acc=0.5208
-- **Fold 2**: F1=0.2946, Loss=0.5493, Acc=0.7917
-- **Fold 3**: F1=0.2029, Loss=1.2193, Acc=0.4375
-- **Fold 4**: F1=0.3030, Loss=0.6400, Acc=0.8333
-- **Fold 5**: F1=0.2400, Loss=1.0850, Acc=0.5625
+- **Fold 1**: F1=1.0000, Loss=0.3481, Acc=1.0000
 
 ## Model Export & Latency
 

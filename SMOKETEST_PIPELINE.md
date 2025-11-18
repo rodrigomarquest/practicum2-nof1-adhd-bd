@@ -10,6 +10,7 @@
 ## Prerequisites
 
 1. **Environment activated**:
+
    ```bash
    source .venv/bin/activate  # Linux/Mac
    # or
@@ -17,6 +18,7 @@
    ```
 
 2. **Data available**:
+
    - Participant data in `data/raw/P000001/`
    - At least one Apple Health export ZIP
    - (Optional) Zepp data for cardiovascular features
@@ -55,6 +57,7 @@ python -m scripts.run_full_pipeline \
 ```
 
 This runs:
+
 - **Stage 1**: CSV Aggregation (per-metric files)
 - **Stage 2**: Unify Daily (features_daily.csv)
 - **Stage 3**: Apply Labels (features_daily_labeled.csv)
@@ -64,23 +67,29 @@ This runs:
 ## Expected Outputs
 
 ### Stage 0: Ingest
+
 - `data/etl/P000001/2025-09-29/apple_inapp/export.xml`
 - `data/etl/P000001/2025-09-29/apple_inapp/qc/manifest.json`
 
 ### Stage 1: CSV Aggregation
+
 - `data/etl/P000001/2025-09-29/per_metric/*.csv` (e.g., `steps.csv`, `heart_rate.csv`)
 
 ### Stage 2: Unify Daily
+
 - `data/etl/P000001/2025-09-29/joined/features_daily.csv` (≈20-50 columns)
 
 ### Stage 3: Apply Labels
+
 - `data/etl/P000001/2025-09-29/joined/features_daily_labeled.csv`
 - Labels added: `episode_type`, `treatment_phase`, etc.
 
 ### Stage 4: Segment
+
 - `data/etl/P000001/2025-09-29/joined/segments/*.csv` (by episode/phase)
 
 ### Stage 5: Prep-NB2
+
 - `ai/local/P000001/2025-09-29/nb2_features_train.csv`
 - `ai/local/P000001/2025-09-29/nb2_features_test.csv`
 - Anti-leak preparation for modeling
@@ -89,27 +98,28 @@ This runs:
 
 ## Approximate Runtime
 
-| Stages | Description | Time (P000001) |
-|--------|-------------|----------------|
-| 0 | Ingest | ~30-60s |
-| 1 | Aggregate | ~10-20s |
-| 2 | Unify | ~5-10s |
-| 3 | Labels | ~2-5s |
-| 4 | Segment | ~2-5s |
-| 5 | Prep-NB2 | ~5-10s |
-| **0-5** | **Total** | **~1-2 min** |
-| 6-7 | NB2 (Baselines + CV) | ~5-10 min |
-| 8 | NB3 (LSTM + SHAP) | ~10-20 min |
-| 9 | Report | ~1-2s |
-| **0-9** | **Full** | **~15-30 min** |
+| Stages  | Description          | Time (P000001) |
+| ------- | -------------------- | -------------- |
+| 0       | Ingest               | ~30-60s        |
+| 1       | Aggregate            | ~10-20s        |
+| 2       | Unify                | ~5-10s         |
+| 3       | Labels               | ~2-5s          |
+| 4       | Segment              | ~2-5s          |
+| 5       | Prep-NB2             | ~5-10s         |
+| **0-5** | **Total**            | **~1-2 min**   |
+| 6-7     | NB2 (Baselines + CV) | ~5-10 min      |
+| 8       | NB3 (LSTM + SHAP)    | ~10-20 min     |
+| 9       | Report               | ~1-2s          |
+| **0-9** | **Full**             | **~15-30 min** |
 
-*Times vary based on data size and hardware.*
+_Times vary based on data size and hardware._
 
 ---
 
 ## Validation Checks
 
 ### 1. No Errors in Logs
+
 ```bash
 # Check for ERROR or CRITICAL messages
 python -m scripts.run_full_pipeline ... 2>&1 | grep -i "error\|critical"
@@ -118,6 +128,7 @@ python -m scripts.run_full_pipeline ... 2>&1 | grep -i "error\|critical"
 Should return **empty** or only expected warnings (e.g., "no Zepp data found" if not available).
 
 ### 2. Output Files Exist
+
 ```bash
 # Check Stage 2 output
 ls -lh data/etl/P000001/2025-09-29/joined/features_daily.csv
@@ -127,6 +138,7 @@ ls -lh data/etl/P000001/2025-09-29/joined/features_daily_labeled.csv
 ```
 
 ### 3. Data Integrity
+
 ```bash
 # Quick row count check
 python -c "
@@ -138,11 +150,13 @@ print(f'Date range: {df[\"date\"].min()} to {df[\"date\"].max()}')
 ```
 
 Expected:
+
 - Rows: 100-500+ (depending on data span)
 - Columns: 20-50
 - Date range: Continuous dates within participant's data period
 
 ### 4. Labels Applied
+
 ```bash
 # Check that labels were added
 python -c "
@@ -158,25 +172,33 @@ print('Unique episode types:', df['episode_type'].unique() if 'episode_type' in 
 ## Troubleshooting
 
 ### Issue: "ModuleNotFoundError"
+
 **Solution**: Ensure virtual environment is activated and requirements installed:
+
 ```bash
 source .venv/bin/activate
 pip install -r requirements/base.txt
 ```
 
 ### Issue: "FileNotFoundError: export.xml"
+
 **Solution**: Stage 0 (Ingest) failed or data not available. Check:
+
 ```bash
 ls data/raw/P000001/apple/
 ```
 
 ### Issue: "No rows in features_daily.csv"
-**Solution**: 
+
+**Solution**:
+
 - Check Stage 1 outputs: `ls data/etl/P000001/2025-09-29/per_metric/`
 - Verify Apple Health export contains data for the snapshot date
 
 ### Issue: "ZEPP_ZIP_PASSWORD not set"
+
 **Solution**: If using Zepp data, set environment variable:
+
 ```bash
 export ZEPP_ZIP_PASSWORD="your_password"  # Linux/Mac
 # or
@@ -184,7 +206,9 @@ set ZEPP_ZIP_PASSWORD=your_password       # Windows
 ```
 
 ### Issue: Slow performance
-**Solution**: 
+
+**Solution**:
+
 - Run stages 0-5 only for smoke test (skip NB2/NB3)
 - Check available RAM (NB2/NB3 can use 4-8GB)
 - Use `--start-stage` to skip completed stages
@@ -194,6 +218,7 @@ set ZEPP_ZIP_PASSWORD=your_password       # Windows
 ## After Smoke Test
 
 ### Success Checklist
+
 - [ ] No ERROR/CRITICAL logs
 - [ ] `features_daily.csv` created with expected rows
 - [ ] `features_daily_labeled.csv` has label columns
@@ -201,6 +226,7 @@ set ZEPP_ZIP_PASSWORD=your_password       # Windows
 - [ ] Runtime within expected range
 
 ### Next Steps
+
 - ✅ **Smoke test passed** → Proceed with full pipeline or development
 - ❌ **Smoke test failed** → Check logs, verify data, review configuration
 
@@ -209,11 +235,13 @@ set ZEPP_ZIP_PASSWORD=your_password       # Windows
 ## Additional Commands
 
 ### Help
+
 ```bash
 python -m scripts.run_full_pipeline --help
 ```
 
 ### Full Pipeline with All Stages
+
 ```bash
 python -m scripts.run_full_pipeline \
   --participant P000001 \
@@ -223,6 +251,7 @@ python -m scripts.run_full_pipeline \
 ```
 
 ### Re-run Specific Stage
+
 ```bash
 # Re-run only Stage 3 (Labels)
 python -m scripts.run_full_pipeline \
