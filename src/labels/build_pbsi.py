@@ -1,11 +1,24 @@
 """
 Build PBSI (Physio-Behavioral Stability Index) labels.
 
-Uses only: sleep + cardio + activity (no temperature, screen time, or EMA/SoM).
+CANONICAL IMPLEMENTATION FOR CA2 PAPER:
+This module implements the segment-wise z-scored PBSI described in the research paper.
+It is integrated into the main ETL pipeline via stage_apply_labels.py.
+
+Key features:
+- Segment-wise z-score normalization (anti-leak safeguard)
+- Sleep/cardio/activity subscores with documented weights
+- Composite PBSI: 0.40*sleep + 0.35*cardio + 0.25*activity
+- Thresholds: pbsi≤-0.5 → +1 (stable), pbsi≥0.5 → -1 (unstable)
+
+Sign convention:
+Lower PBSI score = more stable (counterintuitive but by design)
+  - More sleep, lower HR, higher HRV → lower subscores → lower pbsi → +1 (stable)
+  - Less sleep, higher HR, lower HRV → higher subscores → higher pbsi → -1 (unstable)
 
 Labels:
     label_3cls: +1 (stable), 0 (neutral), -1 (unstable)
-    label_2cls: 1 (stable/high-pbsi), 0 (low-pbsi)
+    label_2cls: 1 (stable), 0 (neutral/unstable)
     label_clinical: 1 if pbsi_score >= 0.75 else 0
 """
 
