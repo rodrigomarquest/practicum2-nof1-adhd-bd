@@ -645,6 +645,7 @@ pytest --collect-only
 ### Rationale
 
 The `archive/` folder contains 26 files (32MB) of legacy code that has been safely moved out of the active codebase:
+
 - **Phase 2**: 14 modules (src/cli/, src/domains/biomarkers/)
 - **Phase 3**: 7 root-level modules + 5 tests
 - All modules replaced by canonical v4.1.x components
@@ -652,12 +653,14 @@ The `archive/` folder contains 26 files (32MB) of legacy code that has been safe
 ### Decision: Untrack but Preserve
 
 **Trade-off Analysis**:
+
 - ✅ **Keep in Git history** – All archived code remains accessible in previous commits
 - ✅ **Untrack from HEAD** – Clean working tree focused on v4.1.x canonical code
 - ✅ **Local reference** – Files remain on disk for developers who need them
 - ✅ **Smaller clone size** – New clones won't download archived legacy code
 
 **Implementation**:
+
 ```bash
 # Untrack archive/ from Git (keeps files on disk)
 git rm -r --cached archive/
@@ -670,6 +673,7 @@ ls archive/
 ```
 
 **How to Access Archived Code**:
+
 1. **From Git history**: `git log --all --full-history -- archive/`
 2. **Checkout old commit**: `git checkout <commit-hash> -- archive/`
 3. **Local disk**: Files remain in working tree for current developers
