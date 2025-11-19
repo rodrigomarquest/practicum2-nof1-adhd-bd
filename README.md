@@ -123,6 +123,84 @@ Dependencies
 
 python -m pip install iphone-backup-decrypt==0.9.0 pycryptodome
 
+⚡ Performance Optimization: Parquet Caching
+
+### Dual-Cache Strategy for Apple Health HR Parsing
+
+**Problem**: Parsing 1.5 GB Apple Health `export.xml` with `ET.findall()` was slow (~5-10 minutes).
+
+**Solution**: Binary regex streaming + dual Parquet caching (implemented Nov 2025).
+
+#### Cache Architecture
+
+```
+First Run (3m7s):
+  export.xml (1.5 GB)
+    ↓ Binary regex streaming (~500 MB/sec)
+    ├─ Event-level collection (4.6M HR records)
+    ├─ Daily aggregation (1,315 days)
+    └─ Save dual caches:
+       ├─ export_apple_hr_events.parquet (23 MB, 4.6M records)  # QC verification
+       └─ export_apple_hr_daily.parquet (30 KB, 1.3K days)      # Fast loading
+
+Subsequent Runs (<1 second):
+  Load export_apple_hr_daily.parquet directly
+  → 180x speedup
+```
+
+#### Performance Results
+
+| Metric | Value |
+|--------|-------|
+| XML size | 1.5 GB |
+| Event cache | 23.4 MB (4,677,088 records) |
+| Daily cache | 30 KB (1,315 days) |
+| Compression ratio | 64x (event), 50,000x (daily) |
+| First run | ~3 minutes |
+| Cached run | <1 second |
+| **Overall speedup** | **180x** |
+
+#### Quality Control (QC) Module
+
+The event-level Parquet enables rigorous academic verification:
+
+```bash
+# Run QC verification
+python -m src.etl.hr_daily_aggregation_consistency_check P000001 2025-11-07 \
+    --start-date 2024-01-01 --end-date 2024-03-01
+
+# Outputs:
+#   data/ai/{PID}/{SNAPSHOT}/qc/hr_daily_aggregation_diff.csv
+#   data/ai/{PID}/{SNAPSHOT}/qc/hr_daily_aggregation_consistency_report.md
+```
+
+**QC Workflow**:
+1. Load event-level Parquet (4.6M HR records)
+2. Re-aggregate to daily (reference "ground truth")
+3. Load official `daily_cardio.csv` (fast pipeline output)
+4. Compare metrics: `hr_mean`, `hr_samples`, `hr_min`, `hr_max`, `hr_std`
+5. Apply thresholds: ±5 records, ±1 bpm, 5% relative difference
+6. Generate comprehensive report with consistency statistics
+
+**Verified Results** (60 days, Jan-Mar 2024):
+- ✅ **100% consistency** for `hr_n_records` (0 mismatches)
+- ✅ **100% consistency** for `hr_mean` (max diff: 2.8e-14 bpm - floating-point precision)
+- ✅ Binary regex optimization maintains **full accuracy**
+
+#### Cache Locations
+
+```
+data/etl/{PID}/{SNAPSHOT}/extracted/apple/apple_health_export/.cache/
+  ├─ export_apple_hr_events.parquet   # Event-level (for QC re-aggregation)
+  └─ export_apple_hr_daily.parquet    # Daily aggregates (for fast loading)
+```
+
+#### Dependencies
+
+```bash
+pip install pyarrow>=14.0.0  # Parquet support
+```
+
 🔷 Modeling and Explainability
 Notebook Focus Output
 01_feature_engineering.ipynb Daily feature aggregation 97 features (27 engineered)
