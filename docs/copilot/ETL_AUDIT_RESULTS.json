@@ -1,0 +1,145 @@
+{
+  "participant": "P000001",
+  "snapshot": "2025-11-07",
+  "timestamp": "2025-11-19T01:16:57.249546",
+  "raw_files": {
+    "apple_zips": [
+      "apple_health_export_20251022T061854Z.zip"
+    ],
+    "zepp_zips": [
+      "3088235680_1761192590962.zip"
+    ]
+  },
+  "extracted_stats": {
+    "apple_daily_sleep": {
+      "rows": 1823,
+      "date_min": "2017-12-04",
+      "date_max": "2025-10-20",
+      "date_span_days": 2878,
+      "unique_dates": 1823,
+      "duplicate_dates": 0
+    },
+    "apple_daily_cardio": {
+      "rows": 1315,
+      "date_min": "2021-05-14",
+      "date_max": "2025-10-21",
+      "date_span_days": 1622,
+      "unique_dates": 1315,
+      "duplicate_dates": 0
+    },
+    "apple_daily_activity": {
+      "rows": 2730,
+      "date_min": "2018-04-06",
+      "date_max": "2025-10-21",
+      "date_span_days": 2756,
+      "unique_dates": 2730,
+      "duplicate_dates": 0
+    },
+    "zepp_daily_sleep": {
+      "rows": 304,
+      "date_min": "2022-12-09",
+      "date_max": "2024-06-30",
+      "date_span_days": 570,
+      "unique_dates": 304,
+      "duplicate_dates": 0
+    },
+    "zepp_daily_cardio": {
+      "rows": 156,
+      "date_min": "2022-12-11",
+      "date_max": "2025-07-28",
+      "date_span_days": 961,
+      "unique_dates": 156,
+      "duplicate_dates": 0
+    },
+    "zepp_daily_activity": {
+      "rows": 500,
+      "date_min": "2022-12-09",
+      "date_max": "2024-06-30",
+      "date_span_days": 570,
+      "unique_dates": 500,
+      "duplicate_dates": 0
+    }
+  },
+  "unified_stats": {
+    "basic": {
+      "rows": 2828,
+      "date_min": "2017-12-04",
+      "date_max": "2025-10-21",
+      "date_span_days": 2879,
+      "unique_dates": 2828,
+      "duplicate_dates": 0
+    },
+    "coverage": {
+      "sleep": 2828,
+      "cardio": 2828,
+      "activity": 2828,
+      "all_three": 2828,
+      "no_data": 0
+    }
+  },
+  "issues": [],
+  "warnings": [
+    {
+      "severity": "INFO",
+      "category": "EXTRACTION",
+      "description": "Apple daily_sleep has 1055 missing days in date range",
+      "details": {
+        "expected": 2878,
+        "actual": 1823
+      }
+    },
+    {
+      "severity": "INFO",
+      "category": "EXTRACTION",
+      "description": "Apple daily_cardio has 307 missing days in date range",
+      "details": {
+        "expected": 1622,
+        "actual": 1315
+      }
+    },
+    {
+      "severity": "INFO",
+      "category": "EXTRACTION",
+      "description": "Apple daily_activity has 26 missing days in date range",
+      "details": {
+        "expected": 2756,
+        "actual": 2730
+      }
+    },
+    {
+      "severity": "INFO",
+      "category": "EXTRACTION",
+      "description": "Zepp daily_sleep has 266 missing days in date range",
+      "details": {
+        "expected": 570,
+        "actual": 304
+      }
+    },
+    {
+      "severity": "INFO",
+      "category": "EXTRACTION",
+      "description": "Zepp daily_cardio has 805 missing days in date range",
+      "details": {
+        "expected": 961,
+        "actual": 156
+      }
+    },
+    {
+      "severity": "INFO",
+      "category": "EXTRACTION",
+      "description": "Zepp daily_activity has 70 missing days in date range",
+      "details": {
+        "expected": 570,
+        "actual": 500
+      }
+    },
+    {
+      "severity": "WARNING",
+      "category": "JOIN",
+      "description": "Unified CSV has 51 MISSING days in date range",
+      "details": {
+        "missing_count": 51
+      }
+    }
+  ]
+}
