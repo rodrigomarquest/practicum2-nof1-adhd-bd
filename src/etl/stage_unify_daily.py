@@ -192,15 +192,33 @@ class DailyUnifier:
         if len(df_activity) > 0:
             df_unified = df_unified.merge(df_activity, on="date", how="left")
         
-        # Forward fill NaN values (common in sensor data)
+        # NOTE (v4.1.5): Forward-fill removed for scientific integrity.
+        # Missing values are kept as NaN to avoid inventing sleep/cardio/activity data.
+        # Previous behavior: df_unified[numeric_cols].fillna(method="ffill").fillna(method="bfill")
+        # New behavior: Preserve NaN to represent true uncertainty/missingness.
+        logger.info(f"[Unify] Preserving NaN values (no forward-fill)")
+        
+        # Log missing data statistics per column
         numeric_cols = df_unified.select_dtypes(include=np.number).columns
-        df_unified[numeric_cols] = df_unified[numeric_cols].fillna(method="ffill").fillna(method="bfill")
+        missing_stats = []
+        for col in numeric_cols:
+            missing_count = df_unified[col].isna().sum()
+            missing_pct = 100 * missing_count / len(df_unified)
+            if missing_count > 0:
+                missing_stats.append(f"  {col}: {missing_count}/{len(df_unified)} ({missing_pct:.1f}%)")
+        
+        if missing_stats:
+            logger.info(f"[Unify] Missing value summary:")
+            for stat in missing_stats:
+                logger.info(stat)
+        else:
+            logger.info(f"[Unify] No missing values in numeric columns")
         
         logger.info(f"\n[Unify] === UNIFIED DATASET ===")
         logger.info(f"[Unify] Total days: {len(df_unified)}")
         logger.info(f"[Unify] Date range: {df_unified['date'].min()} to {df_unified['date'].max()}")
         logger.info(f"[Unify] Columns: {list(df_unified.columns)}")
-        logger.info(f"[Unify] Missing values:\n{df_unified.isnull().sum()}")
+
         
         return df_unified
 

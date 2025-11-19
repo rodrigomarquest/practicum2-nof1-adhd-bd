@@ -119,7 +119,7 @@ class AppleHealthAggregator:
     def aggregate_heartrate(self) -> pd.DataFrame:
         """
         Aggregate heart rate data (HKQuantityTypeIdentifierHeartRate).
-        Daily: mean, min, max HR.
+        Daily: mean, min, max, std HR + sample count.
         
         Uses ultra-fast binary regex streaming with Parquet caching:
         - First run: Parse XML with binary regex (~1-2 min for 1GB)
@@ -129,7 +129,10 @@ class AppleHealthAggregator:
         **Caching Strategy:**
         - Saves TWO Parquet files:
           1. export_apple_hr_events.parquet - event-level (timestamp, hr_value) for QC
-          2. export_apple_hr_daily.parquet - pre-aggregated daily (fast loading)
+          2. export_apple_hr_daily.parquet - pre-aggregated daily (ALL metrics, canonical names)
+        
+        **CANONICAL COLUMNS** (stored in cache):
+        - apple_hr_mean, apple_hr_min, apple_hr_max, apple_hr_std, apple_n_hr
         """
         logger.info("[Apple] Aggregating heart rate data...")
         
@@ -137,7 +140,7 @@ class AppleHealthAggregator:
         xml_path = Path(self.xml_path)
         cache_dir = xml_path.parent / ".cache"
         cache_file_daily = cache_dir / f"{xml_path.stem}_apple_hr_daily.parquet"
-        cache_file_events = cache_dir / f"{xml_path.stem}_apple_hr_events.parquet"  # NEW: event-level cache
+        cache_file_events = cache_dir / f"{xml_path.stem}_apple_hr_events.parquet"
         
         # Try to load from daily cache first (fastest path)
         if cache_file_daily.exists():
@@ -145,18 +148,16 @@ class AppleHealthAggregator:
                 df_cached = pd.read_parquet(cache_file_daily)
                 logger.info(f"[Apple] ✓ Loaded HR from cache: {cache_file_daily.name} ({len(df_cached)} days)")
                 
-                # Rename columns to match expected format
+                # FIXED: Cache now stores ALL metrics with canonical Apple names.
+                # Map back to generic names for daily_cardio.csv output.
                 if "apple_hr_mean" in df_cached.columns:
                     df_cached = df_cached.rename(columns={
                         "apple_hr_mean": "hr_mean",
+                        "apple_hr_min": "hr_min",
                         "apple_hr_max": "hr_max",
+                        "apple_hr_std": "hr_std",
                         "apple_n_hr": "hr_samples"
                     })
-                    # Add missing columns if needed
-                    if "hr_min" not in df_cached.columns:
-                        df_cached["hr_min"] = df_cached["hr_mean"]  # Approximate
-                    if "hr_std" not in df_cached.columns:
-                        df_cached["hr_std"] = 0.0  # Approximate
                 
                 return df_cached[["date", "hr_mean", "hr_min", "hr_max", "hr_std", "hr_samples"]]
             except Exception as e:
@@ -169,9 +170,14 @@ class AppleHealthAggregator:
         import re
         from datetime import datetime as dt
         
+        # HR outlier thresholds (filter biologically implausible values)
+        HR_MIN_VALID = 30   # bpm - below this is likely sensor error
+        HR_MAX_VALID = 220  # bpm - above this is likely sensor error or extreme exercise
+        
         hr_data = {}
-        hr_events = []  # NEW: Store event-level data for QC
+        hr_events = []  # Store event-level data for QC
         hr_count = 0
+        hr_filtered = 0
         file_size_mb = xml_path.stat().st_size / (1024 * 1024)
         
         # Binary regex patterns
@@ -203,7 +209,13 @@ class AppleHealthAggregator:
                     timestamp_str = date_match.group(1).decode('utf-8', errors='ignore')
                     date_str = timestamp_str[:10]  # YYYY-MM-DD
                     
-                    # NEW: Store event-level data
+                    # TASK C: Filter outliers (biologically implausible HR values)
+                    if not (HR_MIN_VALID <= hr_value <= HR_MAX_VALID):
+                        hr_filtered += 1
+                        logger.debug(f"Filtered outlier HR: {hr_value} bpm on {date_str}")
+                        continue
+                    
+                    # Store event-level data (for QC re-aggregation)
                     hr_events.append({
                         "timestamp": timestamp_str,
                         "date": date_str,
@@ -221,11 +233,17 @@ class AppleHealthAggregator:
                 except (ValueError, TypeError):
                     pass
             
-            logger.info(f"[Apple]   ✓ Parsed {hr_count} HR records into {len(hr_data)} days")
+            if hr_filtered > 0:
+                logger.info(f"[Apple]   ✓ Filtered {hr_filtered} outlier HR values ({hr_filtered/(hr_count+hr_filtered)*100:.2f}%)")
+            logger.info(f"[Apple]   ✓ Parsed {hr_count} valid HR records into {len(hr_data)} days")
         
         except Exception as e:
             logger.warning(f"[Apple] Binary regex failed: {e}, falling back to ET.findall()...")
-            # Fallback to original method
+            # Fallback to original method (with same outlier filtering)
+            HR_MIN_VALID = 30
+            HR_MAX_VALID = 220
+            hr_filtered = 0
+            
             for record in self.root.findall(".//Record"):
                 rec_type = record.get("type")
                 if rec_type != self.TYPE_HEARTRATE:
@@ -239,13 +257,19 @@ class AppleHealthAggregator:
                 
                 try:
                     hr_value = float(value)
+                    
+                    # TASK C: Filter outliers
+                    if not (HR_MIN_VALID <= hr_value <= HR_MAX_VALID):
+                        hr_filtered += 1
+                        continue
+                    
                 except:
                     continue
                 
                 date_str = self._get_date_from_dt(start_dt)
                 timestamp_str = record.get("startDate") or ""
                 
-                # NEW: Store event-level data
+                # Store event-level data
                 hr_events.append({
                     "timestamp": timestamp_str,
                     "date": date_str,
@@ -259,6 +283,9 @@ class AppleHealthAggregator:
                     }
                 
                 hr_data[date_str]["hr_values"].append(hr_value)
+            
+            if hr_filtered > 0:
+                logger.info(f"[Apple] Filtered {hr_filtered} outlier HR values in fallback mode")
         
         # Aggregate to daily stats
         rows = []
@@ -291,10 +318,12 @@ class AppleHealthAggregator:
                 df_cache = df_hr.copy()
                 df_cache = df_cache.rename(columns={
                     "hr_mean": "apple_hr_mean",
+                    "hr_min": "apple_hr_min",
                     "hr_max": "apple_hr_max",
+                    "hr_std": "apple_hr_std",
                     "hr_samples": "apple_n_hr"
                 })
-                df_cache = df_cache[["date", "apple_hr_mean", "apple_hr_max", "apple_n_hr"]]
+                df_cache = df_cache[["date", "apple_hr_mean", "apple_hr_min", "apple_hr_max", "apple_hr_std", "apple_n_hr"]]
                 
                 df_cache.to_parquet(cache_file_daily, index=False, compression="snappy")
                 logger.info(f"[Apple] ✓ Cached daily HR to {cache_file_daily.name} ({cache_file_daily.stat().st_size / 1024:.1f} KB)")
@@ -485,6 +514,19 @@ class ZeppHealthAggregator:
         # Parse timestamp and extract date
         df["datetime"] = pd.to_datetime(df["time"])
         df["date"] = df["datetime"].dt.strftime("%Y-%m-%d")
+        
+        # TASK C: Filter outliers (same as Apple for consistency)
+        HR_MIN_VALID = 30
+        HR_MAX_VALID = 220
+        
+        mask_valid = (df["heartRate"] >= HR_MIN_VALID) & (df["heartRate"] <= HR_MAX_VALID)
+        hr_filtered = (~mask_valid).sum()
+        
+        if hr_filtered > 0:
+            pct = 100 * hr_filtered / len(df)
+            logger.info(f"[Zepp] Filtered {hr_filtered} outlier HR values ({pct:.2f}%)")
+        
+        df = df[mask_valid]
         
         # Daily aggregation
         df_daily = df.groupby("date").agg({

@@ -77,7 +77,7 @@ def _parse_apple_timestamp_fast(ts_str: str) -> str | None:
         return None
 
 
-def load_apple_cardio_from_xml(xml_path: Path, home_tz: str = "UTC", max_records: int | None = None) -> pd.DataFrame:
+def load_apple_cardio_from_xml(xml_path: Path, home_tz: str = "UTC", max_records: int | None = None, use_cache: bool = True) -> pd.DataFrame:
     """Extract Apple heartrate from export.xml using FAST binary regex streaming.
     
     Instead of full XML parsing, uses regex to extract HR records directly from
@@ -85,10 +85,15 @@ def load_apple_cardio_from_xml(xml_path: Path, home_tz: str = "UTC", max_records
     
     For 3.9GB files, this achieves ~500MB/sec vs ~10MB/sec with iterparse.
     
+    Supports Parquet caching for ultra-fast subsequent runs:
+    - First run: Parse XML (~1-2 min for 1GB) → save to cache
+    - Subsequent runs: Load from cache (~1-5 seconds)
+    
     Args:
         xml_path: Path to export.xml or export_cda.xml
         home_tz: Timezone for date conversion
         max_records: Limit parsing to max_records HR records (for testing)
+        use_cache: Enable Parquet caching (default: True)
     
     Returns:
         DataFrame with columns: date, apple_hr_mean, apple_hr_max, apple_n_hr
@@ -96,6 +101,20 @@ def load_apple_cardio_from_xml(xml_path: Path, home_tz: str = "UTC", max_records
     if not xml_path.exists():
         logger.info("apple cardio: %s not found", xml_path.name)
         return pd.DataFrame()
+    
+    # Setup cache path (same directory as XML, with .parquet extension)
+    cache_dir = xml_path.parent / ".cache"
+    cache_file = cache_dir / f"{xml_path.stem}_apple_hr_daily.parquet"
+    
+    # Try to load from cache first
+    if use_cache and cache_file.exists():
+        try:
+            df_cached = pd.read_parquet(cache_file)
+            logger.info("apple cardio: ✓ Loaded from cache: %s (%d days)", cache_file.name, len(df_cached))
+            return df_cached
+        except Exception as e:
+            logger.warning("apple cardio: Failed to load cache %s: %s", cache_file.name, str(e))
+            # Continue to parse XML
     
     # Get file size for progress tracking
     file_size_mb = xml_path.stat().st_size / (1024 * 1024)
@@ -234,6 +253,16 @@ def load_apple_cardio_from_xml(xml_path: Path, home_tz: str = "UTC", max_records
     df["apple_hr_max"] = df["apple_hr_max"].astype("float32")
     df["apple_n_hr"] = df["apple_n_hr"].astype("int32")
     logger.info("apple cardio: %d records -> %d days from %s", hr_count, len(df), xml_path.name)
+    
+    # Save to cache for future runs (if enabled and not using max_records limit)
+    if use_cache and max_records is None and not df.empty:
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            df.to_parquet(cache_file, index=False, compression="snappy")
+            logger.info("apple cardio: ✓ Cached to %s (%.2f KB)", cache_file.name, cache_file.stat().st_size / 1024)
+        except Exception as e:
+            logger.warning("apple cardio: Failed to save cache: %s", str(e))
+    
     return df
 
 

@@ -409,7 +409,12 @@ def stage_6_nb2(ctx: PipelineContext, df: pd.DataFrame) -> bool:
         folds = create_calendar_folds(df, n_folds=6, train_months=4, val_months=2)
         
         if len(folds) == 0:
-            raise ValueError("No valid folds created")
+            logger.warning("No valid folds created (classes too imbalanced for CV)")
+            logger.warning("Skipping NB2 training - continuing with rest of pipeline")
+            elapsed = time.time() - stage_start
+            ctx.log_stage_result(6, "skipped", duration_sec=elapsed, 
+                                error="No valid folds (imbalanced classes)")
+            return True  # Return True to continue pipeline
         
         X = df.drop(columns=['date', 'label_3cls'])
         y = df['label_3cls']
@@ -491,7 +496,8 @@ def stage_7_nb3(ctx: PipelineContext) -> bool:
         from sklearn.linear_model import LogisticRegression
         from src.etl.nb3_analysis import (
             create_calendar_folds, compute_shap_values, detect_drift_adwin,
-            detect_drift_ks_segments, create_lstm_sequences, train_lstm_model
+            detect_drift_ks_segments, create_lstm_sequences, train_lstm_model,
+            prepare_nb3_features, NB3_FEATURE_COLS
         )
         import numpy as np
         
@@ -503,24 +509,31 @@ def stage_7_nb3(ctx: PipelineContext) -> bool:
         for d in [shap_dir, drift_dir, models_dir]:
             d.mkdir(parents=True, exist_ok=True)
         
-        # Load data
-        nb2_clean_path = ctx.joined_dir / "features_nb2_clean.csv"
-        df = pd.read_csv(nb2_clean_path)
-        df['date'] = pd.to_datetime(df['date'])
-        df = df.sort_values('date').reset_index(drop=True)
-        
-        # Load labeled data (for drift on pbsi_score)
+        # Load labeled data (contains z-scored features + PBSI outputs)
         labeled_path = ctx.joined_dir / "features_daily_labeled.csv"
         df_labeled = pd.read_csv(labeled_path)
         df_labeled['date'] = pd.to_datetime(df_labeled['date'])
+        
+        # Prepare NB3 dataset: z-scored features with anti-leak validation
+        logger.info(f"[NB3] Preparing z-scored feature set ({len(NB3_FEATURE_COLS)} features)")
+        df = prepare_nb3_features(df_labeled)
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.sort_values('date').reset_index(drop=True)
+        
+        logger.info(f"[NB3] Dataset shape: {df.shape}")
+        logger.info(f"[NB3] Z-features: {', '.join(NB3_FEATURE_COLS)}")
         
         # ===== SHAP ANALYSIS =====
         logger.info("\n[NB3] SHAP Analysis...")
         folds = create_calendar_folds(df, n_folds=6, train_months=4, val_months=2)
         
-        X = df.drop(columns=['date', 'label_3cls'])
-        y = df['label_3cls']
-        feature_names = X.columns.tolist()
+        # Prepare feature matrix and target
+        X = df[NB3_FEATURE_COLS].copy()  # 7 z-scored features
+        y = df['label_3cls'].copy()
+        feature_names = NB3_FEATURE_COLS  # Explicit z-feature names
+        
+        logger.info(f"[NB3 SHAP] Feature matrix shape: {X.shape}")
+        logger.info(f"[NB3 SHAP] Label distribution: {y.value_counts().to_dict()}")
         
         shap_results = []
         for fold_info in folds:
@@ -532,12 +545,12 @@ def stage_7_nb3(ctx: PipelineContext) -> bool:
             y_train = y.iloc[train_idx]
             X_val = X.iloc[val_idx]
             
-            # Train model
+            # Train model (LogisticRegression on z-scored features)
             model = LogisticRegression(multi_class='multinomial', class_weight='balanced',
                                       max_iter=1000, random_state=42)
             model.fit(X_train, y_train)
             
-            # Compute SHAP
+            # Compute SHAP (explains LogisticRegression, not LSTM)
             shap_result = compute_shap_values(model, X_train, X_val, feature_names,
                                              fold_idx, shap_dir)
             shap_results.append(shap_result)
@@ -560,6 +573,12 @@ def stage_7_nb3(ctx: PipelineContext) -> bool:
         # Save SHAP summary
         with open(shap_dir.parent / "shap_summary.md", 'w') as f:
             f.write("# SHAP Feature Importance Summary\n\n")
+            f.write("**Model Explained**: Logistic Regression (multinomial, class_weight='balanced')\n\n")
+            f.write("**Feature Set**: Z-scored canonical features from PBSI pipeline\n")
+            f.write(f"- {len(NB3_FEATURE_COLS)} features: {', '.join(NB3_FEATURE_COLS)}\n")
+            f.write("- Segment-wise normalized (119 temporal segments) to prevent leakage\n\n")
+            f.write("**Note**: SHAP explains the LogisticRegression baseline, NOT the LSTM model.\n\n")
+            f.write("---\n\n")
             f.write("## Global Top-10 Features\n\n")
             for i, (feat, imp) in enumerate(global_ranking[:10], 1):
                 f.write(f"{i}. **{feat}**: {imp:.4f}\n")
@@ -622,13 +641,17 @@ def stage_7_nb3(ctx: PipelineContext) -> bool:
         # ===== LSTM TRAINING =====
         logger.info("\n[NB3] LSTM M1 Training...")
         
-        # Create sequences
+        # Create sequences (z-scored features)
         X_np = X.values
         y_np = y.values
         
         seq_len = 14
-        n_features = X_np.shape[1]
+        n_features = len(NB3_FEATURE_COLS)  # 7 z-scored features
         n_classes = len(np.unique(y_np))
+        
+        logger.info(f"[NB3 LSTM] Sequence length: {seq_len}")
+        logger.info(f"[NB3 LSTM] N features: {n_features} (z-scored)")
+        logger.info(f"[NB3 LSTM] N classes: {n_classes}")
         
         lstm_results = []
         best_f1 = 0
@@ -665,7 +688,15 @@ def stage_7_nb3(ctx: PipelineContext) -> bool:
             f.write("# LSTM M1 Training Report\n\n")
             f.write(f"## Architecture\n\n")
             f.write("- Sequence Length: 14 days\n")
-            f.write("- LSTM(32) -> Dense(32) -> Dropout(0.2) -> Softmax\n\n")
+            f.write(f"- Input Features: {n_features} z-scored canonical features\n")
+            f.write(f"  - {', '.join(NB3_FEATURE_COLS)}\n")
+            f.write("- LSTM(32) -> Dense(32) -> Dropout(0.2) -> Softmax\n")
+            f.write(f"- Classes: {n_classes}\n\n")
+            f.write(f"## Feature Set\n\n")
+            f.write("**Z-scored Canonical Features** (segment-wise normalized, 119 segments):\n\n")
+            for i, feat in enumerate(NB3_FEATURE_COLS, 1):
+                f.write(f"{i}. `{feat}`\n")
+            f.write("\n**Note**: Features are segment-wise z-scored to prevent temporal leakage.\n\n")
             f.write(f"## Cross-Validation Results\n\n")
             
             for res in lstm_results:

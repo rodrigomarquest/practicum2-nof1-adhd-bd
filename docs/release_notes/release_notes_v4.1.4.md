@@ -18,11 +18,13 @@ The pipeline now uses the exact PBSI methodology documented in the CA2 research 
 ## 🎓 Impact
 
 ### ✅ Research Quality
+
 - **Deterministic & Reproducible**: Validated across two independent pipeline runs
 - **Paper-Aligned**: Segment-wise z-scores, correct formula weights, proper thresholds
 - **Production-Ready**: All downstream stages (NB2/NB3) working correctly
 
 ### ✅ Methodology Improvements
+
 - **Before (Simple Heuristic)**: 0-100 scale, no z-scores, arbitrary 33/66 thresholds, global normalization
 - **After (Canonical PBSI)**: Z-scale, 119 temporal segments, -0.5/+0.5 thresholds, anti-leak safeguards
 
@@ -65,13 +67,16 @@ Where:
 ### 1. `src/etl/stage_apply_labels.py` (Major Refactor)
 
 **Added Functions**:
+
 - `_create_temporal_segments(df)`: Creates 119 temporal segment boundaries
 - `_normalize_column_names_for_pbsi(df)`: Maps unified daily columns to build_pbsi expected names
 
 **Updated**:
+
 - `PBSILabeler.apply_labels()`: Now delegates to canonical `build_pbsi_labels()`
 
 **Deleted**:
+
 - `_legacy_calculate_pbsi_score_simple()`: Deprecated 0-100 heuristic removed
 
 ### 2. `src/labels/build_pbsi.py` (Documentation Only)
@@ -88,17 +93,17 @@ Where:
 
 ### 4. Column Name Mapping
 
-| Unified Daily (Stage 2) | Build PBSI (Expected) | Transformation |
-|-------------------------|----------------------|----------------|
-| `sleep_hours` | `sleep_total_h` | Direct rename |
-| `sleep_quality_score` (0-100) | `sleep_efficiency` (0-1) | Divide by 100 |
-| `hr_mean` | `apple_hr_mean` | Direct rename |
-| `hr_max` | `apple_hr_max` | Direct rename |
-| `hr_std` | `apple_hrv_rmssd` | Proxy (× 2 approximation)* |
-| `total_steps` | `steps` | Direct rename |
-| `total_active_energy` | `exercise_min` | Estimate (÷ 5)* |
+| Unified Daily (Stage 2)       | Build PBSI (Expected)    | Transformation              |
+| ----------------------------- | ------------------------ | --------------------------- |
+| `sleep_hours`                 | `sleep_total_h`          | Direct rename               |
+| `sleep_quality_score` (0-100) | `sleep_efficiency` (0-1) | Divide by 100               |
+| `hr_mean`                     | `apple_hr_mean`          | Direct rename               |
+| `hr_max`                      | `apple_hr_max`           | Direct rename               |
+| `hr_std`                      | `apple_hrv_rmssd`        | Proxy (× 2 approximation)\* |
+| `total_steps`                 | `steps`                  | Direct rename               |
+| `total_active_energy`         | `exercise_min`           | Estimate (÷ 5)\*            |
 
-*Documented caveats: HRV approximation (no true RMSSD), exercise estimation
+\*Documented caveats: HRV approximation (no true RMSSD), exercise estimation
 
 ---
 
@@ -107,6 +112,7 @@ Where:
 ### Determinism Test
 
 **Methodology**:
+
 1. **Run 1**: Full pipeline (Stages 0-9)
 2. **Cleanup**: `make clean-outputs` (removed all processed data)
 3. **Run 2**: Full pipeline from scratch
@@ -114,22 +120,23 @@ Where:
 
 ### Pipeline Metrics (Run 1 vs Run 2)
 
-| Checkpoint | Run 1 | Run 2 | Status |
-|-----------|-------|-------|--------|
-| Total days | 2828 | 2828 | ✅ IDENTICAL |
-| Segments | 119 | 119 | ✅ IDENTICAL |
-| PBSI range | -1.298 to 0.926 | -1.298 to 0.926 | ✅ IDENTICAL |
-| Label +1 (stable) | 211 (7.5%) | 211 (7.5%) | ✅ IDENTICAL |
-| Label 0 (neutral) | 2552 (90.2%) | 2552 (90.2%) | ✅ IDENTICAL |
-| Label -1 (unstable) | 65 (2.3%) | 65 (2.3%) | ✅ IDENTICAL |
-| NB2 F1-score | 1.0000 | 1.0000 | ✅ IDENTICAL |
-| NB3 Drift (ADWIN) | 5 changes | 5 changes | ✅ IDENTICAL |
+| Checkpoint          | Run 1           | Run 2           | Status       |
+| ------------------- | --------------- | --------------- | ------------ |
+| Total days          | 2828            | 2828            | ✅ IDENTICAL |
+| Segments            | 119             | 119             | ✅ IDENTICAL |
+| PBSI range          | -1.298 to 0.926 | -1.298 to 0.926 | ✅ IDENTICAL |
+| Label +1 (stable)   | 211 (7.5%)      | 211 (7.5%)      | ✅ IDENTICAL |
+| Label 0 (neutral)   | 2552 (90.2%)    | 2552 (90.2%)    | ✅ IDENTICAL |
+| Label -1 (unstable) | 65 (2.3%)       | 65 (2.3%)       | ✅ IDENTICAL |
+| NB2 F1-score        | 1.0000          | 1.0000          | ✅ IDENTICAL |
+| NB3 Drift (ADWIN)   | 5 changes       | 5 changes       | ✅ IDENTICAL |
 
 **Numerical Precision**: PBSI scores match to 15+ decimal places across runs
 
 ### Sample PBSI Scores
 
 **Stable Day Example (2018-09-18)**:
+
 ```
 pbsi_score: -0.616576836079193  (both runs identical)
 label_3cls: +1 (stable)
@@ -139,6 +146,7 @@ activity_sub: -2.608741  ← High steps (61,968) drive stability
 ```
 
 **Unstable Day Example (2021-09-13)**:
+
 ```
 pbsi_score: 0.5035790070447901  (both runs identical)
 label_3cls: -1 (unstable)
@@ -153,22 +161,26 @@ activity_sub: 0.565002  ← Low steps (1,787) drive instability
 ### Comprehensive Reports (5 New Files)
 
 1. **`DETERMINISM_VALIDATION_REPORT.md`** (342 lines)
+
    - Full determinism test methodology
    - Stage-by-stage comparison
    - Floating-point precision analysis
    - Reproducibility checklist
 
 2. **`PAPER_CODE_CONSISTENCY_REVIEW.md`** (788 lines)
+
    - PhD-level code archaeology (39 KB)
    - Critical Issue #2 documented → **RESOLVED**
    - Comprehensive consistency audit
 
 3. **`PBSI_INTEGRATION_SUMMARY.md`** (323 lines)
+
    - Quick reference guide
    - Before/after comparison
    - Validation results summary
 
 4. **`docs/PBSI_INTEGRATION_UPDATE.md`** (323 lines)
+
    - Comprehensive technical guide
    - Column name mapping table
    - Known caveats documented
@@ -183,6 +195,7 @@ activity_sub: 0.565002  ← Low steps (1,787) drive instability
 ## 🔄 Downstream Impact
 
 ### NB2 (Baseline Models)
+
 - ✅ F1-score: 1.0000±0.0000 (both runs)
 - ✅ Valid folds: 1 (Fold 1: 2019-01-19 → 2019-03-19)
 - ✅ Confusion matrices: Generated identically
@@ -190,6 +203,7 @@ activity_sub: 0.565002  ← Low steps (1,787) drive instability
 **Note**: Perfect F1-score expected given class imbalance (7.5% stable, 2.3% unstable)
 
 ### NB3 (Advanced Analysis)
+
 1. **SHAP**: Top-5 features identical
    - `total_steps`, `total_distance`, `hr_mean`, `hr_std`, `hr_max`
 2. **Drift Detection (ADWIN)**: 5 identical drift points
@@ -198,6 +212,7 @@ activity_sub: 0.565002  ← Low steps (1,787) drive instability
 4. **LSTM**: F1=1.0000 (Fold 1, both runs)
 
 ### TFLite Export
+
 - ✅ Model size: 37.1 KB (both runs)
 - ⚠️ Latency p95: 0.00ms (measurement error due to Flex delegate)
 
@@ -206,18 +221,21 @@ activity_sub: 0.565002  ← Low steps (1,787) drive instability
 ## ⚠️ Known Caveats (Documented)
 
 ### 1. HRV Approximation
+
 - **Issue**: No true HRV (RMSSD) data available from Apple Health / Zepp
 - **Workaround**: Using `hr_std × 2.0` as proxy
 - **Impact**: PBSI cardio subscore may be less accurate
 - **Status**: Documented in `PBSI_INTEGRATION_UPDATE.md`
 
 ### 2. Exercise Estimation
+
 - **Issue**: No explicit exercise duration in unified data
 - **Workaround**: Estimating from `total_active_energy ÷ 5.0`
 - **Impact**: PBSI activity subscore approximation
 - **Status**: Documented in integration guide
 
 ### 3. Segmentation Simplicity
+
 - **Issue**: Using simple temporal segmentation (gaps + month boundaries)
 - **Alternative**: Sophisticated `auto_segment.py` exists but unused
 - **Rationale**: Simple segmentation sufficient for current analysis
@@ -228,6 +246,7 @@ activity_sub: 0.565002  ← Low steps (1,787) drive instability
 ## 🔧 Migration Notes
 
 ### Breaking Changes
+
 **None** – API-compatible
 
 - `PBSILabeler.apply_labels()` signature unchanged
@@ -235,9 +254,11 @@ activity_sub: 0.565002  ← Low steps (1,787) drive instability
 - Old `pbsi_score` values different (z-scale vs 0-100) but column name same
 
 ### Deprecated Code
+
 - ❌ `_legacy_calculate_pbsi_score_simple()` → **Deleted in this release**
 
 ### For Researchers
+
 - If comparing with old results, note that PBSI scales differ (z-scale vs 0-100)
 - Recommend re-running experiments with canonical PBSI for paper consistency
 - Label distributions may change (old: 33/66 thresholds, new: -0.5/+0.5 thresholds)
@@ -247,16 +268,19 @@ activity_sub: 0.565002  ← Low steps (1,787) drive instability
 ## 🧪 Testing & Validation Commands
 
 ### Run Full Pipeline
+
 ```bash
 make pipeline PID=P000001 SNAPSHOT=2025-11-07 ZPWD="your_password"
 ```
 
 ### Run Smoke Test
+
 ```bash
 python tests/test_canonical_pbsi_integration.py
 ```
 
 ### Verify Determinism
+
 ```bash
 # Run 1
 make pipeline PID=P000001 SNAPSHOT=2025-11-07 ZPWD="password"
@@ -275,11 +299,13 @@ make pipeline PID=P000001 SNAPSHOT=2025-11-07 ZPWD="password"
 ## 🧠 Research Impact
 
 ### Resolved Issues
+
 - ✅ **Critical Issue #2**: PBSI implementation now matches CA2 paper methodology
 - ✅ **Anti-leak claims**: Segment-wise z-scores prevent data leakage
 - ✅ **Reproducibility**: Deterministic pipeline with fixed seed (42)
 
 ### Future Work
+
 - Investigate true HRV data sources (if available)
 - Refine exercise estimation (if better proxy exists)
 - Evaluate sophisticated segmentation (`auto_segment.py`)
@@ -290,17 +316,20 @@ make pipeline PID=P000001 SNAPSHOT=2025-11-07 ZPWD="password"
 ## 🎯 Next Steps
 
 ### Immediate (Production)
+
 - [x] Delete legacy code
 - [x] Update CHANGELOG.md
 - [x] Create git tag v4.1.4
 - [x] Publish GitHub release
 
 ### Short-term (Testing)
+
 - [ ] Run smoke test: `python tests/test_canonical_pbsi_integration.py`
 - [ ] Validate on P000002 (if data available)
 - [ ] Compare old vs new PBSI distributions
 
 ### Medium-term (Research)
+
 - [ ] Re-run experiments with canonical PBSI labels
 - [ ] Update paper methods section if needed
 - [ ] Analyze impact on model performance

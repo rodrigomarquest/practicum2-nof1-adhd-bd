@@ -58,7 +58,7 @@ def compute_z_scores_by_segment(
     # Compute z-scores per segment
     features_for_zscores = [
         'sleep_total_h', 'sleep_efficiency',
-        'apple_hr_mean', 'apple_hrv_rmssd', 'apple_hr_max',
+        'hr_mean', 'hrv_rmssd', 'hr_max',
         'steps', 'exercise_min',
     ]
     
@@ -105,9 +105,9 @@ def compute_pbsi_score(row: pd.Series) -> Dict:
     result['sleep_sub'] = sleep_sub
     
     # Cardio subscore
-    z_hr_mean = _get_z_safe(row, 'z_apple_hr_mean')
-    z_hrv = _get_z_safe(row, 'z_apple_hrv_rmssd')
-    z_hr_max = _get_z_safe(row, 'z_apple_hr_max')
+    z_hr_mean = _get_z_safe(row, 'z_hr_mean')
+    z_hrv = _get_z_safe(row, 'z_hrv_rmssd')
+    z_hr_max = _get_z_safe(row, 'z_hr_max')
     
     cardio_sub = 0.5 * z_hr_mean - 0.6 * z_hrv + 0.2 * z_hr_max
     cardio_sub = np.clip(cardio_sub, -3, 3)

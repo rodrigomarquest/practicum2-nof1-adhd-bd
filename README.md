@@ -150,15 +150,15 @@ Subsequent Runs (<1 second):
 
 #### Performance Results
 
-| Metric | Value |
-|--------|-------|
-| XML size | 1.5 GB |
-| Event cache | 23.4 MB (4,677,088 records) |
-| Daily cache | 30 KB (1,315 days) |
-| Compression ratio | 64x (event), 50,000x (daily) |
-| First run | ~3 minutes |
-| Cached run | <1 second |
-| **Overall speedup** | **180x** |
+| Metric              | Value                        |
+| ------------------- | ---------------------------- |
+| XML size            | 1.5 GB                       |
+| Event cache         | 23.4 MB (4,677,088 records)  |
+| Daily cache         | 30 KB (1,315 days)           |
+| Compression ratio   | 64x (event), 50,000x (daily) |
+| First run           | ~3 minutes                   |
+| Cached run          | <1 second                    |
+| **Overall speedup** | **180x**                     |
 
 #### Quality Control (QC) Module
 
@@ -175,6 +175,7 @@ python -m src.etl.hr_daily_aggregation_consistency_check P000001 2025-11-07 \
 ```
 
 **QC Workflow**:
+
 1. Load event-level Parquet (4.6M HR records)
 2. Re-aggregate to daily (reference "ground truth")
 3. Load official `daily_cardio.csv` (fast pipeline output)
@@ -183,6 +184,7 @@ python -m src.etl.hr_daily_aggregation_consistency_check P000001 2025-11-07 \
 6. Generate comprehensive report with consistency statistics
 
 **Verified Results** (60 days, Jan-Mar 2024):
+
 - ✅ **100% consistency** for `hr_n_records` (0 mismatches)
 - ✅ **100% consistency** for `hr_mean` (max diff: 2.8e-14 bpm - floating-point precision)
 - ✅ Binary regex optimization maintains **full accuracy**

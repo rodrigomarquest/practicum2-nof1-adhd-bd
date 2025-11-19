@@ -1,0 +1,308 @@
+.venv/Scripts/python.exe -V
+Python 3.13.5
+[ -d data/raw/P000001 ] || (echo "ERR: data/raw/P000001 not found"; exit 1)
+.venv/Scripts/python.exe scripts/run_full_pipeline.py --participant P000001 --snapshot 2025-11-07 --zepp-password "qqQKwnhY" 
+[2025-11-19 06:25:35] INFO: Participant: P000001
+[2025-11-19 06:25:35] INFO: Snapshot: 2025-11-07
+[2025-11-19 06:25:35] INFO: Stages: 0-9
+[2025-11-19 06:25:35] INFO: Output: data\etl\P000001\2025-11-07
+[2025-11-19 06:25:35] INFO: AI: data\ai\P000001\2025-11-07
+[2025-11-19 06:25:35] INFO: 
+[2025-11-19 06:25:35] INFO: [Apple] Extracting: apple_health_export_20251022T061854Z.zip
+[2025-11-19 06:26:26] INFO: [OK] Apple extracted to data\etl\P000001\2025-11-07\extracted\apple
+[2025-11-19 06:26:26] INFO: [Zepp] Extracting: 3088235680_1761192590962.zip
+[2025-11-19 06:26:26] INFO: [OK] Zepp extracted to data\etl\P000001\2025-11-07\extracted\zepp
+[2025-11-19 06:26:26] INFO: \u2713 Stage 0 complete (50.4s)
+[2025-11-19 06:26:26] INFO: Aggregating from data\etl\P000001\2025-11-07\extracted
+[2025-11-19 06:26:26] INFO: 
+================================================================================
+[2025-11-19 06:26:26] INFO: Stage 1.5: CSV Aggregation - P000001
+[2025-11-19 06:26:26] INFO: ================================================================================
+
+[2025-11-19 06:26:26] INFO: 
+[Apple] Processing: data\etl\P000001\2025-11-07\extracted\apple\apple_health_export\export.xml
+
+[2025-11-19 06:26:26] INFO: [Apple] Loading export.xml: data\etl\P000001\2025-11-07\extracted\apple\apple_health_export\export.xml
+[2025-11-19 06:27:13] INFO: [Apple] Parsed export.xml successfully
+[2025-11-19 06:27:13] INFO: [Apple] Aggregating sleep data...
+[2025-11-19 06:27:16] INFO: [Apple] Aggregated 1823 sleep days
+[2025-11-19 06:27:16] INFO: [Apple] Aggregating heart rate data...
+[2025-11-19 06:27:17] INFO: [Apple] \u2713 Loaded HR from cache: export_apple_hr_daily.parquet (1315 days)
+[2025-11-19 06:27:17] INFO: [Apple] Aggregating activity data...
+[2025-11-19 06:28:08] INFO: [Apple] Aggregated 2730 activity days
+[2025-11-19 06:28:08] ERROR: [ERROR] Apple aggregation failed: [WinError 183] Cannot create a file when that file already exists: 'data\\etl\\P000001\\2025-11-07\\extracted\\apple\\daily_sleep.csv' -> 'data\\etl\\P000001\\2025-11-07\\extracted\\apple\\daily_sleep.prev.csv'
+Traceback (most recent call last):
+  File "C:\dev\practicum2-nof1-adhd-bd\src\etl\stage_csv_aggregation.py", line 564, in run_csv_aggregation
+    out_path.rename(prev_path)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Python313\Lib\pathlib\_local.py", line 767, in rename
+    os.rename(self, target)
+    ~~~~~~~~~^^^^^^^^^^^^^^
+FileExistsError: [WinError 183] Cannot create a file when that file already exists: 'data\\etl\\P000001\\2025-11-07\\extracted\\apple\\daily_sleep.csv' -> 'data\\etl\\P000001\\2025-11-07\\extracted\\apple\\daily_sleep.prev.csv'
+[2025-11-19 06:28:08] INFO: 
+[Zepp] Processing: data\etl\P000001\2025-11-07\extracted\zepp
+
+[2025-11-19 06:28:08] INFO: [Zepp] Scanning directory: data\etl\P000001\2025-11-07\extracted\zepp
+[2025-11-19 06:28:08] INFO: [Zepp] Found files: SLEEP=True, HR=True, ACT=True
+[2025-11-19 06:28:08] INFO: [Zepp] Reading SLEEP: data\etl\P000001\2025-11-07\extracted\zepp\SLEEP\SLEEP_1761192584931.csv
+[2025-11-19 06:28:08] INFO: [Zepp] Aggregated 304 sleep days
+[2025-11-19 06:28:08] INFO: [Zepp] Reading HEARTRATE: data\etl\P000001\2025-11-07\extracted\zepp\HEARTRATE\HEARTRATE_1761192585022.csv
+[2025-11-19 06:28:08] INFO: [Zepp] Aggregated 156 HR days
+[2025-11-19 06:28:08] INFO: [Zepp] Reading ACTIVITY: data\etl\P000001\2025-11-07\extracted\zepp\ACTIVITY\ACTIVITY_1761192583396.csv
+[2025-11-19 06:28:08] INFO: [Zepp] Aggregated 500 activity days
+[2025-11-19 06:28:08] ERROR: [ERROR] Zepp aggregation failed: [WinError 183] Cannot create a file when that file already exists: 'data\\etl\\P000001\\2025-11-07\\extracted\\zepp\\daily_sleep.csv' -> 'data\\etl\\P000001\\2025-11-07\\extracted\\zepp\\daily_sleep.prev.csv'
+Traceback (most recent call last):
+  File "C:\dev\practicum2-nof1-adhd-bd\src\etl\stage_csv_aggregation.py", line 599, in run_csv_aggregation
+    out_path.rename(prev_path)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Python313\Lib\pathlib\_local.py", line 767, in rename
+    os.rename(self, target)
+    ~~~~~~~~~^^^^^^^^^^^^^^
+FileExistsError: [WinError 183] Cannot create a file when that file already exists: 'data\\etl\\P000001\\2025-11-07\\extracted\\zepp\\daily_sleep.csv' -> 'data\\etl\\P000001\\2025-11-07\\extracted\\zepp\\daily_sleep.prev.csv'
+[2025-11-19 06:28:08] INFO: 
+================================================================================
+[2025-11-19 06:28:08] INFO: Stage 1.5 Summary: CSV Aggregation Complete
+[2025-11-19 06:28:08] INFO: ================================================================================
+[2025-11-19 06:28:11] INFO: \u2713 Stage 1 complete: 0 Apple + 0 Zepp days
+[2025-11-19 06:28:11] INFO: 
+================================================================================
+[2025-11-19 06:28:11] INFO: STAGE 2: UNIFY DAILY
+[2025-11-19 06:28:11] INFO: Participant: P000001, Snapshot: 2025-11-07
+[2025-11-19 06:28:11] INFO: ================================================================================
+
+[2025-11-19 06:28:11] INFO: [Unify] Initializing for P000001
+[2025-11-19 06:28:11] INFO: [Unify] Apple dir: data\etl\P000001\2025-11-07\extracted\apple
+[2025-11-19 06:28:11] INFO: [Unify] Zepp dir: data\etl\P000001\2025-11-07\extracted\zepp
+[2025-11-19 06:28:11] INFO: 
+================================================================================
+[2025-11-19 06:28:11] INFO: Stage 2: Unify Daily - P000001
+[2025-11-19 06:28:11] INFO: ================================================================================
+
+[2025-11-19 06:28:11] INFO: 
+[Unify] === SLEEP DATA ===
+[2025-11-19 06:28:11] INFO: [Unify] Loaded apple sleep: 1823 days from data\etl\P000001\2025-11-07\extracted\apple\daily_sleep.csv
+[2025-11-19 06:28:11] INFO: [Unify] Loaded zepp sleep: 304 days from data\etl\P000001\2025-11-07\extracted\zepp\daily_sleep.csv
+[2025-11-19 06:28:11] INFO: [Unify] Merged sleep: 1823 Apple + 45 Zepp = 1868 total
+[2025-11-19 06:28:11] INFO: 
+[Unify] === CARDIO DATA ===
+[2025-11-19 06:28:11] INFO: [Unify] Loaded apple cardio: 1315 days from data\etl\P000001\2025-11-07\extracted\apple\daily_cardio.csv
+[2025-11-19 06:28:11] INFO: [Unify] Loaded zepp cardio: 156 days from data\etl\P000001\2025-11-07\extracted\zepp\daily_cardio.csv
+[2025-11-19 06:28:12] INFO: [Unify] Merged cardio: 1315 Apple + 156 Zepp = 1315 unique days
+[2025-11-19 06:28:12] INFO: 
+[Unify] === ACTIVITY DATA ===
+[2025-11-19 06:28:12] INFO: [Unify] Loaded apple activity: 2730 days from data\etl\P000001\2025-11-07\extracted\apple\daily_activity.csv
+[2025-11-19 06:28:12] INFO: [Unify] Loaded zepp activity: 500 days from data\etl\P000001\2025-11-07\extracted\zepp\daily_activity.csv
+[2025-11-19 06:28:12] INFO: [Unify] Merged activity: 2730 Apple + 500 Zepp = 2730 unique days
+[2025-11-19 06:28:12] INFO: [Unify] Preserving NaN values (no forward-fill)
+[2025-11-19 06:28:12] INFO: [Unify] Missing value summary:
+[2025-11-19 06:28:12] INFO:   sleep_hours: 960/2828 (33.9%)
+[2025-11-19 06:28:12] INFO:   sleep_quality_score: 960/2828 (33.9%)
+[2025-11-19 06:28:12] INFO:   hr_mean: 1513/2828 (53.5%)
+[2025-11-19 06:28:12] INFO:   hr_min: 1513/2828 (53.5%)
+[2025-11-19 06:28:12] INFO:   hr_max: 1513/2828 (53.5%)
+[2025-11-19 06:28:12] INFO:   hr_std: 1513/2828 (53.5%)
+[2025-11-19 06:28:12] INFO:   hr_samples: 1513/2828 (53.5%)
+[2025-11-19 06:28:12] INFO:   total_steps: 98/2828 (3.5%)
+[2025-11-19 06:28:12] INFO:   total_distance: 98/2828 (3.5%)
+[2025-11-19 06:28:12] INFO:   total_active_energy: 98/2828 (3.5%)
+[2025-11-19 06:28:12] INFO: 
+[Unify] === UNIFIED DATASET ===
+[2025-11-19 06:28:12] INFO: [Unify] Total days: 2828
+[2025-11-19 06:28:12] INFO: [Unify] Date range: 2017-12-04 to 2025-10-21
+[2025-11-19 06:28:12] INFO: [Unify] Columns: ['date', 'sleep_hours', 'sleep_quality_score', 'hr_mean', 'hr_min', 'hr_max', 'hr_std', 'hr_samples', 'total_steps', 'total_distance', 'total_active_energy']
+[2025-11-19 06:28:12] INFO: 
+[OK] Saved unified data: data\etl\P000001\2025-11-07\joined\features_daily_unified.csv
+[2025-11-19 06:28:12] INFO: [OK] Records: 2828, Columns: 11
+[2025-11-19 06:28:12] INFO: \u2713 Stage 2 complete: 2828 days, 2017-12-04 to 2025-10-21
+[2025-11-19 06:28:12] INFO: 
+================================================================================
+[2025-11-19 06:28:12] INFO: STAGE 3: APPLY PBSI LABELS
+[2025-11-19 06:28:12] INFO: Participant: P000001, Snapshot: 2025-11-07
+[2025-11-19 06:28:12] INFO: ================================================================================
+
+[2025-11-19 06:28:12] INFO: [Labels] Loading: data\etl\P000001\2025-11-07\joined\features_daily_unified.csv
+[2025-11-19 06:28:12] INFO: [Labels] Loaded 2828 days
+[2025-11-19 06:28:12] INFO: [Labels] Using canonical PBSI (segment-wise z-scored)
+[2025-11-19 06:28:12] INFO: [Labels] Applying canonical PBSI to 2828 days...
+[2025-11-19 06:28:12] WARNING: [Mapping] No HRV data, using hr_std as rough proxy
+[2025-11-19 06:28:12] WARNING: [Mapping] No exercise_min, estimating from active_energy
+[2025-11-19 06:28:12] INFO: [Mapping] Normalized column names for canonical PBSI
+[2025-11-19 06:28:12] INFO: [Labels] segment_id not found, creating temporal segments...
+[2025-11-19 06:28:12] INFO: [Segments] Created 119 temporal segments
+[2025-11-19 06:28:12] INFO: [Segments] Size range: 1-31 days
+[2025-11-19 06:28:12] INFO: Building PBSI labels
+[2025-11-19 06:28:12] INFO: \u2713 Computed z-scores by segment
+[2025-11-19 06:28:13] INFO: \u2713 Computed PBSI scores
+[2025-11-19 06:28:13] INFO: 
+================================================================================
+[2025-11-19 06:28:13] INFO: LABEL DISTRIBUTION
+[2025-11-19 06:28:13] INFO: ================================================================================
+[2025-11-19 06:28:13] INFO: 
+label_3cls:
+[2025-11-19 06:28:13] INFO:   -1.0: 10 (0.4%)
+[2025-11-19 06:28:13] INFO:   0.0: 2682 (94.8%)
+[2025-11-19 06:28:13] INFO:   1.0: 136 (4.8%)
+[2025-11-19 06:28:13] INFO: 
+label_2cls:
+[2025-11-19 06:28:13] INFO:   0.0: 2692 (95.2%)
+[2025-11-19 06:28:13] INFO:   1.0: 136 (4.8%)
+[2025-11-19 06:28:13] INFO: 
+label_clinical:
+[2025-11-19 06:28:13] INFO:   0.0: 2828 (100.0%)
+[2025-11-19 06:28:13] INFO: No degenerate labels
+[2025-11-19 06:28:13] INFO: 
+Example stable (+1) rows:
+[2025-11-19 06:28:13] INFO:            date  pbsi_score  sleep_sub  cardio_sub  activity_sub  pbsi_quality
+252  2018-09-18   -0.592724   0.170601    0.000000     -2.643860          0.64
+1251 2021-06-28   -0.521640  -0.796575   -0.974499      0.552258          1.00
+1258 2021-07-05   -0.649325  -1.094650   -1.056337      0.633013          1.00
+[2025-11-19 06:28:13] INFO: 
+Example unstable (-1) rows:
+[2025-11-19 06:28:13] INFO:            date  pbsi_score  sleep_sub  cardio_sub  activity_sub  pbsi_quality
+1328 2021-09-13    0.635046   0.170601    1.211129      0.571641           0.8
+2221 2024-02-23    0.572146   0.609573    1.455661     -0.724657           1.0
+2577 2025-02-13    0.504065   0.612814    1.030263     -0.406611           1.0
+[2025-11-19 06:28:13] INFO: ================================================================================
+
+[2025-11-19 06:28:13] INFO: [Labels] Canonical PBSI applied
+[2025-11-19 06:28:13] INFO: [Labels] Score range: -1.464 to 0.657
+[2025-11-19 06:28:13] INFO: [Labels] Distribution:
+[2025-11-19 06:28:13] INFO:   Label +1 (stable  ):  136 days (  4.8%)
+[2025-11-19 06:28:13] INFO:   Label +0 (neutral ): 2682 days ( 94.8%)
+[2025-11-19 06:28:13] INFO:   Label -1 (unstable):   10 days (  0.4%)
+[2025-11-19 06:28:13] INFO: 
+[OK] Saved labeled data: data\etl\P000001\2025-11-07\joined\features_daily_labeled.csv
+[2025-11-19 06:28:13] INFO: [OK] Records: 2828, Columns: 37
+[2025-11-19 06:28:13] INFO: \u2713 Stage 3 complete: 2828 days labeled
+[2025-11-19 06:28:13] INFO:   Label -1:   10 (  0.4%)
+[2025-11-19 06:28:13] INFO:   Label +0: 2682 ( 94.8%)
+[2025-11-19 06:28:13] INFO:   Label +1:  136 (  4.8%)
+[2025-11-19 06:28:13] INFO: \u2713 Stage 4 complete: 119 segments
+[2025-11-19 06:28:13] INFO:   Reasons: {'time_boundary': 91, 'gap': 27, 'initial': 1}
+[2025-11-19 06:28:13] INFO: Removing blacklist: ['pbsi_score', 'pbsi_quality']
+[2025-11-19 06:28:13] INFO: \u2713 Stage 5 complete: (2828, 12)
+[2025-11-19 06:28:13] INFO:   pbsi_score removed: YES
+[2025-11-19 06:28:13] INFO:   pbsi_quality removed: YES
+[2025-11-19 06:28:15] INFO: [Calendar CV] Starting from 2018-03-19 (first window with >=2 classes)
+[2025-11-19 06:28:15] INFO: [Calendar CV] Date range: 2018-03-19 to 2025-10-21
+[2025-11-19 06:28:15] INFO: [Calendar CV] Creating 6 folds: 4mo train / 2mo val
+[2025-11-19 06:28:16] WARNING: [Calendar CV] Fold 0: Only 1 class in train, skipping
+[2025-11-19 06:28:16] WARNING: [Calendar CV] Fold 1: Only 1 class in train, skipping
+[2025-11-19 06:28:16] WARNING: [Calendar CV] Fold 2: Only 1 class in train, skipping
+[2025-11-19 06:28:16] WARNING: [Calendar CV] Fold 3: Only 1 class in train, skipping
+[2025-11-19 06:28:16] WARNING: [Calendar CV] Fold 4: Only 1 class in train, skipping
+[2025-11-19 06:28:16] WARNING: [Calendar CV] Fold 5: Only 1 class in train, skipping
+[2025-11-19 06:28:16] WARNING: No valid folds created (classes too imbalanced for CV)
+[2025-11-19 06:28:16] WARNING: Skipping NB2 training - continuing with rest of pipeline
+[2025-11-19 06:28:16] INFO: [NB3] Preparing z-scored feature set (7 features)
+[2025-11-19 06:28:16] INFO: [NB3 Prep] Preparing z-scored feature set from labeled data
+[2025-11-19 06:28:16] INFO: [NB3 Prep] Selected 7 z-scored features:
+[2025-11-19 06:28:16] INFO:   - z_sleep_total_h
+[2025-11-19 06:28:16] INFO:   - z_sleep_efficiency
+[2025-11-19 06:28:16] INFO:   - z_apple_hr_mean
+[2025-11-19 06:28:16] INFO:   - z_apple_hrv_rmssd
+[2025-11-19 06:28:16] INFO:   - z_apple_hr_max
+[2025-11-19 06:28:16] INFO:   - z_steps
+[2025-11-19 06:28:16] INFO:   - z_exercise_min
+[2025-11-19 06:28:16] INFO: [NB3 Prep] Anti-leak verified: 7 prohibited columns excluded
+[2025-11-19 06:28:16] INFO: [NB3 Prep] Output shape: (2828, 9)
+[2025-11-19 06:28:16] INFO: [NB3] Dataset shape: (2828, 9)
+[2025-11-19 06:28:16] INFO: [NB3] Z-features: z_sleep_total_h, z_sleep_efficiency, z_apple_hr_mean, z_apple_hrv_rmssd, z_apple_hr_max, z_steps, z_exercise_min
+[2025-11-19 06:28:16] INFO: 
+[NB3] SHAP Analysis...
+[2025-11-19 06:28:16] INFO: [Calendar CV] Starting from 2018-03-19 (first window with >=2 classes)
+[2025-11-19 06:28:16] INFO: [Calendar CV] Date range: 2018-03-19 to 2025-10-21
+[2025-11-19 06:28:16] INFO: [Calendar CV] Creating 6 folds: 4mo train / 2mo val
+[2025-11-19 06:28:16] WARNING: [Calendar CV] Fold 0: Only 1 class in train, skipping
+[2025-11-19 06:28:16] WARNING: [Calendar CV] Fold 1: Only 1 class in train, skipping
+[2025-11-19 06:28:16] WARNING: [Calendar CV] Fold 2: Only 1 class in train, skipping
+[2025-11-19 06:28:16] WARNING: [Calendar CV] Fold 3: Only 1 class in train, skipping
+[2025-11-19 06:28:16] WARNING: [Calendar CV] Fold 4: Only 1 class in train, skipping
+[2025-11-19 06:28:16] WARNING: [Calendar CV] Fold 5: Only 1 class in train, skipping
+[2025-11-19 06:28:16] INFO: [NB3 SHAP] Feature matrix shape: (2828, 7)
+[2025-11-19 06:28:16] INFO: [NB3 SHAP] Label distribution: {0.0: 2682, 1.0: 136, -1.0: 10}
+[2025-11-19 06:28:16] INFO: [SHAP] Top-3 global: 
+[2025-11-19 06:28:16] INFO: 
+[NB3] Drift Detection: ADWIN...
+[2025-11-19 06:28:16] INFO: [ADWIN] Drift detected at 2021-02-16 00:00:00 (idx=1119)
+[2025-11-19 06:28:16] INFO: [ADWIN] Drift detected at 2021-07-26 00:00:00 (idx=1279)
+[2025-11-19 06:28:16] INFO: [ADWIN] Drift detected at 2022-04-08 00:00:00 (idx=1535)
+[2025-11-19 06:28:16] INFO: [ADWIN] Drift detected at 2023-04-27 00:00:00 (idx=1919)
+[2025-11-19 06:28:16] INFO: [ADWIN] Drift detected at 2024-07-18 00:00:00 (idx=2367)
+[2025-11-19 06:28:16] INFO: [ADWIN] Saved 5 drift points to data\ai\P000001\2025-11-07\nb3\drift\adwin_changes.csv
+[2025-11-19 06:28:16] INFO: 
+[NB3] Drift Detection: KS at Segment Boundaries...
+[2025-11-19 06:28:17] INFO: [KS] Saved 494 tests to data\ai\P000001\2025-11-07\nb3\drift\ks_segment_boundaries.csv
+[2025-11-19 06:28:17] INFO: [KS] 44/494 tests significant (p<0.05)
+[2025-11-19 06:28:17] INFO: [Drift] ADWIN: 5 changes, KS: 44/494 significant
+[2025-11-19 06:28:17] INFO: 
+[NB3] LSTM M1 Training...
+[2025-11-19 06:28:17] INFO: [NB3 LSTM] Sequence length: 14
+[2025-11-19 06:28:17] INFO: [NB3 LSTM] N features: 7 (z-scored)
+[2025-11-19 06:28:17] INFO: [NB3 LSTM] N classes: 3
+[2025-11-19 06:28:17] INFO: \u2713 Stage 7 complete: SHAP \u2713 Drift \u2713 LSTM \u2713
+[2025-11-19 06:28:17] WARNING: [TFLite] No LSTM model available, skipping
+[2025-11-19 06:28:17] INFO: \u2713 Stage 9 complete: RUN_REPORT.md
+[2025-11-19 06:28:17] INFO: \u2713 All stages successful
+[2025-11-19 06:28:17] INFO: \u2713 Output: data\etl\P000001\2025-11-07
+[2025-11-19 06:28:17] INFO: \u2713 Report: RUN_REPORT.md
+
+================================================================================
+                    FULL DETERMINISTIC PIPELINE (stages 0-9)                    
+================================================================================
+
+
+================================================================================
+                    STAGE 0: INGEST (extract from data/raw)                     
+================================================================================
+
+
+================================================================================
+                 STAGE 1: AGGREGATE (xml + csvs to daily_*.csv)                 
+================================================================================
+
+
+================================================================================
+                       STAGE 2: UNIFY (merge daily csvs)                        
+================================================================================
+
+
+================================================================================
+                       STAGE 3: LABEL (apply pbsi labels)                       
+================================================================================
+
+
+================================================================================
+                      STAGE 4: SEGMENT (identify periods)                       
+================================================================================
+
+
+================================================================================
+                    STAGE 5: PREP NB2 (anti-leak safeguards)                    
+================================================================================
+
+
+================================================================================
+                   STAGE 6: NB2 TRAINING (6-fold calendar cv)                   
+================================================================================
+
+
+================================================================================
+                  STAGE 7: NB3 ANALYSIS (SHAP + Drift + LSTM)                   
+================================================================================
+
+
+================================================================================
+                             STAGE 8: TFLITE EXPORT                             
+================================================================================
+
+
+================================================================================
+                            STAGE 9: GENERATE REPORT                            
+================================================================================
+
+
+================================================================================
+                               PIPELINE COMPLETE                                
+================================================================================
+

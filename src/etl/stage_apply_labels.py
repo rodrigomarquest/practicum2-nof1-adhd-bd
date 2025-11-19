@@ -89,11 +89,12 @@ def _normalize_column_names_for_pbsi(df: pd.DataFrame) -> pd.DataFrame:
         sleep_hours, sleep_quality_score, hr_mean, hr_max, hr_std, total_steps, ...
     
     build_pbsi.py expects:
-        sleep_total_h, sleep_efficiency, apple_hr_mean, apple_hr_max, 
-        apple_hrv_rmssd, steps, exercise_min
+        sleep_total_h, sleep_efficiency, hr_mean, hr_max, 
+        hrv_rmssd, steps, exercise_min
         missing_sleep, missing_cardio, missing_activity (for quality scores)
     
     This function creates the necessary columns (with best approximations where needed).
+    NOTE: Uses GENERIC column names (hr_mean, not apple_hr_mean) after unification.
     """
     df = df.copy()
     
@@ -112,32 +113,27 @@ def _normalize_column_names_for_pbsi(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df['sleep_efficiency'] = np.nan
     
-    # Cardio mapping
-    if 'hr_mean' in df.columns:
-        df['apple_hr_mean'] = df['hr_mean']
-        df['missing_cardio'] = df['hr_mean'].isna()
-    else:
-        df['apple_hr_mean'] = np.nan
-        df['missing_cardio'] = True
+    # Cardio mapping - NO RENAMING, keep generic names
+    if 'hr_mean' not in df.columns:
+        df['hr_mean'] = np.nan
+    if 'hr_max' not in df.columns:
+        df['hr_max'] = np.nan
     
-    if 'hr_max' in df.columns:
-        df['apple_hr_max'] = df['hr_max']
-    else:
-        df['apple_hr_max'] = np.nan
+    df['missing_cardio'] = df['hr_mean'].isna()
     
     # HRV: if not present, we need to handle this
     # build_pbsi will use z_hrv, so missing HRV will just use default z-score of 0
-    if 'hrv' in df.columns:
-        df['apple_hrv_rmssd'] = df['hrv']
+    if 'hrv_rmssd' in df.columns:
+        pass  # Already present, no mapping needed
     elif 'hr_std' in df.columns:
         # APPROXIMATION: Use HR std as proxy for HRV variability
         # This is not ideal but better than nothing
         # Inverse relationship: higher std = more variability (could indicate higher HRV)
         logger.warning("[Mapping] No HRV data, using hr_std as rough proxy")
-        df['apple_hrv_rmssd'] = df['hr_std'] * 2.0  # Scale factor
+        df['hrv_rmssd'] = df['hr_std'] * 2.0  # Scale factor
     else:
         logger.warning("[Mapping] No HRV or hr_std available")
-        df['apple_hrv_rmssd'] = np.nan
+        df['hrv_rmssd'] = np.nan
     
     # Activity mapping
     if 'total_steps' in df.columns:

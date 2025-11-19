@@ -1,6 +1,9 @@
 """
 NB3 Analysis Module
 SHAP interpretability, Drift detection (ADWIN + KS), LSTM training
+
+NB3 uses z-scored canonical features from the PBSI pipeline (Stage 3).
+These features are segment-wise normalized to prevent data leakage.
 """
 
 import pandas as pd
@@ -16,10 +19,83 @@ warnings.filterwarnings('ignore')
 logger = logging.getLogger(__name__)
 
 
+# NB3 Feature Set: Z-scored canonical features from PBSI pipeline
+# These are segment-wise normalized (119 segments) to prevent leakage
+NB3_FEATURE_COLS = [
+    "z_sleep_total_h",       # Sleep duration (z-scored per segment)
+    "z_sleep_efficiency",    # Sleep quality 0-1 scale (z-scored per segment)
+    "z_hr_mean",       # Heart rate mean (z-scored per segment)
+    "z_hrv_rmssd",     # HRV proxy: hr_std × 2 (z-scored per segment)
+    "z_hr_max",        # Heart rate max (z-scored per segment)
+    "z_steps",               # Activity steps (z-scored per segment)
+    "z_exercise_min",        # Exercise estimate: active_energy ÷ 5 (z-scored per segment)
+]
+
+# Anti-leak columns: MUST NOT be used as predictors in NB3
+NB3_ANTI_LEAK_COLS = [
+    'pbsi_score',      # Target-derived composite score
+    'pbsi_quality',    # Quality flag derived from labels
+    'sleep_sub',       # PBSI subscore (intermediate calculation)
+    'cardio_sub',      # PBSI subscore (intermediate calculation)
+    'activity_sub',    # PBSI subscore (intermediate calculation)
+    'label_2cls',      # Binary label (derived from label_3cls)
+    'label_clinical',  # Clinical threshold label (derived)
+]
+
+
+def prepare_nb3_features(df_labeled: pd.DataFrame) -> pd.DataFrame:
+    """
+    Prepare NB3 dataset with z-scored canonical features from PBSI pipeline.
+    
+    This function:
+    1. Selects only z-scored features (segment-wise normalized) for NB3
+    2. Removes anti-leak columns (pbsi_score, subscores, derived labels)
+    3. Validates that no leakage columns are present
+    4. Returns clean dataset for NB3 analysis (SHAP + LSTM)
+    
+    Args:
+        df_labeled: Output from Stage 3 (features_daily_labeled.csv)
+                    Contains raw features + z-scored features + PBSI outputs
+    
+    Returns:
+        DataFrame with (date, 7 z-scored features, label_3cls)
+        Shape: (n_days, 9 columns)
+    
+    Raises:
+        AssertionError: If any anti-leak column found in output
+        ValueError: If required z-scored features are missing
+    """
+    logger.info("[NB3 Prep] Preparing z-scored feature set from labeled data")
+    
+    # Verify all required z-features are present
+    missing_features = [f for f in NB3_FEATURE_COLS if f not in df_labeled.columns]
+    if missing_features:
+        raise ValueError(f"Missing required z-features: {missing_features}")
+    
+    # Select NB3 features (z-scored) + date + label
+    nb3_cols = ['date'] + NB3_FEATURE_COLS + ['label_3cls']
+    df_nb3 = df_labeled[nb3_cols].copy()
+    
+    # Verify anti-leak safeguards
+    for col in NB3_ANTI_LEAK_COLS:
+        assert col not in df_nb3.columns, f"LEAK DETECTED: {col} found in NB3 features"
+    
+    logger.info(f"[NB3 Prep] Selected {len(NB3_FEATURE_COLS)} z-scored features:")
+    for feat in NB3_FEATURE_COLS:
+        logger.info(f"  - {feat}")
+    
+    logger.info(f"[NB3 Prep] Anti-leak verified: {len(NB3_ANTI_LEAK_COLS)} prohibited columns excluded")
+    logger.info(f"[NB3 Prep] Output shape: {df_nb3.shape}")
+    
+    return df_nb3
+
+
 def create_calendar_folds(df: pd.DataFrame, n_folds: int = 6, 
                           train_months: int = 4, val_months: int = 2) -> List[Dict]:
     """
     Create temporal CV folds based on calendar months.
+    
+```
     
     Args:
         df: DataFrame with 'date' column (sorted)

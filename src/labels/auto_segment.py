@@ -67,8 +67,8 @@ def detect_signal_change(df: pd.DataFrame, window: int = 7) -> Tuple[np.ndarray,
     Detect sustained, abrupt changes in biomarkers.
     
     Thresholds:
-        - apple_hr_mean: Δ≥8 bpm
-        - apple_hrv_rmssd: Δ≥10 ms
+        - hr_mean: Δ≥8 bpm
+        - hrv_rmssd: Δ≥10 ms
         - sleep_efficiency: Δ≥0.08
     
     Returns:
@@ -77,41 +77,70 @@ def detect_signal_change(df: pd.DataFrame, window: int = 7) -> Tuple[np.ndarray,
     triggers = np.zeros(len(df), dtype=bool)
     reasons = [""] * len(df)
     
+    # Minimum data density required in window to compute trigger (e.g., 70% non-NaN)
+    min_data_density = 0.7
+    
     # HR mean change
-    if "apple_hr_mean" in df.columns:
-        hr = df["apple_hr_mean"].ffill().bfill()
+    # NOTE (v4.1.5): Forward-fill removed for scientific integrity.
+    # Triggers are only computed on windows with sufficient real data (≥70% non-NaN).
+    if "hr_mean" in df.columns:
+        hr = df["hr_mean"]  # Keep NaN, do not forward-fill
         for i in range(window, len(df)):
-            prev_mean = hr.iloc[max(0, i - window):i].mean()
-            curr_mean = hr.iloc[i:min(len(hr), i + window)].mean()
+            prev_window = hr.iloc[max(0, i - window):i]
+            curr_window = hr.iloc[i:min(len(hr), i + window)]
             
-            if not pd.isna(prev_mean) and not pd.isna(curr_mean) and abs(curr_mean - prev_mean) >= 8.0:
-                triggers[i] = True
-                reasons[i] = f"HR_mean_change(Δ={abs(curr_mean - prev_mean):.1f}bpm)"
-                break
+            # Only compute trigger if both windows have sufficient data
+            prev_density = prev_window.notna().sum() / len(prev_window)
+            curr_density = curr_window.notna().sum() / len(curr_window)
+            
+            if prev_density >= min_data_density and curr_density >= min_data_density:
+                prev_mean = prev_window.mean()
+                curr_mean = curr_window.mean()
+                
+                if not pd.isna(prev_mean) and not pd.isna(curr_mean) and abs(curr_mean - prev_mean) >= 8.0:
+                    triggers[i] = True
+                    reasons[i] = f"HR_mean_change(Δ={abs(curr_mean - prev_mean):.1f}bpm)"
+                    break
     
     # HRV change
-    if "apple_hrv_rmssd" in df.columns and not triggers.any():
-        hrv = df["apple_hrv_rmssd"].ffill().bfill()
+    if "hrv_rmssd" in df.columns and not triggers.any():
+        hrv = df["hrv_rmssd"]  # Keep NaN, do not forward-fill
         for i in range(window, len(df)):
-            prev_mean = hrv.iloc[max(0, i - window):i].mean()
-            curr_mean = hrv.iloc[i:min(len(hrv), i + window)].mean()
+            prev_window = hrv.iloc[max(0, i - window):i]
+            curr_window = hrv.iloc[i:min(len(hrv), i + window)]
             
-            if not pd.isna(prev_mean) and not pd.isna(curr_mean) and abs(curr_mean - prev_mean) >= 10.0:
-                triggers[i] = True
-                reasons[i] = f"HRV_change(Δ={abs(curr_mean - prev_mean):.1f}ms)"
-                break
+            # Only compute trigger if both windows have sufficient data
+            prev_density = prev_window.notna().sum() / len(prev_window)
+            curr_density = curr_window.notna().sum() / len(curr_window)
+            
+            if prev_density >= min_data_density and curr_density >= min_data_density:
+                prev_mean = prev_window.mean()
+                curr_mean = curr_window.mean()
+                
+                if not pd.isna(prev_mean) and not pd.isna(curr_mean) and abs(curr_mean - prev_mean) >= 10.0:
+                    triggers[i] = True
+                    reasons[i] = f"HRV_change(Δ={abs(curr_mean - prev_mean):.1f}ms)"
+                    break
     
     # Sleep efficiency change
     if "sleep_efficiency" in df.columns and not triggers.any():
-        sleep = df["sleep_efficiency"].ffill().bfill()
+        sleep = df["sleep_efficiency"]  # Keep NaN, do not forward-fill
         for i in range(window, len(df)):
-            prev_mean = sleep.iloc[max(0, i - window):i].mean()
-            curr_mean = sleep.iloc[i:min(len(sleep), i + window)].mean()
+            prev_window = sleep.iloc[max(0, i - window):i]
+            curr_window = sleep.iloc[i:min(len(sleep), i + window)]
             
-            if not pd.isna(prev_mean) and not pd.isna(curr_mean) and abs(curr_mean - prev_mean) >= 0.08:
-                triggers[i] = True
-                reasons[i] = f"SleepEff_change(Δ={abs(curr_mean - prev_mean):.2f})"
-                break
+            # Only compute trigger if both windows have sufficient data
+            prev_density = prev_window.notna().sum() / len(prev_window)
+            curr_density = curr_window.notna().sum() / len(curr_window)
+            
+            if prev_density >= min_data_density and curr_density >= min_data_density:
+                prev_mean = prev_window.mean()
+                curr_mean = curr_window.mean()
+                
+                if not pd.isna(prev_mean) and not pd.isna(curr_mean) and abs(curr_mean - prev_mean) >= 0.08:
+                    triggers[i] = True
+                    reasons[i] = f"SleepEff_change(Δ={abs(curr_mean - prev_mean):.2f})"
+                    break
     
     return triggers, reasons
 
@@ -326,8 +355,8 @@ if __name__ == "__main__":
         "date": pd.date_range("2025-01-01", periods=180, freq="D"),
         "sleep_total_h": rng.normal(7, 1, 180),
         "sleep_efficiency": rng.uniform(0.7, 0.95, 180),
-        "apple_hr_mean": np.concatenate([rng.normal(70, 5, 90), rng.normal(80, 5, 90)]),
-        "apple_hrv_rmssd": rng.uniform(20, 60, 180),
+        "hr_mean": np.concatenate([rng.normal(70, 5, 90), rng.normal(80, 5, 90)]),
+        "hrv_rmssd": rng.uniform(20, 60, 180),
         "source_cardio": np.where(np.arange(180) < 90, "apple", "zepp"),
         "missing_cardio": np.where(rng.uniform(0, 1, 180) < 0.1, 1, 0),
         "missing_sleep": np.where(rng.uniform(0, 1, 180) < 0.05, 1, 0),
