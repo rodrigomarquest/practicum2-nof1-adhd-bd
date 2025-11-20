@@ -47,7 +47,7 @@ AI_DIR  := data/ai/$(PID)/$(SNAPSHOT_RESOLVED)
         pipeline quick ml6-only ml7-only \
         qc-hr qc-steps qc-sleep qc-all qc-etl \
         clean-outputs clean-all verify \
-        help-release release-notes version-guard changelog release-assets provenance release-draft publish-release print-version
+        help-release release-notes version-guard changelog release-assets provenance release-draft publish-release
 
 # -------- Help --------
 help:
@@ -169,7 +169,7 @@ ASSET_DIR    := $(ASSET_BASE)/$(NEXT_TAG)
 help-release:
 > echo "Release targets:"
 > echo "  make release-notes | version-guard | changelog"
-> echo "  make release-assets | provenance | release-draft | publish-release | print-version"
+> echo "  make release-assets | provenance | release-draft | publish-release"
 
 release-notes:
 > mkdir -p $(RELEASE_DIR)
@@ -229,7 +229,3 @@ publish-release:
 > git tag -a $(NEXT_TAG) -m "Release $(NEXT_TAG)"
 > git push origin $(NEXT_TAG)
 > echo "Tagged & pushed"
-
-print-version:
-> echo "HEAD: $$(git rev-parse --short HEAD)"
-> echo "Next tag: $(NEXT_TAG)"
