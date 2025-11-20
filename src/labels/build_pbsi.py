@@ -1,7 +1,7 @@
 """
 Build PBSI (Physio-Behavioral Stability Index) labels.
 
-CANONICAL IMPLEMENTATION FOR CA2 PAPER:
+CANONICAL IMPLEMENTATION FOR CA2 PAPER (v4.1.6):
 This module implements the segment-wise z-scored PBSI described in the research paper.
 It is integrated into the main ETL pipeline via stage_apply_labels.py.
 
@@ -9,17 +9,31 @@ Key features:
 - Segment-wise z-score normalization (anti-leak safeguard)
 - Sleep/cardio/activity subscores with documented weights
 - Composite PBSI: 0.40*sleep + 0.35*cardio + 0.25*activity
-- Thresholds: pbsi≤-0.5 → +1 (stable), pbsi≥0.5 → -1 (unstable)
+- Percentile-based thresholds (P25/P75) for balanced class distribution
 
 Sign convention:
-Lower PBSI score = more stable (counterintuitive but by design)
-  - More sleep, lower HR, higher HRV → lower subscores → lower pbsi → +1 (stable)
-  - Less sleep, higher HR, lower HRV → higher subscores → higher pbsi → -1 (unstable)
+Lower PBSI score = more physiologically regulated
+  - More sleep, lower HR, higher HRV → lower subscores → lower pbsi → +1 (regulated)
+  - Less sleep, higher HR, lower HRV → higher subscores → higher pbsi → -1 (dysregulated)
 
-Labels:
-    label_3cls: +1 (stable), 0 (neutral), -1 (unstable)
-    label_2cls: 1 (stable), 0 (neutral/unstable)
-    label_clinical: 1 if pbsi_score >= 0.75 else 0
+Labels (v4.1.6):
+    label_3cls: +1 (low_pbsi/regulated), 0 (mid_pbsi/typical), -1 (high_pbsi/dysregulated)
+    label_2cls: 1 (regulated), 0 (typical/dysregulated)
+    label_clinical: deprecated (replaced by label_3cls)
+
+⚠️ IMPORTANT - Clinical Validity:
+These labels are COMPOSITE PHYSIOLOGICAL INDICES and have NOT been validated against
+psychiatric ground truth (mood diaries, clinician ratings, or diagnostic interviews).
+They capture variance in sleep/cardio/activity patterns but should NOT be interpreted
+as direct proxies for psychiatric states (mania, depression, ADHD severity).
+
+For clinical interpretation, cross-reference with:
+- Mood diaries / self-reports
+- Medication changes / life events
+- Clinical assessments (YMRS, MADRS, ASRS)
+
+Future work (v5.x): Validate against ecological momentary assessments (EMA) and
+DSM-5 diagnostic criteria to map physiological patterns to psychiatric states.
 """
 
 import pandas as pd
@@ -46,9 +60,14 @@ def compute_z_scores_by_segment(
     if version_log_path and version_log_path.exists():
         try:
             vlog = pd.read_csv(version_log_path)
-            vlog['date'] = pd.to_datetime(vlog['date'])
-            df = df.merge(vlog[['date', 'segment_id']], on='date', how='left')
-            logger.info("✓ Joined segment info from version_log_enriched")
+            # Handle both 'date' and 'day_boundary' column names
+            date_col = 'date' if 'date' in vlog.columns else 'day_boundary'
+            vlog[date_col] = pd.to_datetime(vlog[date_col])
+            df['date'] = pd.to_datetime(df['date'])
+            df = df.merge(vlog[[date_col, 'segment_id']], left_on='date', right_on=date_col, how='left')
+            if date_col != 'date':
+                df = df.drop(columns=[date_col])
+            logger.info("✓ Joined segment info from version_log")
         except Exception as e:
             logger.warning(f"Could not load version_log: {e}. Using global z-scores.")
             df['segment_id'] = 'global'
@@ -91,9 +110,22 @@ def _get_z_safe(row: pd.Series, col: str, default: float = 0.0) -> float:
     return val if pd.notna(val) else default
 
 
-def compute_pbsi_score(row: pd.Series) -> Dict:
-    """Compute PBSI subscores and composite score for a single row."""
+def compute_pbsi_score(
+    row: pd.Series,
+    threshold_low: float = -0.5,
+    threshold_high: float = 0.5
+) -> Dict:
+    """
+    Compute PBSI subscores and composite score for a single row.
     
+    Args:
+        row: DataFrame row with z-scored features
+        threshold_low: Lower threshold for label_3cls (default: -0.5, v4.1.6: P25)
+        threshold_high: Upper threshold for label_3cls (default: 0.5, v4.1.6: P75)
+    
+    Returns:
+        Dictionary with subscores, pbsi_score, labels, and quality metrics
+    """
     result = {}
     
     # Sleep subscore
@@ -127,10 +159,14 @@ def compute_pbsi_score(row: pd.Series) -> Dict:
     pbsi_score = 0.40 * sleep_sub + 0.35 * cardio_sub + 0.25 * activity_sub
     result['pbsi_score'] = pbsi_score
     
-    # Labels
-    result['label_3cls'] = 1 if pbsi_score <= -0.5 else (-1 if pbsi_score >= 0.5 else 0)
+    # Labels (v4.1.6: percentile-based thresholds)
+    # +1 (low_pbsi): physiologically regulated
+    # 0 (mid_pbsi): typical patterns
+    # -1 (high_pbsi): physiologically dysregulated
+    result['label_3cls'] = 1 if pbsi_score <= threshold_low else (
+        -1 if pbsi_score >= threshold_high else 0
+    )
     result['label_2cls'] = 1 if result['label_3cls'] == 1 else 0
-    result['label_clinical'] = 1 if pbsi_score >= 0.75 else 0
     
     # Quality score
     quality = 1.0
@@ -149,50 +185,97 @@ def build_pbsi_labels(
     unified_df: pd.DataFrame,
     version_log_path: Optional[Path] = None,
     output_path: Optional[Path] = None,
+    use_percentile_thresholds: bool = True,
+    threshold_low_percentile: float = 0.25,
+    threshold_high_percentile: float = 0.75,
+    threshold_low_fixed: float = -0.5,
+    threshold_high_fixed: float = 0.5,
 ) -> pd.DataFrame:
-    """Main function: compute z-scores, PBSI, and save."""
+    """
+    Main function: compute z-scores, PBSI, and save.
     
-    logger.info("Building PBSI labels")
+    Args:
+        unified_df: Input dataframe with raw features
+        version_log_path: Path to segment version log
+        output_path: Path to save labeled dataset
+        use_percentile_thresholds: If True, use percentile-based thresholds (v4.1.6)
+        threshold_low_percentile: Percentile for lower threshold (default: 0.25 = P25)
+        threshold_high_percentile: Percentile for upper threshold (default: 0.75 = P75)
+        threshold_low_fixed: Fixed lower threshold (fallback, default: -0.5)
+        threshold_high_fixed: Fixed upper threshold (fallback, default: 0.5)
+    
+    Returns:
+        DataFrame with PBSI scores and labels
+    """
+    logger.info("Building PBSI labels (v4.1.6)")
     
     df = unified_df.copy()
     
     # Compute z-scores
     df = compute_z_scores_by_segment(df, version_log_path)
     
-    # Compute PBSI for each row
+    # First pass: compute PBSI scores with default thresholds
     pbsi_cols = ['sleep_sub', 'cardio_sub', 'activity_sub', 'pbsi_score',
-                 'label_3cls', 'label_2cls', 'label_clinical', 'pbsi_quality']
+                 'label_3cls', 'label_2cls', 'pbsi_quality']
     
-    pbsi_data = df.apply(compute_pbsi_score, axis=1, result_type='expand')
+    pbsi_data = df.apply(lambda row: compute_pbsi_score(row), axis=1, result_type='expand')
     for col in pbsi_cols:
         df[col] = pbsi_data[col]
     
-    logger.info("✓ Computed PBSI scores")
+    # Determine thresholds
+    if use_percentile_thresholds:
+        pbsi_scores = df['pbsi_score'].dropna()
+        threshold_low = pbsi_scores.quantile(threshold_low_percentile)
+        threshold_high = pbsi_scores.quantile(threshold_high_percentile)
+        logger.info(f"✓ Using percentile-based thresholds (P{int(threshold_low_percentile*100)}/P{int(threshold_high_percentile*100)})")
+        logger.info(f"  Threshold low (P{int(threshold_low_percentile*100)}):  {threshold_low:.3f}")
+        logger.info(f"  Threshold high (P{int(threshold_high_percentile*100)}): {threshold_high:.3f}")
+    else:
+        threshold_low = threshold_low_fixed
+        threshold_high = threshold_high_fixed
+        logger.info(f"✓ Using fixed thresholds: {threshold_low:.3f} / {threshold_high:.3f}")
+    
+    # Second pass: re-compute labels with determined thresholds
+    pbsi_data = df.apply(
+        lambda row: compute_pbsi_score(row, threshold_low, threshold_high),
+        axis=1,
+        result_type='expand'
+    )
+    for col in pbsi_cols:
+        df[col] = pbsi_data[col]
+    
+    logger.info("✓ Computed PBSI scores and labels")
     
     # Report
     logger.info("\n" + "="*80)
-    logger.info("LABEL DISTRIBUTION")
+    logger.info("LABEL DISTRIBUTION (v4.1.6)")
     logger.info("="*80)
     
-    for label_col in ['label_3cls', 'label_2cls', 'label_clinical']:
-        logger.info(f"\n{label_col}:")
-        vc = df[label_col].value_counts().sort_index()
-        for val, count in vc.items():
-            pct = 100 * count / len(df)
-            logger.info(f"  {val}: {count} ({pct:.1f}%)")
+    for label_col in ['label_3cls', 'label_2cls']:
+        if label_col in df.columns:
+            logger.info(f"\n{label_col}:")
+            vc = df[label_col].value_counts().sort_index()
+            for val, count in vc.items():
+                pct = 100 * count / len(df)
+                # Label interpretation
+                if label_col == 'label_3cls':
+                    label_name = {1: 'low_pbsi (regulated)', 0: 'mid_pbsi (typical)', -1: 'high_pbsi (dysregulated)'}
+                    logger.info(f"  {val} [{label_name.get(val, 'unknown')}]: {count} ({pct:.1f}%)")
+                else:
+                    logger.info(f"  {val}: {count} ({pct:.1f}%)")
     
     # Sanity check
     assert df['label_3cls'].nunique() > 1, "Degenerate: only one class in label_3cls!"
     assert df['label_2cls'].nunique() > 1, "Degenerate: only one class in label_2cls!"
     
-    logger.info("No degenerate labels")
+    logger.info("\n✓ No degenerate labels")
     
     # Example rows
-    logger.info("\nExample stable (+1) rows:")
+    logger.info("\nExample LOW_PBSI (+1, regulated) rows:")
     stable = df[df['label_3cls'] == 1][['date', 'pbsi_score', 'sleep_sub', 'cardio_sub', 'activity_sub', 'pbsi_quality']].head(3)
     logger.info(stable.to_string())
     
-    logger.info("\nExample unstable (-1) rows:")
+    logger.info("\nExample HIGH_PBSI (-1, dysregulated) rows:")
     unstable = df[df['label_3cls'] == -1][['date', 'pbsi_score', 'sleep_sub', 'cardio_sub', 'activity_sub', 'pbsi_quality']].head(3)
     logger.info(unstable.to_string())
     
