@@ -1075,3 +1075,16 @@ This project adheres to **Semantic Versioning (SemVer)** and each entry correspo
 [2.1.7]: https://github.com/<owner>/<repo>/compare/v2.1.4...2.1.7
 [3.0.1]: https://github.com/<owner>/<repo>/compare/v2.1.7...3.0.1
 [3.0.2]: https://github.com/<owner>/<repo>/compare/v3.0.1-26-ge94eb8d3c1a2db11c2afa68167c920be0ce80753...3.0.2
+# Practicum N-of-1 Pipeline v4.1.8
+
+Generated on 
+
+Key Results (snapshot 2025-11-20):
+- Expanded pipeline (â‰ˆ2,828 days, 119 segments)
+- NB2 macro-F1 â‰ˆ 0.81; LSTM macro-F1 â‰ˆ 0.25
+- Drift: ADWIN=11; KSâ‰ˆ102 significant
+
+Artifacts:
+- data/etl/P000001/2025-11-20/joined/features_daily_labeled.csv
+- data/ai/P000001/2025-11-20/ml7/models/best_model.tflite
+- RUN_REPORT.md
