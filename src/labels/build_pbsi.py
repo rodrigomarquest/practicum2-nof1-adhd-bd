@@ -11,13 +11,13 @@ Key features:
 - Composite PBSI: 0.40*sleep + 0.35*cardio + 0.25*activity
 - Percentile-based thresholds (P25/P75) for balanced class distribution
 
-Sign convention:
-Lower PBSI score = more physiologically regulated
-  - More sleep, lower HR, higher HRV → lower subscores → lower pbsi → +1 (regulated)
-  - Less sleep, higher HR, lower HRV → higher subscores → higher pbsi → -1 (dysregulated)
+Sign convention (v4.1.7 - INTUITIVE):
+✓ HIGHER PBSI score = BETTER physiological regulation
+  - More sleep, lower HR, higher HRV → positive subscores → HIGHER pbsi → +1 (regulated)
+  - Less sleep, higher HR, lower HRV → negative subscores → LOWER pbsi → -1 (dysregulated)
 
-Labels (v4.1.6):
-    label_3cls: +1 (low_pbsi/regulated), 0 (mid_pbsi/typical), -1 (high_pbsi/dysregulated)
+Labels (v4.1.7):
+    label_3cls: +1 (high_pbsi/regulated), 0 (mid_pbsi/typical), -1 (low_pbsi/dysregulated)
     label_2cls: 1 (regulated), 0 (typical/dysregulated)
     label_clinical: deprecated (replaced by label_3cls)
 
@@ -128,43 +128,43 @@ def compute_pbsi_score(
     """
     result = {}
     
-    # Sleep subscore
+    # Sleep subscore (v4.1.7: INVERTED - higher = better)
     z_sleep_dur = _get_z_safe(row, 'z_sleep_total_h')
     z_sleep_eff = _get_z_safe(row, 'z_sleep_efficiency')
     
-    sleep_sub = -0.6 * z_sleep_dur + 0.4 * z_sleep_eff
+    sleep_sub = 0.6 * z_sleep_dur + 0.4 * z_sleep_eff  # More sleep + better efficiency = HIGHER
     sleep_sub = np.clip(sleep_sub, -3, 3)
     result['sleep_sub'] = sleep_sub
     
-    # Cardio subscore
+    # Cardio subscore (v4.1.7: INVERTED - higher = better)
     z_hr_mean = _get_z_safe(row, 'z_hr_mean')
     z_hrv = _get_z_safe(row, 'z_hrv_rmssd')
     z_hr_max = _get_z_safe(row, 'z_hr_max')
     
-    cardio_sub = 0.5 * z_hr_mean - 0.6 * z_hrv + 0.2 * z_hr_max
+    cardio_sub = -0.5 * z_hr_mean + 0.6 * z_hrv - 0.2 * z_hr_max  # Lower HR + higher HRV = HIGHER
     cardio_sub = np.clip(cardio_sub, -3, 3)
     result['cardio_sub'] = cardio_sub
     
-    # Activity subscore
+    # Activity subscore (v4.1.7: INVERTED - higher = better)
     z_steps = _get_z_safe(row, 'z_steps')
     z_exercise = _get_z_safe(row, 'z_exercise_min')
     if pd.isna(row.get('z_exercise_min')):
         z_exercise = _get_z_safe(row, 'z_move_kcal')
     
-    activity_sub = -0.7 * z_steps - 0.3 * z_exercise
+    activity_sub = 0.7 * z_steps + 0.3 * z_exercise  # More steps + more exercise = HIGHER
     activity_sub = np.clip(activity_sub, -3, 3)
     result['activity_sub'] = activity_sub
     
-    # Composite
+    # Composite (v4.1.7: HIGHER PBSI = BETTER regulation)
     pbsi_score = 0.40 * sleep_sub + 0.35 * cardio_sub + 0.25 * activity_sub
     result['pbsi_score'] = pbsi_score
     
-    # Labels (v4.1.6: percentile-based thresholds)
-    # +1 (low_pbsi): physiologically regulated
+    # Labels (v4.1.7: INVERTED thresholds - higher = better)
+    # +1 (high_pbsi): physiologically regulated (HIGH score = GOOD)
     # 0 (mid_pbsi): typical patterns
-    # -1 (high_pbsi): physiologically dysregulated
-    result['label_3cls'] = 1 if pbsi_score <= threshold_low else (
-        -1 if pbsi_score >= threshold_high else 0
+    # -1 (low_pbsi): physiologically dysregulated (LOW score = BAD)
+    result['label_3cls'] = 1 if pbsi_score >= threshold_high else (
+        -1 if pbsi_score <= threshold_low else 0
     )
     result['label_2cls'] = 1 if result['label_3cls'] == 1 else 0
     
@@ -207,7 +207,7 @@ def build_pbsi_labels(
     Returns:
         DataFrame with PBSI scores and labels
     """
-    logger.info("Building PBSI labels (v4.1.6)")
+    logger.info("Building PBSI labels (v4.1.7 - INTUITIVE sign convention)")
     
     df = unified_df.copy()
     
@@ -228,8 +228,9 @@ def build_pbsi_labels(
         threshold_low = pbsi_scores.quantile(threshold_low_percentile)
         threshold_high = pbsi_scores.quantile(threshold_high_percentile)
         logger.info(f"✓ Using percentile-based thresholds (P{int(threshold_low_percentile*100)}/P{int(threshold_high_percentile*100)})")
-        logger.info(f"  Threshold low (P{int(threshold_low_percentile*100)}):  {threshold_low:.3f}")
-        logger.info(f"  Threshold high (P{int(threshold_high_percentile*100)}): {threshold_high:.3f}")
+        logger.info(f"  Threshold low (P{int(threshold_low_percentile*100)}):  {threshold_low:.3f} → -1 (low_pbsi/dysregulated)")
+        logger.info(f"  Threshold high (P{int(threshold_high_percentile*100)}): {threshold_high:.3f} → +1 (high_pbsi/regulated)")
+        logger.info(f"  v4.1.7: HIGHER PBSI = BETTER regulation (intuitive!)")
     else:
         threshold_low = threshold_low_fixed
         threshold_high = threshold_high_fixed

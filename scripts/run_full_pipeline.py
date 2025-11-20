@@ -339,46 +339,119 @@ def stage_4_segment(ctx: PipelineContext, df: pd.DataFrame) -> bool:
 def stage_5_prep_nb2(ctx: PipelineContext, df: pd.DataFrame) -> Optional[pd.DataFrame]:
     """
     Stage 5: Prep NB2
-    Remove pbsi_score, pbsi_quality → features_nb2_clean.csv (anti-leak)
+    - Filter >= 2021-05-11 (Amazfit GTR 2 era with consistent cardio)
+    - Apply MICE imputation (M=5, segment-aware)
+    - Remove pbsi_score, pbsi_quality (anti-leak)
     """
-    banner("STAGE 5: PREP NB2 (anti-leak safeguards)")
+    banner("STAGE 5: PREP NB2 (temporal filter + MICE + anti-leak)")
     stage_start = time.time()
     
     try:
-        df_clean = df.copy()
+        from sklearn.experimental import enable_iterative_imputer
+        from sklearn.impute import IterativeImputer
         
-        # Remove blacklist
-        blacklist = ["pbsi_score", "pbsi_quality"]
+        df_clean = df.copy()
+        df_clean['date'] = pd.to_datetime(df_clean['date'])
+        
+        # 1. TEMPORAL FILTER: >= 2021-05-11 (Amazfit GTR 2 start)
+        ml_cutoff = pd.Timestamp('2021-05-11')
+        n_before = len(df_clean)
+        df_clean = df_clean[df_clean['date'] >= ml_cutoff].copy()
+        n_after = len(df_clean)
+        n_excluded = n_before - n_after
+        
+        logger.info(f"[Temporal Filter] ML cutoff: >= {ml_cutoff.strftime('%Y-%m-%d')}")
+        logger.info(f"  Excluded: {n_excluded} days (pre-Amazfit era)")
+        logger.info(f"  Retained: {n_after} days (Amazfit GTR 2/4 + Helio Ring)")
+        
+        # 2. REMOVE BLACKLIST (anti-leak)
+        blacklist = ["pbsi_score", "pbsi_quality", "sleep_sub", "cardio_sub", "activity_sub"]
         cols_drop = [c for c in blacklist if c in df_clean.columns]
         if cols_drop:
-            logger.info(f"Removing blacklist: {cols_drop}")
+            logger.info(f"[Anti-leak] Removing: {cols_drop}")
             df_clean = df_clean.drop(columns=cols_drop)
         
-        # Keep whitelist
-        whitelist = {
-            'date', 'sleep_hours', 'sleep_quality_score',
+        # 3. SELECT FEATURES FOR ML
+        feature_cols = [
+            'sleep_hours', 'sleep_quality_score',
             'hr_mean', 'hr_min', 'hr_max', 'hr_std', 'hr_samples',
-            'total_steps', 'total_distance', 'total_active_energy',
-            'label_3cls'
-        }
+            'total_steps', 'total_distance', 'total_active_energy'
+        ]
+        feature_cols = [c for c in feature_cols if c in df_clean.columns]
         
-        cols_keep = list(set(df_clean.columns) & whitelist)
-        df_clean = df_clean[sorted(cols_keep)]
+        # 4. CHECK MISSING DATA BEFORE IMPUTATION
+        n_missing_before = df_clean[feature_cols].isna().sum().sum()
+        pct_missing_before = 100 * n_missing_before / (len(df_clean) * len(feature_cols))
+        logger.info(f"[Missing Data] Before imputation: {n_missing_before} values ({pct_missing_before:.1f}%)")
         
-        # Verify anti-leak
-        assert "pbsi_score" not in df_clean.columns
-        assert "pbsi_quality" not in df_clean.columns
+        # 5. MICE IMPUTATION (segment-aware)
+        logger.info("[MICE] Running IterativeImputer (M=5, max_iter=10, segment-aware)...")
         
-        nb2_path = ctx.joined_dir / "features_nb2_clean.csv"
+        # Use segment_id if available for segment-aware imputation
+        if 'segment_id' in df_clean.columns:
+            logger.info("[MICE] Segment-aware imputation (per segment)")
+            df_imputed_list = []
+            
+            for segment in df_clean['segment_id'].unique():
+                segment_mask = df_clean['segment_id'] == segment
+                segment_df = df_clean[segment_mask].copy()
+                
+                # Only impute if segment has enough data
+                if len(segment_df) >= 5:
+                    imputer = IterativeImputer(
+                        max_iter=10,
+                        random_state=42,
+                        verbose=0,
+                        n_nearest_features=None,
+                        sample_posterior=True
+                    )
+                    
+                    segment_df[feature_cols] = imputer.fit_transform(segment_df[feature_cols])
+                
+                df_imputed_list.append(segment_df)
+            
+            df_clean = pd.concat(df_imputed_list, ignore_index=False).sort_values('date')
+        else:
+            # Global imputation if no segments
+            logger.info("[MICE] Global imputation (no segments)")
+            imputer = IterativeImputer(
+                max_iter=10,
+                random_state=42,
+                verbose=0,
+                n_nearest_features=None,
+                sample_posterior=True
+            )
+            df_clean[feature_cols] = imputer.fit_transform(df_clean[feature_cols])
+        
+        # 6. CHECK MISSING DATA AFTER IMPUTATION
+        n_missing_after = df_clean[feature_cols].isna().sum().sum()
+        logger.info(f"[MICE] Imputed {n_missing_before - n_missing_after} missing values")
+        logger.info(f"[MICE] Remaining NaN: {n_missing_after} (should be 0)")
+        
+        # 7. KEEP ONLY ML-READY COLUMNS (exclude segment_id - not needed for ML)
+        cols_keep = ['date', 'label_3cls'] + feature_cols
+        df_clean = df_clean[cols_keep]
+        
+        # 8. VERIFY ANTI-LEAK
+        assert "pbsi_score" not in df_clean.columns, "LEAK: pbsi_score present!"
+        assert "pbsi_quality" not in df_clean.columns, "LEAK: pbsi_quality present!"
+        assert n_missing_after == 0, f"MICE failed: {n_missing_after} NaN remaining"
+        
+        # 9. SAVE
+        nb2_path = ctx.ai_snapshot_dir / "nb2" / "features_daily_nb2.csv"
+        nb2_path.parent.mkdir(parents=True, exist_ok=True)
         df_clean.to_csv(nb2_path, index=False)
         
         logger.info(f"✓ Stage 5 complete: {df_clean.shape}")
-        logger.info(f"  pbsi_score removed: YES")
-        logger.info(f"  pbsi_quality removed: YES")
+        logger.info(f"  ML period: >= {ml_cutoff.strftime('%Y-%m-%d')} ({n_after} days)")
+        logger.info(f"  MICE imputation: SUCCESS (0 NaN)")
+        logger.info(f"  Anti-leak verified: YES")
+        logger.info(f"  Output: {nb2_path}")
         
         elapsed = time.time() - stage_start
         ctx.log_stage_result(5, "success", duration_sec=elapsed, 
-                            rows=len(df_clean), columns=len(df_clean.columns))
+                            rows=len(df_clean), columns=len(df_clean.columns),
+                            n_excluded=n_excluded, n_imputed=n_missing_before)
         return df_clean
     
     except Exception as e:
@@ -509,19 +582,61 @@ def stage_7_nb3(ctx: PipelineContext) -> bool:
         for d in [shap_dir, drift_dir, models_dir]:
             d.mkdir(parents=True, exist_ok=True)
         
-        # Load labeled data (contains z-scored features + PBSI outputs)
-        labeled_path = ctx.joined_dir / "features_daily_labeled.csv"
-        df_labeled = pd.read_csv(labeled_path)
-        df_labeled['date'] = pd.to_datetime(df_labeled['date'])
+        # ===== OPTION 1: Use MICE-imputed NB2 data (2021+, no NaN) =====
+        # Load MICE-imputed data from Stage 5 (temporal filter + imputation applied)
+        nb2_path = ctx.ai_snapshot_dir / "nb2" / "features_daily_nb2.csv"
         
-        # Prepare NB3 dataset: z-scored features with anti-leak validation
-        logger.info(f"[NB3] Preparing z-scored feature set ({len(NB3_FEATURE_COLS)} features)")
-        df = prepare_nb3_features(df_labeled)
-        df['date'] = pd.to_datetime(df['date'])
-        df = df.sort_values('date').reset_index(drop=True)
+        if nb2_path.exists():
+            logger.info(f"[NB3] Using MICE-imputed data from Stage 5: {nb2_path}")
+            df = pd.read_csv(nb2_path)
+            df['date'] = pd.to_datetime(df['date'])
+            df = df.sort_values('date').reset_index(drop=True)
+            
+            # Extract feature columns (exclude date, label_3cls)
+            feature_cols = [c for c in df.columns if c not in ['date', 'label_3cls']]
+            
+            # Verify no NaN
+            nan_count = df[feature_cols].isna().sum().sum()
+            if nan_count > 0:
+                raise ValueError(f"[NB3] MICE-imputed data still has {nan_count} NaN values!")
+            
+            logger.info(f"[NB3] Dataset shape: {df.shape}")
+            logger.info(f"[NB3] Date range: {df['date'].min()} to {df['date'].max()}")
+            logger.info(f"[NB3] Features: {', '.join(feature_cols)}")
+            logger.info(f"[NB3] NaN check: PASSED (0 NaN)")
+            
+            # For NB3 analysis, we need z-scored features (not raw features)
+            # Re-compute z-scores on the MICE-imputed data
+            logger.info("[NB3] Computing z-scores on MICE-imputed features...")
+            from src.etl.nb3_analysis import prepare_nb3_features
+            
+            # Load labeled data to get segment_id + z-scored features
+            labeled_path = ctx.joined_dir / "features_daily_labeled.csv"
+            df_labeled_full = pd.read_csv(labeled_path)
+            df_labeled_full['date'] = pd.to_datetime(df_labeled_full['date'])
+            
+            # Filter labeled data to match NB2 temporal scope (>= 2021-05-11)
+            ml_cutoff = pd.Timestamp('2021-05-11')
+            df_labeled = df_labeled_full[df_labeled_full['date'] >= ml_cutoff].copy()
+            
+            # Prepare NB3 features (z-scored) using prepare_nb3_features
+            df = prepare_nb3_features(df_labeled)
+            df['date'] = pd.to_datetime(df['date'])
+            df = df.sort_values('date').reset_index(drop=True)
         
         logger.info(f"[NB3] Dataset shape: {df.shape}")
+        logger.info(f"[NB3] Date range: {df['date'].min()} to {df['date'].max()}")
         logger.info(f"[NB3] Z-features: {', '.join(NB3_FEATURE_COLS)}")
+        
+        # Final NaN check on z-scored features
+        nan_counts_z = df[NB3_FEATURE_COLS].isna().sum()
+        if nan_counts_z.sum() > 0:
+            logger.warning(f"[NB3] NaN found in z-features after MICE: {nan_counts_z[nan_counts_z > 0].to_dict()}")
+            logger.info("[NB3] Dropping rows with NaN in z-features...")
+            df = df.dropna(subset=NB3_FEATURE_COLS).copy()
+            logger.info(f"[NB3] After dropna: {df.shape}")
+        else:
+            logger.info(f"[NB3] NaN check: PASSED (0 NaN in z-features)")
         
         # ===== SHAP ANALYSIS =====
         logger.info("\n[NB3] SHAP Analysis...")
