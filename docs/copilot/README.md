@@ -12,14 +12,40 @@ These documents serve as:
 
 ## What's Here
 
-**32+ AI-assisted documents** covering:
+**40+ AI-assisted documents** covering:
 
+### Paper-Code Alignment (Nov 2025)
+- `PAPER_CODE_AUDIT_REPORT.md` - Comprehensive audit (1,847 lines)
+- `PAPER_CODE_CONSISTENCY_REVIEW.md` - PhD-level technical review
+- `AUDIT_EXECUTIVE_SUMMARY.md` - Prioritized action items
+- `FIX_SEGMENTATION_SECTION.md` - Actionable fix guide
+- `FINAL_VALIDATION_REPORT.md` - 100% alignment confirmation
+
+### Pipeline Development & Audits
+- `ETL_AUDIT_IMPLEMENTATION_PLAN.md` - Regression test suite plan
+- `HR_FEATURE_INTEGRITY_AUDIT.md` - Heart rate feature validation
+- `DETERMINISM_VALIDATION_REPORT.md` - Reproducibility verification
+- `PBSI_INTEGRATION_SUMMARY.md` - Canonical PBSI implementation
+
+### Release Management
+- `RELEASE_v4.1.0_FINAL_REPORT.md` - v4.1.0 release summary
+- `RELEASE_v4.1.0_INDEX.md` - Release documentation index
+- `RELEASE_SUMMARY_v4.1.2.md` - v4.1.2 deployment summary
+- `FINAL_COMPLETION_REPORT.md` - Project completion milestone
+
+### Notebook Development (v4.1.5)
+- `NB1_EDA_MIGRATION.md` - EDA notebook refactoring
+- `NB2_FINALIZATION.md` - Baseline model implementation
+- `NB3_FIX_COMPLETED.md` - LSTM model fixes
+- `cleanup_decisions.md` - Repository reorganization plan
+
+### Technical Implementations
 - Phase summaries (Phase 2, Phase 3, Phase 7, etc.)
-- Implementation reports (Period Expansion, Vendor/Variant, Biomarkers)
-- Release execution plans (v4.1.0)
-- Notebook migrations and finalization (NB1, NB2, NB3)
-- ETL fixes and cleanup summaries
+- Period Expansion implementation (Vendor/Variant, Biomarkers)
+- Sleep audit and forward-fill strategies
+- ETL fixes and optimization reports
 - Session completion and handoff reports
+- Module usage analysis (`UNUSED_MODULES_REPORT.md`)
 
 ## Important Note
 

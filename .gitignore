@@ -34,6 +34,9 @@ dist/
 notebook.log
 .kaggle/
 
+# --- Pipeline execution logs
+pipeline_run.log
+
 # --- Data layout (canonical)
 data/
 !data/sample_input/**
@@ -117,6 +120,5 @@ notebooks/**/*
 !notebooks/*.ipynb
 !notebooks/*.py
 !notebooks/README.md
-archive/
-../archive_legacy/
-archive/
+!notebooks/archive/
+!notebooks/archive/**
