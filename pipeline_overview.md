@@ -13,6 +13,7 @@ This document provides a high-level overview of the deterministic end-to-end dat
 - Produce daily, participant-level features suitable for time-series modeling and clinical interpretation
 - Support **research reproducibility**: ETL transparency, feature provenance, and modeling traceability (NB0–ML7)
 - Enable **deterministic execution** with fixed random seeds across all stages
+- Provide **user feedback** during long operations via progress bars (tqdm)
 
 The focus of this document is on what each stage does and how the pieces connect. For implementation details, see `docs/ETL_ARCHITECTURE_COMPLETE.md`.
 
@@ -49,7 +50,7 @@ The focus of this document is on what each stage does and how the pieces connect
 - Segmentation autologs (119 segments with calendar boundaries)
 - Pipeline provenance (ETL manifests, QC reports)
 
-## 3. Repository Structure (v4.1.5)
+## 3. Repository Structure (v4.1.7)
 
 ```
 practicum2-nof1-adhd-bd/
@@ -60,18 +61,21 @@ practicum2-nof1-adhd-bd/
 │   │   ├── joined/                       # Stage 2-4: Unified features + segments
 │   │   └── qc/                           # Quality control reports
 │   └── ai/P000001/2025-11-07/           # Modeling outputs
-│       ├── ml6/                          # Stage 6: Logistic regression
-│       └── ml7/                          # Stage 7: LSTM models
+│       ├── ml6/                          # Stage 6: Logistic regression (formerly NB2)
+│       └── ml7/                          # Stage 7: LSTM models (formerly NB3)
 ├── notebooks/
 │   ├── NB0_DataRead.ipynb               # Stage detection & readiness
 │   ├── NB1_EDA.ipynb                    # Exploratory data analysis
-│   ├── ML6_Baseline.ipynb               # Baseline model results
-│   ├── ML7_DeepLearning.ipynb           # LSTM evaluation
+│   ├── NB2_Baseline.ipynb               # (Internally uses ML6, preserves historical name)
+│   ├── NB3_DeepLearning.ipynb           # (Internally uses ML7, preserves historical name)
 │   └── archive/                         # Deprecated notebooks
 ├── src/
 │   ├── etl_pipeline.py                  # Stage 0: Extraction orchestrator
 │   ├── make_labels.py                   # PBSI label construction
-│   └── models_nb2.py, models_nb3.py     # Modeling scripts
+│   ├── models_ml6.py                    # Stage 6: Baseline models (formerly models_nb2.py)
+│   ├── models_ml7.py                    # Stage 7: LSTM models (formerly models_nb3.py)
+│   └── utils/
+│       └── progress.py                  # NEW v4.1.7: tqdm progress bar utilities
 ├── scripts/
 │   └── run_full_pipeline.py             # Main orchestrator (10 stages)
 ├── config/
@@ -106,23 +110,33 @@ This supports:
 
 The pipeline consists of **10 deterministic stages** orchestrated by `scripts/run_full_pipeline.py`:
 
-| Stage | Name          | Input            | Output                          | Description                                                              |
-| ----- | ------------- | ---------------- | ------------------------------- | ------------------------------------------------------------------------ |
-| 0     | **Ingest**    | `data/raw/`      | `extracted/`                    | Extract from Apple Health XML + Zepp ZIPs                                |
-| 1     | **Aggregate** | Raw CSVs         | `daily_*.csv`                   | Aggregate to daily per-metric files                                      |
-| 2     | **Unify**     | Per-metric CSVs  | `features_daily_unified.csv`    | Merge all metrics by date                                                |
-| 3     | **Label**     | Unified features | `features_daily_labeled.csv`    | Apply PBSI v4.1.7 labels (3-class)                                       |
-| 4     | **Segment**   | Labeled features | `segment_autolog.csv`           | Detect behavioral segments (2 rules)                                     |
-| 5     | **Prep-ML6**  | Segments         | `ai/ml6/features_daily_nb2.csv` | **v4.1.7**: Temporal filter (>=2021-05-11) + MICE imputation + anti-leak |
-| 6     | **ML6**       | MICE data        | `data/ai/.../ml6/`              | Train logistic regression (6-fold CV)                                    |
-| 7     | **ML7**       | MICE data        | `data/ai/.../ml7/`              | Train LSTM + SHAP + drift detection                                      |
-| 8     | **TFLite**    | ML7 model        | `model.tflite`                  | Export to mobile format                                                  |
-| 9     | **Report**    | All outputs      | `RUN_REPORT.md`                 | Generate execution summary                                               |
+| Stage | Name          | Input            | Output                          | Description                                                              | Progress Bars (v4.1.8)       |
+| ----- | ------------- | ---------------- | ------------------------------- | ------------------------------------------------------------------------ | ---------------------------- |
+| 0     | **Ingest**    | `data/raw/`      | `extracted/`                    | Extract from Apple Health XML + Zepp ZIPs                                | ✅ ZIP extraction            |
+| 1     | **Aggregate** | Raw CSVs         | `daily_*.csv`                   | Aggregate to daily per-metric files                                      | ✅ XML parsing, HR, Activity |
+| 2     | **Unify**     | Per-metric CSVs  | `features_daily_unified.csv`    | Merge all metrics by date                                                | -                            |
+| 3     | **Label**     | Unified features | `features_daily_labeled.csv`    | Apply PBSI v4.1.7 labels (3-class)                                       | -                            |
+| 4     | **Segment**   | Labeled features | `segment_autolog.csv`           | Detect behavioral segments (2 rules)                                     | -                            |
+| 5     | **Prep-ML6**  | Segments         | `ai/ml6/features_daily_ml6.csv` | **v4.1.7**: Temporal filter (>=2021-05-11) + MICE imputation + anti-leak | -                            |
+| 6     | **ML6**       | MICE data        | `data/ai/.../ml6/`              | Train logistic regression (6-fold CV)                                    | -                            |
+| 7     | **ML7**       | MICE data        | `data/ai/.../ml7/`              | Train LSTM + SHAP + drift detection                                      | -                            |
+| 8     | **TFLite**    | ML7 model        | `model.tflite`                  | Export to mobile format                                                  | -                            |
+| 9     | **Report**    | All outputs      | `RUN_REPORT.md`                 | Generate execution summary                                               | -                            |
 
 **Segmentation Rules** (Stage 4):
 
 1. Calendar boundaries (month/year transitions)
 2. Gaps greater than 1 day
+
+**Progress Bar Implementation** (v4.1.8):
+
+- **Stage 0**: Member-by-member ZIP extraction for Apple + Zepp exports
+- **Stage 1**:
+  - Threaded progress bar during XML parsing (~55s for 1495 MB)
+  - Record-level progress for HR extraction (~68s for 4.6M records)
+  - Record-level progress for activity aggregation (~8s for 245k records)
+- **Overhead**: ~2.5s total (1.4% of pipeline runtime)
+- **Module**: `src/utils/progress.py` with tqdm utilities
 
 See `docs/ETL_ARCHITECTURE_COMPLETE.md` for detailed stage specifications.
 
@@ -341,7 +355,7 @@ KS tests at version / segment boundaries.
 
 SHAP-based drift: >10% change in feature importance flagged.
 
-## 7. Canonical Notebooks (v4.1.5)
+## 7. Canonical Notebooks (v4.1.8)
 
 The pipeline includes 4 canonical Jupyter notebooks for reproducible analysis:
 
@@ -350,6 +364,7 @@ The pipeline includes 4 canonical Jupyter notebooks for reproducible analysis:
 - **Purpose**: Pipeline stage detection and file verification
 - **Runtime**: <5 seconds
 - **Outputs**: Status table, missing stage hints, quick inventory
+- **v4.1.8 Update**: Checks for ML6/ML7 directories and files
 
 ### NB1 – Exploratory Analysis (`notebooks/NB1_EDA.ipynb`)
 
@@ -358,21 +373,34 @@ The pipeline includes 4 canonical Jupyter notebooks for reproducible analysis:
 - **Key visualizations**: Temporal trends, missingness, distributions, segments (119)
 - **Paper figures**: Fig 3(a,b), Fig 4
 
-### ML6 – Baseline Models (`notebooks/ML6_Baseline.ipynb`)
+### NB2 – Baseline Models (`notebooks/NB2_Baseline.ipynb`)
 
-- **Purpose**: Logistic regression performance evaluation
+- **Purpose**: Logistic regression performance evaluation (Stage 6: ML6)
+- **Filename**: Preserves historical `NB2_Baseline.ipynb` name
+- **Internal naming**: Uses ML6 directories and variables
 - **Model**: L2-regularized logistic regression
 - **CV**: 5-fold calendar-based (chronological splits)
 - **Performance**: Macro F1 ~0.81
 - **Paper figures**: Fig 5, Table 3
+- **v4.1.8 Note**: Header includes explanation about NB2 filename vs ML6 internal naming
 
-### ML7 – Deep Learning (`notebooks/ML7_DeepLearning.ipynb`)
+### NB3 – Deep Learning (`notebooks/NB3_DeepLearning.ipynb`)
 
-- **Purpose**: LSTM sequence model evaluation
+- **Purpose**: LSTM sequence model evaluation (Stage 7: ML7)
+- **Filename**: Preserves historical `NB3_DeepLearning.ipynb` name
+- **Internal naming**: Uses ML7 directories, imports from `ml7_analysis`
 - **Architecture**: BiLSTM(64) + Dense(32) + softmax(3)
 - **Input**: 14-day windows, 7 features
 - **Performance**: Macro F1 ~0.79-0.87 (fold-dependent)
 - **Paper figures**: Fig 6, Table 3
+- **v4.1.8 Note**: Header includes explanation about NB3 filename vs ML7 internal naming
+
+**Naming Convention** (v4.1.8):
+
+- **Notebook filenames**: Preserved as `NB2_Baseline.ipynb`, `NB3_DeepLearning.ipynb` for historical continuity
+- **Internal code**: Uses `ML6_DIR`, `ML7_DIR`, `ml6_files`, `ml7_files`, etc.
+- **Data directories**: `data/ai/P000001/2025-11-07/ml6/` and `.../ml7/`
+- **Rationale**: ML6/ML7 reflects modeling stages (Stage 6 = ML6, Stage 7 = ML7) while preserving user-familiar notebook names
 
 See `docs/notebooks_overview.md` for complete documentation.
 
@@ -394,10 +422,12 @@ python -m scripts.run_full_pipeline \
 ```bash
 make etl-extract    # Stage 0: Extract from raw/
 make etl-all        # Stages 0-4: Full ETL
-make nb2            # Stage 6: Train logistic regression
-make nb3            # Stage 7: Train LSTM
+make ml6            # Stage 6: Train logistic regression (formerly `make nb2`)
+make ml7            # Stage 7: Train LSTM (formerly `make nb3`)
 make notebooks      # Open Jupyter notebooks
 ```
+
+**Note**: Makefile targets updated in v4.1.8 to use `ml6`/`ml7` instead of `nb2`/`nb3`.
 
 ## 9. Quality Control & Reproducibility
 

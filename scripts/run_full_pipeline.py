@@ -21,6 +21,7 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 from typing import Optional
+from tqdm import tqdm
 
 try:
     import pyzipper
@@ -118,31 +119,49 @@ def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) ->
         # Extract Apple ZIPs
         apple_raw_dir = raw_participant_dir / "apple" / "export"
         if apple_raw_dir.exists():
-            for zip_file in apple_raw_dir.glob("*.zip"):
+            apple_zips = list(apple_raw_dir.glob("*.zip"))
+            for zip_file in apple_zips:
                 logger.info(f"[Apple] Extracting: {zip_file.name}")
                 with zipfile.ZipFile(zip_file, 'r') as z:
-                    z.extractall(ctx.extracted_dir / "apple")
+                    members = z.namelist()
+                    with tqdm(total=len(members), desc=f"[Apple] {zip_file.name}", 
+                             unit="files", ncols=100, leave=False) as pbar:
+                        for member in members:
+                            z.extract(member, ctx.extracted_dir / "apple")
+                            pbar.update(1)
             logger.info(f"[OK] Apple extracted to {ctx.extracted_dir / 'apple'}")
         else:
             logger.warning(f"[SKIP] Apple export dir not found: {apple_raw_dir}")
         
         # Extract Zepp ZIPs
         if zepp_raw_dir.exists():
-            for zip_file in zepp_raw_dir.glob("*.zip"):
+            zepp_zips = list(zepp_raw_dir.glob("*.zip"))
+            for zip_file in zepp_zips:
                 logger.info(f"[Zepp] Extracting: {zip_file.name}")
                 try:
                     # Try with pyzipper first (handles AES encryption)
                     if HAS_PYZIPPER:
                         try:
                             with pyzipper.AESZipFile(zip_file, 'r') as z:
-                                if zpwd:
-                                    z.extractall(ctx.extracted_dir / "zepp", pwd=zpwd.encode('utf-8'))
-                                else:
-                                    z.extractall(ctx.extracted_dir / "zepp")
+                                members = z.namelist()
+                                with tqdm(total=len(members), desc=f"[Zepp] {zip_file.name}", 
+                                         unit="files", ncols=100, leave=False) as pbar:
+                                    for member in members:
+                                        if zpwd:
+                                            z.extract(member, ctx.extracted_dir / "zepp", pwd=zpwd.encode('utf-8'))
+                                        else:
+                                            z.extract(member, ctx.extracted_dir / "zepp")
+                                        pbar.update(1)
                         except Exception as e:
                             # Fallback to regular zipfile
+                            logger.warning(f"[Zepp] AES extraction failed, trying standard ZIP: {e}")
                             with zipfile.ZipFile(zip_file, 'r') as z:
-                                z.extractall(ctx.extracted_dir / "zepp")
+                                members = z.namelist()
+                                with tqdm(total=len(members), desc=f"[Zepp] {zip_file.name}", 
+                                         unit="files", ncols=100, leave=False) as pbar:
+                                    for member in members:
+                                        z.extract(member, ctx.extracted_dir / "zepp")
+                                        pbar.update(1)
                     else:
                         # No pyzipper, try regular zipfile
                         with zipfile.ZipFile(zip_file, 'r') as z:
@@ -584,7 +603,7 @@ def stage_7_ml7(ctx: PipelineContext) -> bool:
         
         # ===== OPTION 1: Use MICE-imputed ML6 data (2021+, no NaN) =====
         # Load MICE-imputed data from Stage 5 (temporal filter + imputation applied)
-        ml6_path = ctx.ai_snapshot_dir / "ml6" / "features_daily_nb2.csv"
+        ml6_path = ctx.ai_snapshot_dir / "ml6" / "features_daily_ml6.csv"
         
         if ml6_path.exists():
             logger.info(f"[ML7] Using MICE-imputed data from Stage 5: {ml6_path}")
@@ -623,20 +642,26 @@ def stage_7_ml7(ctx: PipelineContext) -> bool:
             df = prepare_ml7_features(df_labeled)
             df['date'] = pd.to_datetime(df['date'])
             df = df.sort_values('date').reset_index(drop=True)
-        
-        logger.info(f"[ML7] Dataset shape: {df.shape}")
-        logger.info(f"[ML7] Date range: {df['date'].min()} to {df['date'].max()}")
-        logger.info(f"[ML7] Z-features: {', '.join(ML7_FEATURE_COLS)}")
-        
-        # Final NaN check on z-scored features
-        nan_counts_z = df[ML7_FEATURE_COLS].isna().sum()
-        if nan_counts_z.sum() > 0:
-            logger.warning(f"[ML7] NaN found in z-features after MICE: {nan_counts_z[nan_counts_z > 0].to_dict()}")
-            logger.info("[ML7] Dropping rows with NaN in z-features...")
-            df = df.dropna(subset=ML7_FEATURE_COLS).copy()
-            logger.info(f"[ML7] After dropna: {df.shape}")
+            
+            logger.info(f"[ML7] Dataset shape: {df.shape}")
+            logger.info(f"[ML7] Date range: {df['date'].min()} to {df['date'].max()}")
+            logger.info(f"[ML7] Z-features: {', '.join(ML7_FEATURE_COLS)}")
+            
+            # Final NaN check on z-scored features
+            nan_counts_z = df[ML7_FEATURE_COLS].isna().sum()
+            if nan_counts_z.sum() > 0:
+                logger.warning(f"[ML7] NaN found in z-features after MICE: {nan_counts_z[nan_counts_z > 0].to_dict()}")
+                logger.info("[ML7] Dropping rows with NaN in z-features...")
+                df = df.dropna(subset=ML7_FEATURE_COLS).copy()
+                logger.info(f"[ML7] After dropna: {df.shape}")
+            else:
+                logger.info(f"[ML7] NaN check: PASSED (0 NaN in z-features)")
         else:
-            logger.info(f"[ML7] NaN check: PASSED (0 NaN in z-features)")
+            # ML6 data not found - cannot proceed
+            logger.error(f"[ML7] Required ML6 data not found: {ml6_path}")
+            logger.error("[ML7] Please run Stage 5 (prep-ml6) first:")
+            logger.error(f"      make prep-ml6 PARTICIPANT={ctx.participant} SNAPSHOT={ctx.snapshot}")
+            raise FileNotFoundError(f"ML6 data not found: {ml6_path}")
         
         # ===== SHAP ANALYSIS =====
         logger.info("\n[ML7] SHAP Analysis...")
@@ -870,8 +895,16 @@ def stage_8_tflite(ctx: PipelineContext) -> bool:
         
         # Measure latency
         # Create dummy input (1 sequence)
-        ml6_clean_path = ctx.joined_dir / "features_ml6_clean.csv"
-        df = pd.read_csv(ml6_clean_path)
+        # Use ML6 features from Stage 5 output
+        ml6_path = ctx.ai_snapshot_dir / "ml6" / "features_daily_ml6.csv"
+        
+        if not ml6_path.exists():
+            logger.warning(f"[TFLite] ML6 data not found: {ml6_path}, skipping latency test")
+            logger.info(f"✓ Stage 8 complete: TFLite exported (latency test skipped)")
+            ctx.log_stage_result(8, "success", duration_sec=time.time() - stage_start)
+            return True
+        
+        df = pd.read_csv(ml6_path)
         X = df.drop(columns=['date', 'label_3cls']).values
         
         seq_len = 14
@@ -945,7 +978,7 @@ def stage_9_report(ctx: PipelineContext) -> bool:
         for label in [-1, 0, 1]:
             count = (df['label_3cls'] == label).sum()
             pct = count / len(df) * 100
-            label_name = {-1: "Unstable", 0: "Neutral", 1: "Stable"}[label]
+            label_name = {-1: "Dysregulated", 0: "Typical", 1: "Regulated"}[label]
             lines.append(f"- **Label {label:+2d} ({label_name})**: {count} ({pct:.1f}%)")
         
         # ML6 Results

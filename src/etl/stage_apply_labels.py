@@ -10,12 +10,12 @@ Input: features_daily_unified.csv (from Stage 2)
 Output: features_daily_labeled.csv with:
         - segment_id (temporal segments for z-score normalization)
         - pbsi_score (z-scored composite: 0.40*sleep + 0.35*cardio + 0.25*activity)
-        - label_3cls: +1 (stable, pbsi≤-0.5), 0 (neutral), -1 (unstable, pbsi≥0.5)
-        - label_2cls, label_clinical, pbsi_quality
+        - label_3cls: +1 (regulated, high PBSI), 0 (typical), -1 (dysregulated, low PBSI)
+        - label_2cls, pbsi_quality
 
-Sign convention: Lower PBSI score = more stable (counterintuitive but by design)
-  - More sleep, lower HR, higher HRV → lower subscores → lower pbsi_score → +1 (stable)
-  - Less sleep, higher HR, lower HRV → higher subscores → higher pbsi_score → -1 (unstable)
+Sign convention (v4.1.7 - INTUITIVE): Higher PBSI score = better regulation
+  - More sleep, lower HR, higher HRV → higher pbsi_score → +1 (regulated)
+  - Less sleep, higher HR, lower HRV → lower pbsi_score → -1 (dysregulated)
 """
 
 import pandas as pd
@@ -201,10 +201,9 @@ class PBSILabeler:
             - segment_id: temporal segment identifier
             - z_{feature}: z-scores per segment
             - sleep_sub, cardio_sub, activity_sub: PBSI subscores
-            - pbsi_score: composite score (z-scaled, lower=more stable)
-            - label_3cls: +1 (stable), 0 (neutral), -1 (unstable)
+            - pbsi_score: composite score (z-scaled, higher=better regulation)
+            - label_3cls: +1 (regulated), 0 (typical), -1 (dysregulated)
             - label_2cls: binary version
-            - label_clinical: high-threshold flag
             - pbsi_quality: data completeness score
         """
         logger.info(f"[Labels] Applying canonical PBSI to {len(df)} days...")
@@ -229,11 +228,11 @@ class PBSILabeler:
         logger.info(f"[Labels] Canonical PBSI applied")
         logger.info(f"[Labels] Score range: {df['pbsi_score'].min():.3f} to {df['pbsi_score'].max():.3f}")
         logger.info(f"[Labels] Distribution:")
-        for label in [1, 0, -1]:  # Order: stable, neutral, unstable
+        for label in [1, 0, -1]:  # Order: regulated, typical, dysregulated
             count = (df["label_3cls"] == label).sum()
             pct = count / len(df) * 100
-            label_name = {1: "stable", 0: "neutral", -1: "unstable"}[label]
-            logger.info(f"  Label {label:+2d} ({label_name:8s}): {count:4d} days ({pct:5.1f}%)")
+            label_name = {1: "regulated", 0: "typical", -1: "dysregulated"}[label]
+            logger.info(f"  Label {label:+2d} ({label_name:12s}): {count:4d} days ({pct:5.1f}%)")
         
         return df
 

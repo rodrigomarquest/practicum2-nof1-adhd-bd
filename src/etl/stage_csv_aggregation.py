@@ -15,6 +15,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import logging
 from typing import Dict, Tuple, Optional
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +39,46 @@ class AppleHealthAggregator:
         if not self.xml_path.exists():
             raise FileNotFoundError(f"export.xml not found: {xml_path}")
         
+        file_size_mb = self.xml_path.stat().st_size / (1024 * 1024)
         logger.info(f"[Apple] Loading export.xml: {xml_path}")
-        self.tree = ET.parse(xml_path)
-        self.root = self.tree.getroot()
-        logger.info(f"[Apple] Parsed export.xml successfully")
+        logger.info(f"[Apple] File size: {file_size_mb:.1f} MB - Parsing XML structure...")
+        
+        import time
+        import threading
+        
+        start_time = time.time()
+        
+        # Create a progress bar that updates while parsing
+        # Estimate based on file size: ~1MB per second for XML parsing
+        estimated_seconds = max(int(file_size_mb / 1.0), 10)
+        
+        parsing_done = threading.Event()
+        
+        def show_progress():
+            """Show progress bar while XML is being parsed."""
+            with tqdm(total=estimated_seconds, desc="[Apple] Parsing XML", 
+                     unit="s", ncols=100, leave=False, 
+                     bar_format='{l_bar}{bar}| {elapsed} elapsed') as pbar:
+                while not parsing_done.is_set():
+                    time.sleep(1)
+                    if pbar.n < estimated_seconds:
+                        pbar.update(1)
+        
+        # Start progress bar in background thread
+        progress_thread = threading.Thread(target=show_progress, daemon=True)
+        progress_thread.start()
+        
+        try:
+            # Parse XML (blocking operation)
+            self.tree = ET.parse(xml_path)
+            self.root = self.tree.getroot()
+        finally:
+            # Stop progress bar
+            parsing_done.set()
+            progress_thread.join(timeout=1)
+        
+        elapsed = time.time() - start_time
+        logger.info(f"[Apple] Parsed export.xml successfully in {elapsed:.1f}s")
     
     def _parse_datetime(self, dt_str: str) -> datetime:
         """Parse Apple HealthKit datetime format (ISO 8601 with timezone)."""
@@ -191,47 +228,61 @@ class AppleHealthAggregator:
                 content = f.read()
             
             logger.info(f"[Apple]   Extracting HR records with binary regex...")
-            for record_match in re.finditer(record_pattern, content):
-                record_tag = record_match.group(0)
-                
-                # Extract value
-                val_match = re.search(value_pattern, record_tag)
-                if not val_match:
-                    continue
-                
-                # Extract startDate
-                date_match = re.search(date_pattern, record_tag)
-                if not date_match:
-                    continue
-                
-                try:
-                    hr_value = float(val_match.group(1))
-                    timestamp_str = date_match.group(1).decode('utf-8', errors='ignore')
-                    date_str = timestamp_str[:10]  # YYYY-MM-DD
+            
+            # Find all HR record matches first to get total count for progress bar
+            hr_matches = list(re.finditer(record_pattern, content))
+            total_matches = len(hr_matches)
+            logger.info(f"[Apple]   Found {total_matches:,} HR record tags to process...")
+            
+            # Process with progress bar
+            with tqdm(total=total_matches, desc="[Apple] Parsing HR records", 
+                     unit="records", ncols=100, leave=False) as pbar:
+                for record_match in hr_matches:
+                    record_tag = record_match.group(0)
                     
-                    # TASK C: Filter outliers (biologically implausible HR values)
-                    if not (HR_MIN_VALID <= hr_value <= HR_MAX_VALID):
-                        hr_filtered += 1
-                        logger.debug(f"Filtered outlier HR: {hr_value} bpm on {date_str}")
+                    # Extract value
+                    val_match = re.search(value_pattern, record_tag)
+                    if not val_match:
+                        pbar.update(1)
                         continue
                     
-                    # Store event-level data (for QC re-aggregation)
-                    hr_events.append({
-                        "timestamp": timestamp_str,
-                        "date": date_str,
-                        "hr_value": hr_value
-                    })
+                    # Extract startDate
+                    date_match = re.search(date_pattern, record_tag)
+                    if not date_match:
+                        pbar.update(1)
+                        continue
                     
-                    if date_str not in hr_data:
-                        hr_data[date_str] = {
+                    try:
+                        hr_value = float(val_match.group(1))
+                        timestamp_str = date_match.group(1).decode('utf-8', errors='ignore')
+                        date_str = timestamp_str[:10]  # YYYY-MM-DD
+                        
+                        # TASK C: Filter outliers (biologically implausible HR values)
+                        if not (HR_MIN_VALID <= hr_value <= HR_MAX_VALID):
+                            hr_filtered += 1
+                            logger.debug(f"Filtered outlier HR: {hr_value} bpm on {date_str}")
+                            pbar.update(1)
+                            continue
+                        
+                        # Store event-level data (for QC re-aggregation)
+                        hr_events.append({
+                            "timestamp": timestamp_str,
                             "date": date_str,
-                            "hr_values": []
-                        }
+                            "hr_value": hr_value
+                        })
+                        
+                        if date_str not in hr_data:
+                            hr_data[date_str] = {
+                                "date": date_str,
+                                "hr_values": []
+                            }
+                        
+                        hr_data[date_str]["hr_values"].append(hr_value)
+                        hr_count += 1
+                    except (ValueError, TypeError):
+                        pass
                     
-                    hr_data[date_str]["hr_values"].append(hr_value)
-                    hr_count += 1
-                except (ValueError, TypeError):
-                    pass
+                    pbar.update(1)
             
             if hr_filtered > 0:
                 logger.info(f"[Apple]   ✓ Filtered {hr_filtered} outlier HR values ({hr_filtered/(hr_count+hr_filtered)*100:.2f}%)")
@@ -341,35 +392,49 @@ class AppleHealthAggregator:
         
         activity_data = {}
         
-        for record in self.root.findall(".//Record"):
-            rec_type = record.get("type")
-            start_dt = self._parse_datetime(record.get("startDate"))
-            value = record.get("value")
-            
-            if start_dt is None or value is None:
-                continue
-            
-            try:
-                val = float(value)
-            except:
-                continue
-            
-            date_str = self._get_date_from_dt(start_dt)
-            
-            if date_str not in activity_data:
-                activity_data[date_str] = {
-                    "date": date_str,
-                    "total_steps": 0,
-                    "total_distance": 0,
-                    "total_active_energy": 0
-                }
-            
-            if rec_type == self.TYPE_STEPS:
-                activity_data[date_str]["total_steps"] += val
-            elif rec_type == self.TYPE_DISTANCE:
-                activity_data[date_str]["total_distance"] += val
-            elif rec_type == self.TYPE_ACTIVE_ENERGY:
-                activity_data[date_str]["total_active_energy"] += val
+        # Get all activity records first for progress bar
+        activity_records = [
+            r for r in self.root.findall(".//Record") 
+            if r.get("type") in [self.TYPE_STEPS, self.TYPE_DISTANCE, self.TYPE_ACTIVE_ENERGY]
+        ]
+        
+        logger.info(f"[Apple] Found {len(activity_records):,} activity records to process...")
+        
+        with tqdm(total=len(activity_records), desc="[Apple] Aggregating activity", 
+                 unit="records", ncols=100, leave=False) as pbar:
+            for record in activity_records:
+                rec_type = record.get("type")
+                start_dt = self._parse_datetime(record.get("startDate"))
+                value = record.get("value")
+                
+                if start_dt is None or value is None:
+                    pbar.update(1)
+                    continue
+                
+                try:
+                    val = float(value)
+                except:
+                    pbar.update(1)
+                    continue
+                
+                date_str = self._get_date_from_dt(start_dt)
+                
+                if date_str not in activity_data:
+                    activity_data[date_str] = {
+                        "date": date_str,
+                        "total_steps": 0,
+                        "total_distance": 0,
+                        "total_active_energy": 0
+                    }
+                
+                if rec_type == self.TYPE_STEPS:
+                    activity_data[date_str]["total_steps"] += val
+                elif rec_type == self.TYPE_DISTANCE:
+                    activity_data[date_str]["total_distance"] += val
+                elif rec_type == self.TYPE_ACTIVE_ENERGY:
+                    activity_data[date_str]["total_active_energy"] += val
+                
+                pbar.update(1)
         
         df_activity = pd.DataFrame(list(activity_data.values()))
         logger.info(f"[Apple] Aggregated {len(df_activity)} activity days")
