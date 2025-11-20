@@ -1,4 +1,4 @@
-# NB3 Fix Implementation - COMPLETED
+# ML7 Fix Implementation - COMPLETED
 
 **Date**: 2025-01-XX (placeholder)  
 **Status**: ✅ **IMPLEMENTATION COMPLETE** - Ready for Testing
@@ -7,7 +7,7 @@
 
 ## Problem Summary
 
-### Critical Issues Discovered in NB3 Pipeline
+### Critical Issues Discovered in ML7 Pipeline
 
 1. **Degenerate SHAP Results**:
 
@@ -21,7 +21,7 @@
 
 3. **Wrong Feature Source**:
 
-   - NB3 was reading from `features_nb2_clean.csv` (10 raw features)
+   - ML7 was reading from `features_nb2_clean.csv` (10 raw features)
    - Should read from `features_daily_labeled.csv` (7 z-scored features)
 
 4. **Inconsistent with CA2 Paper**:
@@ -54,7 +54,7 @@ n_features = X_np.shape[1]  # = 10 (raw)
 
 ```python
 # Load labeled data with z-scored features
-from src.etl.nb3_analysis import prepare_nb3_features, NB3_FEATURE_COLS
+from src.etl.ml7_analysis import prepare_nb3_features, NB3_FEATURE_COLS
 
 labeled_path = ctx.joined_dir / "features_daily_labeled.csv"
 df_labeled = pd.read_csv(labeled_path)
@@ -73,7 +73,7 @@ n_features = len(NB3_FEATURE_COLS)  # = 7 (z-scored)
 
 ## Implementation Details
 
-### 1. Added NB3 Constants (`src/etl/nb3_analysis.py`)
+### 1. Added ML7 Constants (`src/etl/ml7_analysis.py`)
 
 **NB3_FEATURE_COLS** (7 z-scored canonical features):
 
@@ -120,9 +120,9 @@ NB3_ANTI_LEAK_COLS = [
 
 **Changes**:
 
-1. Import `prepare_nb3_features` and `NB3_FEATURE_COLS` from `nb3_analysis`
+1. Import `prepare_nb3_features` and `NB3_FEATURE_COLS` from `ml7_analysis`
 2. Load `features_daily_labeled.csv` (has z-scored features)
-3. Call `prepare_nb3_features(df_labeled)` to get validated NB3 dataset
+3. Call `prepare_nb3_features(df_labeled)` to get validated ML7 dataset
 4. Use explicit `NB3_FEATURE_COLS` for X matrix
 5. Update LSTM to use `len(NB3_FEATURE_COLS)` (7 z-features, not 10 raw)
 6. Enhanced logging for feature selection and validation
@@ -205,7 +205,7 @@ Valid Folds: 1/6  ← Only 1 fold
 **After** (Expected):
 
 ```
-Macro-F1: 0.XXXX ± 0.XXXX  ← Realistic (likely < 1.0, may underperform NB2)
+Macro-F1: 0.XXXX ± 0.XXXX  ← Realistic (likely < 1.0, may underperform ML6)
 Valid Folds: 1-6  ← Multiple folds (if data permits)
 ```
 
@@ -215,7 +215,7 @@ Valid Folds: 1-6  ← Multiple folds (if data permits)
 
 ## Files Modified
 
-1. **src/etl/nb3_analysis.py** (2 edits):
+1. **src/etl/ml7_analysis.py** (2 edits):
 
    - Added `NB3_FEATURE_COLS` constant (7 z-scored features)
    - Added `NB3_ANTI_LEAK_COLS` constant (7 prohibited columns)
@@ -241,7 +241,7 @@ Valid Folds: 1-6  ← Multiple folds (if data permits)
 # Clean previous outputs
 make clean-outputs
 
-# Run full pipeline with NB3 fix
+# Run full pipeline with ML7 fix
 make pipeline PID=P000001 SNAPSHOT=2025-11-07 ZPWD="your_password"
 ```
 
@@ -250,7 +250,7 @@ make pipeline PID=P000001 SNAPSHOT=2025-11-07 ZPWD="your_password"
 **Check SHAP Summary**:
 
 ```bash
-cat data/ai/P000001/2025-11-07/nb3/shap_summary.md
+cat data/ai/P000001/2025-11-07/ml7/shap_summary.md
 ```
 
 **Expected**: All 7 z-features should have non-zero importance (not just 1 feature).
@@ -258,7 +258,7 @@ cat data/ai/P000001/2025-11-07/nb3/shap_summary.md
 **Check LSTM Report**:
 
 ```bash
-cat data/ai/P000001/2025-11-07/nb3/lstm_report.md
+cat data/ai/P000001/2025-11-07/ml7/lstm_report.md
 ```
 
 **Expected**:
@@ -270,7 +270,7 @@ cat data/ai/P000001/2025-11-07/nb3/lstm_report.md
 **Check RUN_REPORT.md**:
 
 ```bash
-cat RUN_REPORT.md | grep -A 10 "NB3"
+cat RUN_REPORT.md | grep -A 10 "ML7"
 ```
 
 **Expected**: Stage 7 logs show validation messages, no degenerate warnings.
@@ -287,8 +287,8 @@ make clean-outputs
 make pipeline PID=P000001 SNAPSHOT=2025-11-07
 
 # Compare outputs: Should be IDENTICAL
-diff -u data/ai/P000001/2025-11-07/nb3/shap_summary.md <(same from Run 1)
-diff -u data/ai/P000001/2025-11-07/nb3/lstm_report.md <(same from Run 1)
+diff -u data/ai/P000001/2025-11-07/ml7/shap_summary.md <(same from Run 1)
+diff -u data/ai/P000001/2025-11-07/ml7/lstm_report.md <(same from Run 1)
 ```
 
 **Expected**: Bit-for-bit identical outputs (determinism preserved).
@@ -339,10 +339,10 @@ diff -u data/ai/P000001/2025-11-07/nb3/lstm_report.md <(same from Run 1)
 5. **Update Documentation**:
 
    - Create `NB3_VALIDATION_REPORT.md` with before/after comparison
-   - Update `DETERMINISM_VALIDATION_REPORT.md` with NB3 results
+   - Update `DETERMINISM_VALIDATION_REPORT.md` with ML7 results
 
 6. **Re-publish v4.1.4**:
-   - Update CHANGELOG.md with NB3 fix notes
+   - Update CHANGELOG.md with ML7 fix notes
    - Create new git commit
    - Update git tag v4.1.4 (force) or create v4.1.5
    - Publish GitHub release
@@ -358,7 +358,7 @@ diff -u data/ai/P000001/2025-11-07/nb3/lstm_report.md <(same from Run 1)
 - [ ] Validation logs present in output
 - [ ] Reports document feature set and model clearly
 - [ ] Determinism preserved (2 runs identical)
-- [ ] No anti-leak columns in NB3 features
+- [ ] No anti-leak columns in ML7 features
 - [ ] Z-scored features used (not raw)
 
 ---
@@ -368,23 +368,23 @@ diff -u data/ai/P000001/2025-11-07/nb3/lstm_report.md <(same from Run 1)
 ### ✅ Fix is considered successful if:
 
 1. **SHAP Non-Degenerate**: At least 5 out of 7 features have non-zero importance
-2. **LSTM Realistic**: Macro-F1 < 1.0 (may underperform NB2, but should be reasonable)
+2. **LSTM Realistic**: Macro-F1 < 1.0 (may underperform ML6, but should be reasonable)
 3. **Determinism**: 2 independent runs produce identical outputs
 4. **Transparency**: Reports clearly document which model SHAP explains and which features are used
-5. **Anti-leak**: No prohibited columns (pbsi_score, subscores) in NB3 features
+5. **Anti-leak**: No prohibited columns (pbsi_score, subscores) in ML7 features
 6. **Consistency**: Z-scored features align with CA2 paper claims
 
 ### ⚠️ Acceptable Outcomes (Not Failures):
 
 - **Single-class folds skipped**: Expected due to extreme class imbalance
-- **LSTM underperforms NB2**: Acceptable (may not be suitable for this problem)
+- **LSTM underperforms ML6**: Acceptable (may not be suitable for this problem)
 - **Some features have low importance**: Acceptable (not all features need to be equally important)
 
 ### ❌ Failure Criteria (Require Re-investigation):
 
 - SHAP still shows only 1-2 features non-zero
 - LSTM still shows F1=1.0000 across all folds
-- Anti-leak columns detected in NB3 features
+- Anti-leak columns detected in ML7 features
 - Raw features detected (not z-scored)
 - Determinism broken (2 runs differ)
 

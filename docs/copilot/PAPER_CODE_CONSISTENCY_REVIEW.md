@@ -67,32 +67,32 @@ This review evaluates the consistency between methodological claims (inferred fr
 | **ACTUAL:** <33 → -1, 33-66 → 0, >66 → +1           | `src/etl/stage_apply_labels.py:110-120`                       | ❌ **DIFFERENT THRESHOLDS** | Stage 3 uses 0-100 scale                               |
 | Quality gate: 1.0×0.8^(missing)                     | `src/labels/build_pbsi.py:104`                                | ⚠️ **IN UNUSED CODE**       | Not in actual pipeline                                 |
 | **Temporal CV**                                     |                                                               |                             |                                                        |
-| 6-fold calendar CV                                  | `src/models/run_nb2.py:50`                                    | ✅ VERIFIED                 | `calendar_cv_folds()` function                         |
-| 4-month train / 2-month val                         | `src/etl/nb3_analysis.py:19-20`                               | ✅ VERIFIED                 | Both NB2 and NB3 use same logic                        |
-| Strict date boundaries                              | `src/models/run_nb2.py:74-84`                                 | ✅ VERIFIED                 | No overlap, chronological splits                       |
+| 6-fold calendar CV                                  | `src/models/run_ml6.py:50`                                    | ✅ VERIFIED                 | `calendar_cv_folds()` function                         |
+| 4-month train / 2-month val                         | `src/etl/ml7_analysis.py:19-20`                               | ✅ VERIFIED                 | Both ML6 and ML7 use same logic                        |
+| Strict date boundaries                              | `src/models/run_ml6.py:74-84`                                 | ✅ VERIFIED                 | No overlap, chronological splits                       |
 | **Anti-Leak Safeguards**                            |                                                               |                             |                                                        |
 | Segment-wise z-score normalization                  | `src/labels/build_pbsi.py:59-64`                              | ❌ **NOT IMPLEMENTED**      | Pipeline doesn't call build_pbsi.py                    |
-| Blacklist columns (pbsi_score, pbsi_quality)        | `scripts/run_full_pipeline.py:352`                            | ✅ VERIFIED                 | Stage 5: remove before NB2                             |
-| Temporal splits (no shuffling)                      | `src/models/run_nb2.py:74`                                    | ✅ VERIFIED                 | Strict chronological order                             |
-| **NB2 Modeling**                                    |                                                               |                             |                                                        |
-| Logistic Regression (L2, balanced)                  | `src/models/run_nb2.py:210`                                   | ✅ VERIFIED                 | C∈{0.1,1,3}, class_weight=balanced                     |
-| 5 baselines (Dummy, Naive, MovingAvg, Rule, LogReg) | `src/models/run_nb2.py:2-15`                                  | ✅ VERIFIED                 | All 5 documented in header                             |
-| 3-class (label_3cls) + 2-class (label_2cls)         | `src/models/run_nb2.py:10-14`                                 | ✅ VERIFIED                 | Both targets evaluated                                 |
-| Metrics: F1-macro, balanced_acc, kappa              | `src/models/run_nb2.py:37-39`                                 | ✅ VERIFIED                 | sklearn metrics imported                               |
-| McNemar test (LogReg vs Dummy)                      | `src/models/run_nb2.py:16`                                    | ✅ VERIFIED                 | mcnemar_p output mentioned                             |
-| **NB3 Modeling**                                    |                                                               |                             |                                                        |
-| LSTM M1 architecture                                | `src/etl/nb3_analysis.py`                                     | ⚠️ **PARTIAL**              | File exists, need to verify layers                     |
+| Blacklist columns (pbsi_score, pbsi_quality)        | `scripts/run_full_pipeline.py:352`                            | ✅ VERIFIED                 | Stage 5: remove before ML6                             |
+| Temporal splits (no shuffling)                      | `src/models/run_ml6.py:74`                                    | ✅ VERIFIED                 | Strict chronological order                             |
+| **ML6 Modeling**                                    |                                                               |                             |                                                        |
+| Logistic Regression (L2, balanced)                  | `src/models/run_ml6.py:210`                                   | ✅ VERIFIED                 | C∈{0.1,1,3}, class_weight=balanced                     |
+| 5 baselines (Dummy, Naive, MovingAvg, Rule, LogReg) | `src/models/run_ml6.py:2-15`                                  | ✅ VERIFIED                 | All 5 documented in header                             |
+| 3-class (label_3cls) + 2-class (label_2cls)         | `src/models/run_ml6.py:10-14`                                 | ✅ VERIFIED                 | Both targets evaluated                                 |
+| Metrics: F1-macro, balanced_acc, kappa              | `src/models/run_ml6.py:37-39`                                 | ✅ VERIFIED                 | sklearn metrics imported                               |
+| McNemar test (LogReg vs Dummy)                      | `src/models/run_ml6.py:16`                                    | ✅ VERIFIED                 | mcnemar_p output mentioned                             |
+| **ML7 Modeling**                                    |                                                               |                             |                                                        |
+| LSTM M1 architecture                                | `src/etl/ml7_analysis.py`                                     | ⚠️ **PARTIAL**              | File exists, need to verify layers                     |
 | 14-day sequence window                              | `docs/NB3_QUICK_REFERENCE.md`                                 | ⚠️ **DOCUMENTED ONLY**      | Not found in code (may be in line 200+)                |
-| SHAP explainability                                 | `src/etl/nb3_analysis.py:117`                                 | ✅ VERIFIED                 | LinearExplainer for LogReg, top-5 features             |
+| SHAP explainability                                 | `src/etl/ml7_analysis.py:117`                                 | ✅ VERIFIED                 | LinearExplainer for LogReg, top-5 features             |
 | **Drift Detection**                                 |                                                               |                             |                                                        |
-| ADWIN (δ=0.002)                                     | `docs/NB3_QUICK_REFERENCE.md` + `src/etl/nb3_analysis.py:212` | ✅ VERIFIED                 | Function signature at line 212                         |
+| ADWIN (δ=0.002)                                     | `docs/NB3_QUICK_REFERENCE.md` + `src/etl/ml7_analysis.py:212` | ✅ VERIFIED                 | Function signature at line 212                         |
 | KS tests (p<0.01)                                   | `docs/NB3_QUICK_REFERENCE.md`                                 | ⚠️ **DOCUMENTED**           | Implementation not yet examined                        |
 | SHAP drift (>10% change)                            | `docs/NB3_QUICK_REFERENCE.md`                                 | ⚠️ **DOCUMENTED**           | Implementation not yet examined                        |
 | TFLite export + latency profiling                   | `docs/NB3_QUICK_REFERENCE.md`                                 | ⚠️ **DOCUMENTED**           | 200-run profiling mentioned                            |
 | **Reproducibility**                                 |                                                               |                             |                                                        |
 | Snapshot 2025-11-07                                 | `src/biomarkers/segmentation.py:35`                           | ✅ VERIFIED                 | S6 end date = 2025-11-07                               |
-| Deterministic (seed=42)                             | `src/models/run_nb2.py:44`                                    | ✅ VERIFIED                 | `np.random.seed(42)`                                   |
-| Make targets (nb3-run)                              | `Makefile`                                                    | ⚠️ **ASSUMED**              | File exists, not examined                              |
+| Deterministic (seed=42)                             | `src/models/run_ml6.py:44`                                    | ✅ VERIFIED                 | `np.random.seed(42)`                                   |
+| Make targets (ml7-run)                              | `Makefile`                                                    | ⚠️ **ASSUMED**              | File exists, not examined                              |
 
 ---
 
@@ -243,7 +243,7 @@ def score_to_label(score):
 
 **Code Evidence**:
 
-**NB2 (`src/models/run_nb2.py:50-89`):**
+**ML6 (`src/models/run_ml6.py:50-89`):**
 
 ```python
 def calendar_cv_folds(
@@ -268,7 +268,7 @@ def calendar_cv_folds(
         val_mask = (dates >= train_end) & (dates < fold_end)
 ```
 
-**NB3 (`src/etl/nb3_analysis.py:19-55`):**
+**ML7 (`src/etl/ml7_analysis.py:19-55`):**
 
 ```python
 def create_calendar_folds(df: pd.DataFrame, n_folds: int = 6,
@@ -283,7 +283,7 @@ def create_calendar_folds(df: pd.DataFrame, n_folds: int = 6,
 
 **Strengths**:
 
-1. Both NB2 and NB3 use identical temporal CV logic
+1. Both ML6 and ML7 use identical temporal CV logic
 2. No data shuffling (strict chronological order)
 3. Sanity checks for class balance (≥2 classes in train)
 4. Fold boundaries are logged for reproducibility
@@ -302,27 +302,27 @@ def create_calendar_folds(df: pd.DataFrame, n_folds: int = 6,
 
 ```python
 def stage_5_prep_nb2(ctx: PipelineContext, df: pd.DataFrame) -> Optional[pd.DataFrame]:
-    """Stage 5: Prep NB2 - Remove pbsi_score, pbsi_quality → anti-leak"""
+    """Stage 5: Prep ML6 - Remove pbsi_score, pbsi_quality → anti-leak"""
     df_clean = df.copy()
-    # Remove blacklist columns before NB2
+    # Remove blacklist columns before ML6
 ```
 
 **Assessment**: **PARTIALLY SUPPORTED** ⚠️
 
-**What works**: Blacklist columns are removed before NB2 training ✅  
+**What works**: Blacklist columns are removed before ML6 training ✅  
 **What doesn't**: No segment-wise normalization (because segmentation is trivial) ❌
 
 ---
 
-### 2.6 NB2 Baseline Modeling
+### 2.6 ML6 Baseline Modeling
 
 **Claim**: "5 baselines: Dummy, Naive-Yesterday, MovingAvg-7d, Rule-based, Logistic Regression (L2, C∈{0.1,1,3}, class_weight=balanced). Metrics: F1-macro, F1-weighted, balanced_acc, kappa, ROC-AUC (2-class), McNemar test."
 
-**Code Evidence** (`src/models/run_nb2.py:1-40`):
+**Code Evidence** (`src/models/run_ml6.py:1-40`):
 
 ```python
 """
-NB2 Baselines: 6-fold calendar-based temporal CV with 5 baselines.
+ML6 Baselines: 6-fold calendar-based temporal CV with 5 baselines.
 
 Protocol:
     - Baselines:
@@ -352,13 +352,13 @@ from sklearn.metrics import (
 
 ---
 
-### 2.7 NB3 LSTM + Drift Detection
+### 2.7 ML7 LSTM + Drift Detection
 
 **Claim**: "14-day LSTM M1 with SHAP explainability. Drift detection: ADWIN (δ=0.002), KS tests (p<0.01), SHAP drift (>10%)."
 
 **Code Evidence**:
 
-**SHAP** (`src/etl/nb3_analysis.py:117-175`):
+**SHAP** (`src/etl/ml7_analysis.py:117-175`):
 
 ```python
 def compute_shap_values(model, X_train, X_val, feature_names: List[str],
@@ -369,7 +369,7 @@ def compute_shap_values(model, X_train, X_val, feature_names: List[str],
     # Top-5 features by mean |SHAP value|
 ```
 
-**ADWIN** (`src/etl/nb3_analysis.py:212`):
+**ADWIN** (`src/etl/ml7_analysis.py:212`):
 
 ```python
 def detect_drift_adwin(df: pd.DataFrame, score_col: str = 'pbsi_score',
@@ -377,7 +377,7 @@ def detect_drift_adwin(df: pd.DataFrame, score_col: str = 'pbsi_score',
     """ADWIN drift detection on temporal sequence."""
 ```
 
-**14-day LSTM window**: ⚠️ **DOCUMENTED in `docs/NB3_QUICK_REFERENCE.md` but not yet verified in code** (need to read lines 200-525 of nb3_analysis.py)
+**14-day LSTM window**: ⚠️ **DOCUMENTED in `docs/NB3_QUICK_REFERENCE.md` but not yet verified in code** (need to read lines 200-525 of ml7_analysis.py)
 
 **KS tests, SHAP drift**: ⚠️ **PARAMETERS DOCUMENTED but implementation not yet examined**
 
@@ -393,7 +393,7 @@ def detect_drift_adwin(df: pd.DataFrame, score_col: str = 'pbsi_score',
 
 **Code Evidence**:
 
-**Seed**: `src/models/run_nb2.py:44`
+**Seed**: `src/models/run_ml6.py:44`
 
 ```python
 np.random.seed(42)
@@ -569,7 +569,7 @@ thresholds:
 
 **Issue**: Documentation mentions "14-day sequence window" for LSTM, but not yet verified in code.
 
-**Status**: Need to read lines 200-525 of `src/etl/nb3_analysis.py` to confirm.
+**Status**: Need to read lines 200-525 of `src/etl/ml7_analysis.py` to confirm.
 
 **Recommendation**: Ensure LSTM input shape is documented in code comments (e.g., `(batch_size, 14, n_features)`).
 
@@ -581,7 +581,7 @@ thresholds:
 
 **Status**: Functions exist but not fully reviewed.
 
-**Recommendation**: Verify all three drift detection methods are called in NB3 pipeline and results are saved.
+**Recommendation**: Verify all three drift detection methods are called in ML7 pipeline and results are saved.
 
 ---
 
@@ -655,14 +655,14 @@ thresholds:
 
 4. **Add inline comments**:
    - Document PBSI sign convention in `stage_apply_labels.py`
-   - Explain temporal CV fold creation logic in `run_nb2.py`
+   - Explain temporal CV fold creation logic in `run_ml6.py`
    - Clarify Stage 4 segmentation rules in `run_full_pipeline.py`
 
 #### 📊 **MEDIUM PRIORITY (Improve Reproducibility)**:
 
-5. **Verify NB3 implementation**:
+5. **Verify ML7 implementation**:
 
-   - Confirm 14-day LSTM window in code (read full `nb3_analysis.py`)
+   - Confirm 14-day LSTM window in code (read full `ml7_analysis.py`)
    - Test drift detection (ADWIN, KS, SHAP) with sample data
    - Ensure TFLite export works
 
@@ -704,8 +704,8 @@ thresholds:
 
 - ✅ **Data unification**: 100% consistent
 - ✅ **Temporal CV**: 100% consistent
-- ✅ **NB2 baselines**: 100% consistent
-- ⚠️ **NB3 LSTM/drift**: 70% consistent (partial verification)
+- ✅ **ML6 baselines**: 100% consistent
+- ⚠️ **ML7 LSTM/drift**: 70% consistent (partial verification)
 - ❌ **Segmentation**: 20% consistent (documented ≠ implemented)
 - ❌ **PBSI labeling**: 30% consistent (documented ≠ implemented)
 - ⚠️ **Anti-leak safeguards**: 50% consistent (blacklist works, z-scores don't)
@@ -724,7 +724,7 @@ thresholds:
 1. Re-run analysis with correct PBSI implementation (if `build_pbsi.py` is canonical)
 2. Update paper methods section to match actual pipeline (Stage 3, Stage 4)
 3. Add limitations section: "Simple segmentation (gap-based) was used; behavioral segmentation remains future work"
-4. Verify NB3 implementation (14-day LSTM, drift detection) against paper claims
+4. Verify ML7 implementation (14-day LSTM, drift detection) against paper claims
 
 ---
 
@@ -748,8 +748,8 @@ thresholds:
 3. `src/biomarkers/segmentation.py` (174 lines, UNUSED)
 4. `src/etl/stage_apply_labels.py` (200 lines, Stage 3 ACTUAL)
 5. `scripts/run_full_pipeline.py` (1017 lines, Stage 4 examined lines 267-350)
-6. `src/models/run_nb2.py` (521 lines, lines 1-100 examined)
-7. `src/etl/nb3_analysis.py` (525 lines, lines 1-200 examined)
+6. `src/models/run_ml6.py` (521 lines, lines 1-100 examined)
+7. `src/etl/ml7_analysis.py` (525 lines, lines 1-200 examined)
 8. `src/biomarkers/__init__.py` (brief, import check)
 
 ### Configuration (3 files)
@@ -775,11 +775,11 @@ thresholds:
 **Limitations**:
 
 - Paper PDF not directly accessible (claims inferred from docs)
-- NB3 implementation partially examined (lines 200-525 not yet read)
+- ML7 implementation partially examined (lines 200-525 not yet read)
 - Drift detection not fully verified
 - No runtime testing (static code analysis only)
 
-**Confidence Level**: HIGH for critical issues (segmentation, PBSI), MODERATE for NB3 details
+**Confidence Level**: HIGH for critical issues (segmentation, PBSI), MODERATE for ML7 details
 
 ---
 

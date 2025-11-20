@@ -1,12 +1,12 @@
-# NB2 Finalization: Complete Baselines + Calendar CV + McNemar
+# ML6 Finalization: Complete Baselines + Calendar CV + McNemar
 
 ## Summary
 
-Implemented full NB2-vFinal pipeline with 5 baselines, strict 4m/2m calendar folds, McNemar tests, stratified CSVs, and enhanced diagnostics.
+Implemented full ML6-vFinal pipeline with 5 baselines, strict 4m/2m calendar folds, McNemar tests, stratified CSVs, and enhanced diagnostics.
 
 ## Changes
 
-### 1. src/models/run_nb2.py (Complete Rewrite)
+### 1. src/models/run_ml6.py (Complete Rewrite)
 
 **New Baselines** (5 total):
 
@@ -31,11 +31,11 @@ Implemented full NB2-vFinal pipeline with 5 baselines, strict 4m/2m calendar fol
 
 **Outputs** (both tasks 3-class & 2-class):
 
-- `nb2/baselines_label_3cls.csv` - all 5 baselines (6 folds + mean/std)
-- `nb2/baselines_label_2cls.csv` - all 5 baselines + mcnemar_p column
-- `nb2/baseline_stratified_3cls.csv` - Dummy only (backward compat)
-- `nb2/baseline_stratified_2cls.csv` - Dummy only (backward compat)
-- `nb2/confusion_matrices/*.png` - per fold (LogReg, Rule, Dummy)
+- `ml6/baselines_label_3cls.csv` - all 5 baselines (6 folds + mean/std)
+- `ml6/baselines_label_2cls.csv` - all 5 baselines + mcnemar_p column
+- `ml6/baseline_stratified_3cls.csv` - Dummy only (backward compat)
+- `ml6/baseline_stratified_2cls.csv` - Dummy only (backward compat)
+- `ml6/confusion_matrices/*.png` - per fold (LogReg, Rule, Dummy)
 
 **Metrics**:
 
@@ -52,7 +52,7 @@ Already implemented in previous sessions, validates:
 
 ### 3. scripts/generate_nb2_summary.py (New)
 
-Generates `nb2/baselines_summary.md`:
+Generates `ml6/baselines_summary.md`:
 
 - Side-by-side comparison table (5 baselines × 2 tasks)
 - Metrics per baseline
@@ -61,14 +61,14 @@ Generates `nb2/baselines_summary.md`:
 ### 4. Makefile (New Targets)
 
 ```makefile
-make nb2-unify       # Stage 1: merge Apple+Zepp
-make nb2-labels      # Stage 2: build PBSI labels
-make nb2-baselines   # Stage 3: temporal CV + baselines
-make nb2-all         # Full pipeline (all 3 stages)
-make nb2-summary     # Generate baselines_summary.md
+make ml6-unify       # Stage 1: merge Apple+Zepp
+make ml6-labels      # Stage 2: build PBSI labels
+make ml6-baselines   # Stage 3: temporal CV + baselines
+make ml6-all         # Full pipeline (all 3 stages)
+make ml6-summary     # Generate baselines_summary.md
 ```
 
-### 5. scripts/run_nb2_pipeline.py (Updated)
+### 5. scripts/run_ml6_pipeline.py (Updated)
 
 - Orchestrates all 3 stages
 - Calls run_temporal_cv with output_dir
@@ -94,28 +94,28 @@ make nb2-summary     # Generate baselines_summary.md
 
 ```bash
 # Full pipeline
-python scripts/run_nb2_pipeline.py --stage all
+python scripts/run_ml6_pipeline.py --stage all
 
 # Or via Makefile
-make nb2-all
+make ml6-all
 
 # Generate summary
-make nb2-summary
+make ml6-summary
 
 # Check outputs
-ls -la nb2/baselines_label_*.csv
-ls -la nb2/baseline_stratified_*.csv
-ls -la nb2/confusion_matrices/
-cat nb2/baselines_summary.md
+ls -la ml6/baselines_label_*.csv
+ls -la ml6/baseline_stratified_*.csv
+ls -la ml6/confusion_matrices/
+cat ml6/baselines_summary.md
 ```
 
 ## Files Modified
 
-- src/models/run_nb2.py (complete rewrite, ~520 lines)
+- src/models/run_ml6.py (complete rewrite, ~520 lines)
 - src/models/**init**.py (updated imports)
-- scripts/run_nb2_pipeline.py (unchanged)
+- scripts/run_ml6_pipeline.py (unchanged)
 - scripts/generate_nb2_summary.py (new)
-- Makefile (added 2 targets: nb2-summary)
+- Makefile (added 2 targets: ml6-summary)
 - src/features/unify_daily.py (unchanged, already has diagnostics)
 - src/labels/build_pbsi.py (unchanged)
 
@@ -138,7 +138,7 @@ cat nb2/baselines_summary.md
 **Commit Message:**
 
 ```
-NB2: add Naive + MA7 + Rule baselines, strict 4m/2m folds, McNemar, and stratified CSVs
+ML6: add Naive + MA7 + Rule baselines, strict 4m/2m folds, McNemar, and stratified CSVs
 - Enforce calendar-based folds; remove row-based wording
 - Generate baseline_stratified_{3cls,2cls}.csv + baselines_label_{3cls,2cls}.csv
 - Write baselines_summary.md and confusion matrices for LogReg/Rule
@@ -146,4 +146,4 @@ NB2: add Naive + MA7 + Rule baselines, strict 4m/2m folds, McNemar, and stratifi
 - Add anti-degeneration guards; keep seed=42
 ```
 
-**Version**: NB2-vFinal (2025-11)
+**Version**: ML6-vFinal (2025-11)

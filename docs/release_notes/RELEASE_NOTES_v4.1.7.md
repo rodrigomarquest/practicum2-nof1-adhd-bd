@@ -98,7 +98,7 @@ pbsi_score = 0.40 * sleep_sub + 0.35 * cardio_sub + 0.25 * activity_sub
 
 ### Solution: Temporal Filter + MICE
 
-**Stage 5 (NB2 Preparation)** now implements:
+**Stage 5 (ML6 Preparation)** now implements:
 
 1. **Temporal Filter**:
 
@@ -122,13 +122,13 @@ pbsi_score = 0.40 * sleep_sub + 0.35 * cardio_sub + 0.25 * activity_sub
    - Removed: `pbsi_score`, `pbsi_quality`, `sleep_sub`, `cardio_sub`, `activity_sub`
    - Excluded: `segment_id` from ML features
 
-**Output**: `data/ai/{participant}/{snapshot}/nb2/features_daily_nb2.csv`
+**Output**: `data/ai/{participant}/{snapshot}/ml6/features_daily_nb2.csv`
 
 ---
 
 ## 📊 Performance Results
 
-### Stage 6 (NB2): LogisticRegression
+### Stage 6 (ML6): LogisticRegression
 
 **6-fold calendar-based CV** (4mo train / 2mo val):
 
@@ -144,7 +144,7 @@ pbsi_score = 0.40 * sleep_sub + 0.35 * cardio_sub + 0.25 * activity_sub
 
 **Interpretation**: Classical ML (LogisticRegression) achieves moderate performance on MICE-imputed features. High variance across folds suggests temporal non-stationarity.
 
-### Stage 7 (NB3): SHAP + Drift + LSTM
+### Stage 7 (ML7): SHAP + Drift + LSTM
 
 **SHAP Feature Importance** (Top-3 global):
 
@@ -180,9 +180,9 @@ pbsi_score = 0.40 * sleep_sub + 0.35 * cardio_sub + 0.25 * activity_sub
   - Added temporal filter (`>= 2021-05-11`)
   - Added MICE imputation (segment-aware)
   - Added anti-leak verification
-  - Changed output path: `ai/nb2/features_daily_nb2.csv`
+  - Changed output path: `ai/ml6/features_daily_nb2.csv`
 - **Stage 7 (`stage_7_nb3`)**: Updated to use MICE-imputed data (lines ~585-605)
-  - Now loads `ai/nb2/features_daily_nb2.csv` instead of `joined/features_daily_labeled.csv`
+  - Now loads `ai/ml6/features_daily_nb2.csv` instead of `joined/features_daily_labeled.csv`
   - Applies same temporal filter (`>= 2021-05-11`)
   - Verifies 0 NaN before SHAP/LSTM
 
@@ -215,9 +215,9 @@ python scripts/run_full_pipeline.py --start-stage 5 --end-stage 7
 
 **Outputs**:
 
-- **Stage 5**: `data/ai/P000001/2025-11-07/nb2/features_daily_nb2.csv` (1,625 days, 0 NaN)
-- **Stage 6**: `data/ai/P000001/2025-11-07/nb2/cv_summary.json` (CV results)
-- **Stage 7**: `data/ai/P000001/2025-11-07/nb3/` (SHAP, drift, LSTM outputs)
+- **Stage 5**: `data/ai/P000001/2025-11-07/ml6/features_daily_nb2.csv` (1,625 days, 0 NaN)
+- **Stage 6**: `data/ai/P000001/2025-11-07/ml6/cv_summary.json` (CV results)
+- **Stage 7**: `data/ai/P000001/2025-11-07/ml7/` (SHAP, drift, LSTM outputs)
 
 ---
 
@@ -225,7 +225,7 @@ python scripts/run_full_pipeline.py --start-stage 5 --end-stage 7
 
 ### API Changes
 
-- **Stage 5 output path changed**: `joined/features_nb2_clean.csv` → `ai/nb2/features_daily_nb2.csv`
+- **Stage 5 output path changed**: `joined/features_nb2_clean.csv` → `ai/ml6/features_daily_nb2.csv`
 - **Temporal filter applied**: ML datasets now start from **2021-05-11** (not 2017-12-04)
 
 ### Label Interpretation Reversed

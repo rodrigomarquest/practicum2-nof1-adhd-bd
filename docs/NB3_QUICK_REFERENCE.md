@@ -1,10 +1,10 @@
-# NB3 Pipeline — Quick Reference
+# ML7 Pipeline — Quick Reference
 
 ## Overview
 
-**NB3** implements:
+**ML7** implements:
 
-1. **Logistic Regression** across 6 calendar-based folds (same CV as NB2)
+1. **Logistic Regression** across 6 calendar-based folds (same CV as ML6)
 2. **SHAP Explainability**: Top-5 features per fold + global importance ranking
 3. **Drift Detection**:
    - **ADWIN** (δ=0.002): Detects changes in per-sample loss within validation folds
@@ -15,7 +15,7 @@
 
 ## Data Requirements
 
-- **Input**: `data/etl/features_daily_labeled.csv` (from NB2)
+- **Input**: `data/etl/features_daily_labeled.csv` (from ML6)
 - **Columns required**:
   - `date` (YYYY-MM-DD, datetime)
   - `label_3cls` or `label_2cls` (class labels)
@@ -24,10 +24,10 @@
 
 ## Quick Start
 
-### Run full NB3 pipeline
+### Run full ML7 pipeline
 
 ```bash
-make nb3-run
+make ml7-run
 ```
 
 ### Or directly
@@ -39,16 +39,16 @@ python scripts/run_nb3_pipeline.py \
   --label_col label_3cls
 ```
 
-### Run NB2 → NB3 end-to-end
+### Run ML6 → ML7 end-to-end
 
 ```bash
-make nb3-all
+make ml7-all
 ```
 
 ## Output Structure
 
 ```
-nb3/
+ml7/
 ├── models/
 │   └── best_model.tflite         # TFLite-quantized LSTM (best by F1-macro)
 ├── plots/
@@ -141,7 +141,7 @@ Input (seq_len=14, n_features=27)
 
 ### LSTM Training
 
-- **CV**: Same 6 calendar folds as NB2
+- **CV**: Same 6 calendar folds as ML6
 - **Early Stopping**: patience=10, monitor='val_accuracy'
 - **Optimizer**: Adam
 - **Loss**: sparse_categorical_crossentropy
@@ -225,25 +225,25 @@ All operations use fixed seeds:
 
 ## Next Steps
 
-After NB3 completes:
+After ML7 completes:
 
 1. **Validate outputs**:
 
    ```bash
-   ls -la nb3/
-   python -c "import json; print(json.load(open('nb3/latency_stats.json')))"
+   ls -la ml7/
+   python -c "import json; print(json.load(open('ml7/latency_stats.json')))"
    ```
 
 2. **Review markdown reports**:
 
    ```bash
-   cat nb3/shap_summary.md
-   cat nb3/drift_report.md
+   cat ml7/shap_summary.md
+   cat ml7/drift_report.md
    ```
 
-3. **Compare with NB2 baselines**:
+3. **Compare with ML6 baselines**:
 
-   - LSTM F1-macro vs Logistic F1 from NB2
+   - LSTM F1-macro vs Logistic F1 from ML6
    - Latency profile for production feasibility
 
 4. **Integration**:

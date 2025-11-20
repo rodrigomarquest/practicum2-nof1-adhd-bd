@@ -2,7 +2,7 @@
 
 ## Problem
 
-The `joined_features_daily.csv` file currently contains **multiple rows per day** (intra-day data is not aggregated). This breaks downstream NB2 baseline modeling which expects **one row per date**.
+The `joined_features_daily.csv` file currently contains **multiple rows per day** (intra-day data is not aggregated). This breaks downstream ML6 baseline modeling which expects **one row per date**.
 
 - Current state: `joined_features_daily.csv` has 284,049 rows (raw intra-day data)
 - Expected state: `joined_features_daily.csv` should have ~2,700 rows (one per day)
@@ -56,7 +56,7 @@ if "date" in concat_df.columns:
    - Output: `features_daily_labeled.csv` with heuristic labels
    - Preserves daily structure
 
-4. **Update NB2**:
+4. **Update ML6**:
    - Reads `features_daily_labeled.csv` (guaranteed one row per date)
    - Label column: `label_final`
 

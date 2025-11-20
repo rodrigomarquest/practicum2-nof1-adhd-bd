@@ -422,11 +422,11 @@ def compute_z_scores_by_segment(df, version_log_path):
 
 ---
 
-## Section 6: HR in NB2 Modeling
+## Section 6: HR in ML6 Modeling
 
 ### 6.1 Feature Preparation
 
-**Source**: `src/models/run_nb2.py`
+**Source**: `src/models/run_ml6.py`
 
 **Feature Matrix Construction**:
 
@@ -440,13 +440,13 @@ def compute_z_scores_by_segment(df, version_log_path):
 **Search for HR Column Filtering**:
 
 ```bash
-grep -i "blacklist\|exclude\|drop.*hr" src/models/run_nb2.py
+grep -i "blacklist\|exclude\|drop.*hr" src/models/run_ml6.py
 # Result: No matches
 ```
 
 **✅ VERIFIED**:
 
-- No explicit HR column blacklisting in NB2
+- No explicit HR column blacklisting in ML6
 - All HR features from `features_nb2_clean.csv` enter model training
 
 **Feature Preprocessing** (lines 92-96):
@@ -489,23 +489,23 @@ x_train_scaled = scaler.fit_transform(x_train_imp)
 
 ---
 
-## Section 7: HR in NB3 / LSTM Code
+## Section 7: HR in ML7 / LSTM Code
 
-### 7.1 NB3 Analysis Module
+### 7.1 ML7 Analysis Module
 
-**Source**: `src/etl/nb3_analysis.py`
+**Source**: `src/etl/ml7_analysis.py`
 
 **Search for HR Usage**:
 
 ```bash
-grep -n "hr_mean\|apple_hr\|hrv" src/etl/nb3_analysis.py
+grep -n "hr_mean\|apple_hr\|hrv" src/etl/ml7_analysis.py
 # No direct HR feature engineering found
 ```
 
 **✅ VERIFIED**:
 
-- NB3 uses pre-processed features from `features_nb2_clean.csv`
-- No NB3-specific HR transformations detected
+- ML7 uses pre-processed features from `features_nb2_clean.csv`
+- No ML7-specific HR transformations detected
 
 ---
 
@@ -522,7 +522,7 @@ grep -n "hr_mean\|apple_hr\|hrv" src/etl/nb3_analysis.py
 - No LSTM training script found in `src/models/`
 - Possible locations:
   - `notebooks/NB3_DeepLearning.py`
-  - `src/etl/nb3_analysis.py`
+  - `src/etl/ml7_analysis.py`
 
 **Recommendation**: Audit LSTM code separately to verify:
 
@@ -888,8 +888,8 @@ else:
 | `unify_daily.py`           | Canonical schema             | ✅ CORRECT           |
 | `build_pbsi.py`            | PBSI computation             | ✅ CORRECT           |
 | `auto_segment.py`          | Period boundaries            | ✅ CORRECT           |
-| `run_nb2.py`               | Baseline models              | ⚠️ NOT FULLY AUDITED |
-| `nb3_analysis.py`          | LSTM + SHAP                  | ⚠️ NOT AUDITED       |
+| `run_ml6.py`               | Baseline models              | ⚠️ NOT FULLY AUDITED |
+| `ml7_analysis.py`          | LSTM + SHAP                  | ⚠️ NOT AUDITED       |
 
 ---
 

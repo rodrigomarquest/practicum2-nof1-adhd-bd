@@ -1,5 +1,5 @@
 """
-Data Preparation for NB2 - Anti-Leak Safeguards
+Data Preparation for ML6 - Anti-Leak Safeguards
 Remove label-related features and prepare clean dataset for training.
 
 Removes:
@@ -19,11 +19,11 @@ from typing import Tuple
 logger = logging.getLogger(__name__)
 
 
-def prepare_nb2_dataset(csv_path: str, 
+def prepare_ml6_dataset(csv_path: str, 
                        remove_segment_id: bool = False,
                        output_path: str = None) -> Tuple[pd.DataFrame, dict]:
     """
-    Prepare clean dataset for NB2 training with anti-leak safeguards.
+    Prepare clean dataset for ML6 training with anti-leak safeguards.
     
     Removes:
     - pbsi_score, pbsi_quality (label metadata)
@@ -47,7 +47,7 @@ def prepare_nb2_dataset(csv_path: str,
     """
     
     logger.info(f"\n{'='*80}")
-    logger.info(f"DATA PREPARATION: Anti-Leak Safeguards for NB2")
+    logger.info(f"DATA PREPARATION: Anti-Leak Safeguards for ML6")
     logger.info(f"{'='*80}\n")
     
     # Load data
@@ -167,6 +167,6 @@ if __name__ == "__main__":
             output_path = sys.argv[i+1]
             break
     
-    df_clean, stats = prepare_nb2_dataset(csv_path, remove_segment_id=remove_segment, output_path=output_path)
+    df_clean, stats = prepare_ml6_dataset(csv_path, remove_segment_id=remove_segment, output_path=output_path)
     
     print(f"\n[DONE] Preparation complete: {df_clean.shape}")

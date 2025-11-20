@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 FULL DETERMINISTIC PIPELINE
-Stages 0-9: Ingest → Aggregate → Unify → Label → Segment → Prep-NB2 → NB2 → NB3 → TFLite → Report
+Stages 0-9: Ingest → Aggregate → Unify → Label → Segment → Prep-ML6 → ML6 → ML7 → TFLite → Report
 
 All outputs under canonical structure:
   data/etl/P000001/<SNAPSHOT>/ (stages 0-5)
@@ -77,8 +77,8 @@ class PipelineContext:
                   self.extracted_dir / "zepp",
                   self.joined_dir,
                   self.qc_dir,
-                  self.ai_snapshot_dir / "nb2",
-                  self.ai_snapshot_dir / "nb3" / "models"]:
+                  self.ai_snapshot_dir / "ml6",
+                  self.ai_snapshot_dir / "ml7" / "models"]:
             d.mkdir(parents=True, exist_ok=True)
         
         self.start_time = datetime.now()
@@ -336,14 +336,14 @@ def stage_4_segment(ctx: PipelineContext, df: pd.DataFrame) -> bool:
         return False
 
 
-def stage_5_prep_nb2(ctx: PipelineContext, df: pd.DataFrame) -> Optional[pd.DataFrame]:
+def stage_5_prep_ml6(ctx: PipelineContext, df: pd.DataFrame) -> Optional[pd.DataFrame]:
     """
-    Stage 5: Prep NB2
+    Stage 5: Prep ML6 (static daily classifier)
     - Filter >= 2021-05-11 (Amazfit GTR 2 era with consistent cardio)
     - Apply MICE imputation (M=5, segment-aware)
     - Remove pbsi_score, pbsi_quality (anti-leak)
     """
-    banner("STAGE 5: PREP NB2 (temporal filter + MICE + anti-leak)")
+    banner("STAGE 5: PREP ML6 (temporal filter + MICE + anti-leak)")
     stage_start = time.time()
     
     try:
@@ -438,15 +438,15 @@ def stage_5_prep_nb2(ctx: PipelineContext, df: pd.DataFrame) -> Optional[pd.Data
         assert n_missing_after == 0, f"MICE failed: {n_missing_after} NaN remaining"
         
         # 9. SAVE
-        nb2_path = ctx.ai_snapshot_dir / "nb2" / "features_daily_nb2.csv"
-        nb2_path.parent.mkdir(parents=True, exist_ok=True)
-        df_clean.to_csv(nb2_path, index=False)
+        ml6_path = ctx.ai_snapshot_dir / "ml6" / "features_daily_ml6.csv"
+        ml6_path.parent.mkdir(parents=True, exist_ok=True)
+        df_clean.to_csv(ml6_path, index=False)
         
         logger.info(f"✓ Stage 5 complete: {df_clean.shape}")
         logger.info(f"  ML period: >= {ml_cutoff.strftime('%Y-%m-%d')} ({n_after} days)")
         logger.info(f"  MICE imputation: SUCCESS (0 NaN)")
         logger.info(f"  Anti-leak verified: YES")
-        logger.info(f"  Output: {nb2_path}")
+        logger.info(f"  Output: {ml6_path}")
         
         elapsed = time.time() - stage_start
         ctx.log_stage_result(5, "success", duration_sec=elapsed, 
@@ -460,18 +460,18 @@ def stage_5_prep_nb2(ctx: PipelineContext, df: pd.DataFrame) -> Optional[pd.Data
         return None
 
 
-def stage_6_nb2(ctx: PipelineContext, df: pd.DataFrame) -> bool:
+def stage_6_ml6(ctx: PipelineContext, df: pd.DataFrame) -> bool:
     """
-    Stage 6: NB2 Training
+    Stage 6: ML6 Training (static daily classifier)
     6-fold temporal CV with calendar-based splits (4mo train / 2mo val)
     """
-    banner("STAGE 6: NB2 TRAINING (6-fold calendar cv)")
+    banner("STAGE 6: ML6 TRAINING (6-fold calendar cv)")
     stage_start = time.time()
     
     try:
         from sklearn.linear_model import LogisticRegression
         from sklearn.metrics import f1_score, balanced_accuracy_score
-        from src.etl.nb3_analysis import create_calendar_folds
+        from src.etl.ml7_analysis import create_calendar_folds
         import numpy as np
         
         df = df.copy()
@@ -483,7 +483,7 @@ def stage_6_nb2(ctx: PipelineContext, df: pd.DataFrame) -> bool:
         
         if len(folds) == 0:
             logger.warning("No valid folds created (classes too imbalanced for CV)")
-            logger.warning("Skipping NB2 training - continuing with rest of pipeline")
+            logger.warning("Skipping ML6 training - continuing with rest of pipeline")
             elapsed = time.time() - stage_start
             ctx.log_stage_result(6, "skipped", duration_sec=elapsed, 
                                 error="No valid folds (imbalanced classes)")
@@ -540,7 +540,7 @@ def stage_6_nb2(ctx: PipelineContext, df: pd.DataFrame) -> bool:
             "folds": cv_results
         }
         
-        cv_path = ctx.ai_snapshot_dir / "nb2" / "cv_summary.json"
+        cv_path = ctx.ai_snapshot_dir / "ml6" / "cv_summary.json"
         with open(cv_path, 'w') as f:
             json.dump(cv_summary, f, indent=2)
         
@@ -557,38 +557,38 @@ def stage_6_nb2(ctx: PipelineContext, df: pd.DataFrame) -> bool:
         return False
 
 
-def stage_7_nb3(ctx: PipelineContext) -> bool:
+def stage_7_ml7(ctx: PipelineContext) -> bool:
     """
-    Stage 7: NB3 Analysis
+    Stage 7: ML7 Analysis (LSTM sequence classifier)
     SHAP interpretability + Drift detection (ADWIN + KS) + LSTM training
     """
-    banner("STAGE 7: NB3 ANALYSIS (SHAP + Drift + LSTM)")
+    banner("STAGE 7: ML7 ANALYSIS (SHAP + Drift + LSTM)")
     stage_start = time.time()
     
     try:
         from sklearn.linear_model import LogisticRegression
-        from src.etl.nb3_analysis import (
+        from src.etl.ml7_analysis import (
             create_calendar_folds, compute_shap_values, detect_drift_adwin,
             detect_drift_ks_segments, create_lstm_sequences, train_lstm_model,
-            prepare_nb3_features, NB3_FEATURE_COLS
+            prepare_ml7_features, ML7_FEATURE_COLS
         )
         import numpy as np
         
         # Create output directories
-        shap_dir = ctx.ai_snapshot_dir / "nb3" / "shap"
-        drift_dir = ctx.ai_snapshot_dir / "nb3" / "drift"
-        models_dir = ctx.ai_snapshot_dir / "nb3" / "models"
+        shap_dir = ctx.ai_snapshot_dir / "ml7" / "shap"
+        drift_dir = ctx.ai_snapshot_dir / "ml7" / "drift"
+        models_dir = ctx.ai_snapshot_dir / "ml7" / "models"
         
         for d in [shap_dir, drift_dir, models_dir]:
             d.mkdir(parents=True, exist_ok=True)
         
-        # ===== OPTION 1: Use MICE-imputed NB2 data (2021+, no NaN) =====
+        # ===== OPTION 1: Use MICE-imputed ML6 data (2021+, no NaN) =====
         # Load MICE-imputed data from Stage 5 (temporal filter + imputation applied)
-        nb2_path = ctx.ai_snapshot_dir / "nb2" / "features_daily_nb2.csv"
+        ml6_path = ctx.ai_snapshot_dir / "ml6" / "features_daily_nb2.csv"
         
-        if nb2_path.exists():
-            logger.info(f"[NB3] Using MICE-imputed data from Stage 5: {nb2_path}")
-            df = pd.read_csv(nb2_path)
+        if ml6_path.exists():
+            logger.info(f"[ML7] Using MICE-imputed data from Stage 5: {ml6_path}")
+            df = pd.read_csv(ml6_path)
             df['date'] = pd.to_datetime(df['date'])
             df = df.sort_values('date').reset_index(drop=True)
             
@@ -598,57 +598,57 @@ def stage_7_nb3(ctx: PipelineContext) -> bool:
             # Verify no NaN
             nan_count = df[feature_cols].isna().sum().sum()
             if nan_count > 0:
-                raise ValueError(f"[NB3] MICE-imputed data still has {nan_count} NaN values!")
+                raise ValueError(f"[ML7] MICE-imputed data still has {nan_count} NaN values!")
             
-            logger.info(f"[NB3] Dataset shape: {df.shape}")
-            logger.info(f"[NB3] Date range: {df['date'].min()} to {df['date'].max()}")
-            logger.info(f"[NB3] Features: {', '.join(feature_cols)}")
-            logger.info(f"[NB3] NaN check: PASSED (0 NaN)")
+            logger.info(f"[ML7] Dataset shape: {df.shape}")
+            logger.info(f"[ML7] Date range: {df['date'].min()} to {df['date'].max()}")
+            logger.info(f"[ML7] Features: {', '.join(feature_cols)}")
+            logger.info(f"[ML7] NaN check: PASSED (0 NaN)")
             
-            # For NB3 analysis, we need z-scored features (not raw features)
+            # For ML7 analysis, we need z-scored features (not raw features)
             # Re-compute z-scores on the MICE-imputed data
-            logger.info("[NB3] Computing z-scores on MICE-imputed features...")
-            from src.etl.nb3_analysis import prepare_nb3_features
+            logger.info("[ML7] Computing z-scores on MICE-imputed features...")
+            from src.etl.ml7_analysis import prepare_ml7_features
             
             # Load labeled data to get segment_id + z-scored features
             labeled_path = ctx.joined_dir / "features_daily_labeled.csv"
             df_labeled_full = pd.read_csv(labeled_path)
             df_labeled_full['date'] = pd.to_datetime(df_labeled_full['date'])
             
-            # Filter labeled data to match NB2 temporal scope (>= 2021-05-11)
+            # Filter labeled data to match ML6 temporal scope (>= 2021-05-11)
             ml_cutoff = pd.Timestamp('2021-05-11')
             df_labeled = df_labeled_full[df_labeled_full['date'] >= ml_cutoff].copy()
             
-            # Prepare NB3 features (z-scored) using prepare_nb3_features
-            df = prepare_nb3_features(df_labeled)
+            # Prepare ML7 features (z-scored) using prepare_ml7_features
+            df = prepare_ml7_features(df_labeled)
             df['date'] = pd.to_datetime(df['date'])
             df = df.sort_values('date').reset_index(drop=True)
         
-        logger.info(f"[NB3] Dataset shape: {df.shape}")
-        logger.info(f"[NB3] Date range: {df['date'].min()} to {df['date'].max()}")
-        logger.info(f"[NB3] Z-features: {', '.join(NB3_FEATURE_COLS)}")
+        logger.info(f"[ML7] Dataset shape: {df.shape}")
+        logger.info(f"[ML7] Date range: {df['date'].min()} to {df['date'].max()}")
+        logger.info(f"[ML7] Z-features: {', '.join(ML7_FEATURE_COLS)}")
         
         # Final NaN check on z-scored features
-        nan_counts_z = df[NB3_FEATURE_COLS].isna().sum()
+        nan_counts_z = df[ML7_FEATURE_COLS].isna().sum()
         if nan_counts_z.sum() > 0:
-            logger.warning(f"[NB3] NaN found in z-features after MICE: {nan_counts_z[nan_counts_z > 0].to_dict()}")
-            logger.info("[NB3] Dropping rows with NaN in z-features...")
-            df = df.dropna(subset=NB3_FEATURE_COLS).copy()
-            logger.info(f"[NB3] After dropna: {df.shape}")
+            logger.warning(f"[ML7] NaN found in z-features after MICE: {nan_counts_z[nan_counts_z > 0].to_dict()}")
+            logger.info("[ML7] Dropping rows with NaN in z-features...")
+            df = df.dropna(subset=ML7_FEATURE_COLS).copy()
+            logger.info(f"[ML7] After dropna: {df.shape}")
         else:
-            logger.info(f"[NB3] NaN check: PASSED (0 NaN in z-features)")
+            logger.info(f"[ML7] NaN check: PASSED (0 NaN in z-features)")
         
         # ===== SHAP ANALYSIS =====
-        logger.info("\n[NB3] SHAP Analysis...")
+        logger.info("\n[ML7] SHAP Analysis...")
         folds = create_calendar_folds(df, n_folds=6, train_months=4, val_months=2)
         
         # Prepare feature matrix and target
-        X = df[NB3_FEATURE_COLS].copy()  # 7 z-scored features
+        X = df[ML7_FEATURE_COLS].copy()  # 7 z-scored features
         y = df['label_3cls'].copy()
-        feature_names = NB3_FEATURE_COLS  # Explicit z-feature names
+        feature_names = ML7_FEATURE_COLS  # Explicit z-feature names
         
-        logger.info(f"[NB3 SHAP] Feature matrix shape: {X.shape}")
-        logger.info(f"[NB3 SHAP] Label distribution: {y.value_counts().to_dict()}")
+        logger.info(f"[ML7 SHAP] Feature matrix shape: {X.shape}")
+        logger.info(f"[ML7 SHAP] Label distribution: {y.value_counts().to_dict()}")
         
         shap_results = []
         for fold_info in folds:
@@ -690,7 +690,7 @@ def stage_7_nb3(ctx: PipelineContext) -> bool:
             f.write("# SHAP Feature Importance Summary\n\n")
             f.write("**Model Explained**: Logistic Regression (multinomial, class_weight='balanced')\n\n")
             f.write("**Feature Set**: Z-scored canonical features from PBSI pipeline\n")
-            f.write(f"- {len(NB3_FEATURE_COLS)} features: {', '.join(NB3_FEATURE_COLS)}\n")
+            f.write(f"- {len(ML7_FEATURE_COLS)} features: {', '.join(ML7_FEATURE_COLS)}\n")
             f.write("- Segment-wise normalized (119 temporal segments) to prevent leakage\n\n")
             f.write("**Note**: SHAP explains the LogisticRegression baseline, NOT the LSTM model.\n\n")
             f.write("---\n\n")
@@ -707,7 +707,7 @@ def stage_7_nb3(ctx: PipelineContext) -> bool:
         logger.info(f"[SHAP] Top-3 global: {', '.join([f[0] for f in global_ranking[:3]])}")
         
         # ===== DRIFT DETECTION: ADWIN =====
-        logger.info("\n[NB3] Drift Detection: ADWIN...")
+        logger.info("\n[ML7] Drift Detection: ADWIN...")
         adwin_result = detect_drift_adwin(
             df_labeled,
             score_col='pbsi_score',
@@ -716,7 +716,7 @@ def stage_7_nb3(ctx: PipelineContext) -> bool:
         )
         
         # ===== DRIFT DETECTION: KS at Segment Boundaries =====
-        logger.info("\n[NB3] Drift Detection: KS at Segment Boundaries...")
+        logger.info("\n[ML7] Drift Detection: KS at Segment Boundaries...")
         segments_path = ctx.snapshot_dir / "segment_autolog.csv"
         
         if segments_path.exists():
@@ -754,19 +754,19 @@ def stage_7_nb3(ctx: PipelineContext) -> bool:
                    f"KS: {ks_result.get('n_significant', 0)}/{ks_result.get('n_tests', 0)} significant")
         
         # ===== LSTM TRAINING =====
-        logger.info("\n[NB3] LSTM M1 Training...")
+        logger.info("\n[ML7] LSTM M1 Training...")
         
         # Create sequences (z-scored features)
         X_np = X.values
         y_np = y.values
         
         seq_len = 14
-        n_features = len(NB3_FEATURE_COLS)  # 7 z-scored features
+        n_features = len(ML7_FEATURE_COLS)  # 7 z-scored features
         n_classes = len(np.unique(y_np))
         
-        logger.info(f"[NB3 LSTM] Sequence length: {seq_len}")
-        logger.info(f"[NB3 LSTM] N features: {n_features} (z-scored)")
-        logger.info(f"[NB3 LSTM] N classes: {n_classes}")
+        logger.info(f"[ML7 LSTM] Sequence length: {seq_len}")
+        logger.info(f"[ML7 LSTM] N features: {n_features} (z-scored)")
+        logger.info(f"[ML7 LSTM] N classes: {n_classes}")
         
         lstm_results = []
         best_f1 = 0
@@ -799,17 +799,17 @@ def stage_7_nb3(ctx: PipelineContext) -> bool:
                     best_model = result['model']
         
         # Save LSTM report
-        with open(ctx.ai_snapshot_dir / "nb3" / "lstm_report.md", 'w', encoding='utf-8') as f:
+        with open(ctx.ai_snapshot_dir / "ml7" / "lstm_report.md", 'w', encoding='utf-8') as f:
             f.write("# LSTM M1 Training Report\n\n")
             f.write(f"## Architecture\n\n")
             f.write("- Sequence Length: 14 days\n")
             f.write(f"- Input Features: {n_features} z-scored canonical features\n")
-            f.write(f"  - {', '.join(NB3_FEATURE_COLS)}\n")
+            f.write(f"  - {', '.join(ML7_FEATURE_COLS)}\n")
             f.write("- LSTM(32) -> Dense(32) -> Dropout(0.2) -> Softmax\n")
             f.write(f"- Classes: {n_classes}\n\n")
             f.write(f"## Feature Set\n\n")
             f.write("**Z-scored Canonical Features** (segment-wise normalized, 119 segments):\n\n")
-            for i, feat in enumerate(NB3_FEATURE_COLS, 1):
+            for i, feat in enumerate(ML7_FEATURE_COLS, 1):
                 f.write(f"{i}. `{feat}`\n")
             f.write("\n**Note**: Features are segment-wise z-scored to prevent temporal leakage.\n\n")
             f.write(f"## Cross-Validation Results\n\n")
@@ -851,7 +851,7 @@ def stage_8_tflite(ctx: PipelineContext) -> bool:
     stage_start = time.time()
     
     try:
-        from src.etl.nb3_analysis import convert_to_tflite, measure_latency
+        from src.etl.ml7_analysis import convert_to_tflite, measure_latency
         import numpy as np
         
         best_model = ctx.results.get('best_lstm_model')
@@ -862,7 +862,7 @@ def stage_8_tflite(ctx: PipelineContext) -> bool:
             return True
         
         # Convert to TFLite
-        tflite_path = ctx.ai_snapshot_dir / "nb3" / "models" / "best_model.tflite"
+        tflite_path = ctx.ai_snapshot_dir / "ml7" / "models" / "best_model.tflite"
         success = convert_to_tflite(best_model, tflite_path)
         
         if not success:
@@ -870,8 +870,8 @@ def stage_8_tflite(ctx: PipelineContext) -> bool:
         
         # Measure latency
         # Create dummy input (1 sequence)
-        nb2_clean_path = ctx.joined_dir / "features_nb2_clean.csv"
-        df = pd.read_csv(nb2_clean_path)
+        ml6_clean_path = ctx.joined_dir / "features_ml6_clean.csv"
+        df = pd.read_csv(ml6_clean_path)
         X = df.drop(columns=['date', 'label_3cls']).values
         
         seq_len = 14
@@ -881,7 +881,7 @@ def stage_8_tflite(ctx: PipelineContext) -> bool:
         latency_stats = measure_latency(tflite_path, dummy_input, n_runs=100)
         
         # Save latency stats
-        latency_path = ctx.ai_snapshot_dir / "nb3" / "latency_stats.json"
+        latency_path = ctx.ai_snapshot_dir / "ml7" / "latency_stats.json"
         with open(latency_path, 'w') as f:
             json.dump(latency_stats, f, indent=2)
         
@@ -908,7 +908,7 @@ def stage_8_tflite(ctx: PipelineContext) -> bool:
 def stage_9_report(ctx: PipelineContext) -> bool:
     """
     Stage 9: Generate Report
-    Create RUN_REPORT.md with all NB2/NB3 metrics
+    Create RUN_REPORT.md with all ML6/ML7 metrics
     """
     banner("STAGE 9: GENERATE REPORT")
     stage_start = time.time()
@@ -948,15 +948,15 @@ def stage_9_report(ctx: PipelineContext) -> bool:
             label_name = {-1: "Unstable", 0: "Neutral", 1: "Stable"}[label]
             lines.append(f"- **Label {label:+2d} ({label_name})**: {count} ({pct:.1f}%)")
         
-        # NB2 Results
-        cv_summary_path = ctx.ai_snapshot_dir / "nb2" / "cv_summary.json"
+        # ML6 Results
+        cv_summary_path = ctx.ai_snapshot_dir / "ml6" / "cv_summary.json"
         if cv_summary_path.exists():
             with open(cv_summary_path, 'r') as f:
                 cv_data = json.load(f)
             
             lines.extend([
                 "",
-                "## NB2: Logistic Regression (Temporal Calendar CV)",
+                "## ML6: Logistic Regression (Temporal Calendar CV)",
                 "",
                 f"- **CV Type**: {cv_data.get('cv_type', 'N/A')}",
                 f"- **Train/Val**: {cv_data.get('train_months', 4)}mo / {cv_data.get('val_months', 2)}mo",
@@ -975,7 +975,7 @@ def stage_9_report(ctx: PipelineContext) -> bool:
         if shap_ranking:
             lines.extend([
                 "",
-                "## NB3: SHAP Feature Importance (Global Top-10)",
+                "## ML7: SHAP Feature Importance (Global Top-10)",
                 "",
             ])
             for i, (feat, imp) in enumerate(shap_ranking[:10], 1):
@@ -987,7 +987,7 @@ def stage_9_report(ctx: PipelineContext) -> bool:
         
         lines.extend([
             "",
-            "## NB3: Drift Detection",
+            "## ML7: Drift Detection",
             "",
             f"- **ADWIN Changes Detected (δ=0.002)**: {adwin_changes}",
             f"- **KS Significant Tests (p<0.05)**: {ks_significant}",
@@ -999,7 +999,7 @@ def stage_9_report(ctx: PipelineContext) -> bool:
             mean_lstm_f1 = np.mean([r['f1_macro'] for r in lstm_results])
             lines.extend([
                 "",
-                "## NB3: LSTM M1",
+                "## ML7: LSTM M1",
                 "",
                 f"- **Architecture**: LSTM(32) -> Dense(32) -> Dropout(0.2) -> Softmax(3)",
                 f"- **Sequence Length**: 14 days",
@@ -1032,13 +1032,13 @@ def stage_9_report(ctx: PipelineContext) -> bool:
             "",
             f"- **Unified**: {ctx.joined_dir / 'features_daily_unified.csv'}",
             f"- **Labeled**: {labeled_path}",
-            f"- **NB2 Clean**: {ctx.joined_dir / 'features_nb2_clean.csv'}",
+            f"- **ML6 Clean**: {ctx.joined_dir / 'features_ml6_clean.csv'}",
             f"- **Segments**: {ctx.snapshot_dir / 'segment_autolog.csv'}",
-            f"- **NB2 CV Summary**: {ctx.ai_snapshot_dir / 'nb2' / 'cv_summary.json'}",
-            f"- **SHAP Summary**: {ctx.ai_snapshot_dir / 'nb3' / 'shap_summary.md'}",
-            f"- **Drift Report**: {ctx.ai_snapshot_dir / 'nb3' / 'drift_report.md'}",
-            f"- **LSTM Report**: {ctx.ai_snapshot_dir / 'nb3' / 'lstm_report.md'}",
-            f"- **Latency Stats**: {ctx.ai_snapshot_dir / 'nb3' / 'latency_stats.json'}",
+            f"- **ML6 CV Summary**: {ctx.ai_snapshot_dir / 'ml6' / 'cv_summary.json'}",
+            f"- **SHAP Summary**: {ctx.ai_snapshot_dir / 'ml7' / 'shap_summary.md'}",
+            f"- **Drift Report**: {ctx.ai_snapshot_dir / 'ml7' / 'drift_report.md'}",
+            f"- **LSTM Report**: {ctx.ai_snapshot_dir / 'ml7' / 'lstm_report.md'}",
+            f"- **Latency Stats**: {ctx.ai_snapshot_dir / 'ml7' / 'latency_stats.json'}",
             "",
             "## Status",
             "",
@@ -1124,18 +1124,18 @@ def main():
                 success = False
         
         if args.start_stage <= 5 <= args.end_stage:
-            df_clean = stage_5_prep_nb2(ctx, df)
+            df_clean = stage_5_prep_ml6(ctx, df)
         else:
-            clean_path = ctx.joined_dir / "features_nb2_clean.csv"
+            clean_path = ctx.joined_dir / "features_ml6_clean.csv"
             df_clean = pd.read_csv(clean_path) if clean_path.exists() else None
         
         if df_clean is not None:
             if args.start_stage <= 6 <= args.end_stage:
-                if not stage_6_nb2(ctx, df_clean):
+                if not stage_6_ml6(ctx, df_clean):
                     success = False
             
             if args.start_stage <= 7 <= args.end_stage:
-                if not stage_7_nb3(ctx):
+                if not stage_7_ml7(ctx):
                     success = False
             
             if args.start_stage <= 8 <= args.end_stage:

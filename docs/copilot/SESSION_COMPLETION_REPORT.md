@@ -59,7 +59,7 @@ Successfully completed a **critical ETL pipeline fix** that enables proper daily
   - `label_distribution.csv` (class counts)
   - `label_manifest.json` (metadata)
 
-### 5. ✅ NB2 Baseline Execution (COMPLETE)
+### 5. ✅ ML6 Baseline Execution (COMPLETE)
 
 - **Temporal CV:** 4 folds (120d train, 60d val, 10d gap)
 - **Baselines tested:**
@@ -132,7 +132,7 @@ Result: One row per date (899 rows) ✅
    - Removed duplicate `zscore()` function
    - Updated z-score calls to use `zscore_lib()` (lines 235-236)
 
-3. **`run_nb2_beiwe.py`** (no changes in this session, already fixed)
+3. **`run_ml6_beiwe.py`** (no changes in this session, already fixed)
    - Uses `label_final` column correctly
    - Baseline functions vectorized (performance optimized)
 
@@ -164,10 +164,10 @@ File: data/etl/P000001/2025-11-07/joined/features_daily_labeled.csv
 - Label distribution: neutral=899 (100%, all due to data constraints)
 ```
 
-### NB2 Baseline Outputs
+### ML6 Baseline Outputs
 
 ```
-Directory: data/ai/local/P000001/2025-11-07/nb2/
+Directory: data/ai/local/P000001/2025-11-07/ml6/
 - tables/nb2_baseline_metrics_per_fold.csv (per-fold results)
 - tables/nb2_metrics_summary.csv (aggregated metrics)
 - figures/ (confusion matrices, distribution plots)
@@ -184,7 +184,7 @@ Directory: data/ai/local/P000001/2025-11-07/nb2/
 1. **Limited activation proxies:** Only `act_steps` available (apple_exercise_min is zeros)
 2. **Missing fatigue data:** No Zepp sleep data in 30-month window for P000001
 3. **Result:** All labels default to "neutral" (correct given data constraints)
-4. **Impact on NB2:** Perfect F1 scores (1.0) due to single-class problem (not a modeling issue)
+4. **Impact on ML6:** Perfect F1 scores (1.0) due to single-class problem (not a modeling issue)
 
 ### Recommendations for Future Work
 
@@ -204,7 +204,7 @@ Directory: data/ai/local/P000001/2025-11-07/nb2/
 | 06:38 | ETL join execution #2      | ✅ Fixed, 66K rows         |
 | 06:39 | ETL join execution #3      | ✅ Fixed, 899 rows (final) |
 | 06:39 | Heuristic label generation | ✅ Complete (all neutral)  |
-| 06:40 | NB2 baseline execution     | ✅ Complete (F1=1.0)       |
+| 06:40 | ML6 baseline execution     | ✅ Complete (F1=1.0)       |
 
 ---
 

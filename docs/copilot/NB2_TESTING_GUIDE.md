@@ -1,4 +1,4 @@
-# NB2-vFinal Testing Guide
+# ML6-vFinal Testing Guide
 
 ## Quick Start
 
@@ -6,11 +6,11 @@
 
 ```bash
 # Single command
-python scripts/run_nb2_pipeline.py --stage all
+python scripts/run_ml6_pipeline.py --stage all
 
 # Or via Makefile
-make nb2-all
-make nb2-summary
+make ml6-all
+make ml6-summary
 ```
 
 ### 2. Expected Outputs
@@ -20,7 +20,7 @@ make nb2-summary
 - `features_daily_unified.csv` - Apple+Zepp merged (27 cols, 1 row/date)
 - `features_daily_labeled.csv` - PBSI labels added (35 cols)
 
-**Results Files** (nb2/):
+**Results Files** (ml6/):
 
 - `baselines_label_3cls.csv` - All 5 baselines (3-class)
 - `baselines_label_2cls.csv` - All 5 baselines (2-class, with mcnemar_p)
@@ -33,35 +33,35 @@ make nb2-summary
 
 ```bash
 # Check row counts (should be 6 data + 2 summary rows)
-wc -l nb2/baselines_label_3cls.csv   # 9 rows
-wc -l nb2/baselines_label_2cls.csv   # 9 rows
+wc -l ml6/baselines_label_3cls.csv   # 9 rows
+wc -l ml6/baselines_label_2cls.csv   # 9 rows
 
 # Check columns (all 5 baselines)
-head -1 nb2/baselines_label_3cls.csv
+head -1 ml6/baselines_label_3cls.csv
 # Expected: fold, dummy_f1_macro, dummy_f1_weighted, ..., lr_kappa
 
 # Check McNemar column (2-class only)
-head -1 nb2/baselines_label_2cls.csv | grep mcnemar
+head -1 ml6/baselines_label_2cls.csv | grep mcnemar
 # Expected: lr_mcnemar_p, naive_mcnemar_p, ma7_mcnemar_p, rule_mcnemar_p
 
 # Check confusion matrices
-ls -la nb2/confusion_matrices/ | wc -l   # Should be 20 (18 PNG + 2 dirs)
+ls -la ml6/confusion_matrices/ | wc -l   # Should be 20 (18 PNG + 2 dirs)
 
 # Check summary markdown
-cat nb2/baselines_summary.md | head -30
+cat ml6/baselines_summary.md | head -30
 ```
 
 ### 4. Verify Determinism (Rerun Reproducibility)
 
 ```bash
 # Delete outputs
-rm data/etl/features_daily_*.csv nb2/baselines_*.csv nb2/confusion_matrices/*.png
+rm data/etl/features_daily_*.csv ml6/baselines_*.csv ml6/confusion_matrices/*.png
 
 # Rerun
-python scripts/run_nb2_pipeline.py --stage all
+python scripts/run_ml6_pipeline.py --stage all
 
 # Compare checksums (should match previous run)
-md5sum nb2/baselines_label_3cls.csv
+md5sum ml6/baselines_label_3cls.csv
 # Run again and compare
 ```
 
@@ -127,9 +127,9 @@ md5sum nb2/baselines_label_3cls.csv
 [INFO]   Train dist: {...}
 [INFO]   Val dist: {...}
 [INFO]   LR best C: 1
-[INFO]   Saved: nb2/confusion_matrices/fold_0_lr_label_3cls.png
-[INFO]   Saved: nb2/confusion_matrices/fold_0_rule_label_3cls.png
-[INFO]   Saved: nb2/confusion_matrices/fold_0_dummy_label_3cls.png
+[INFO]   Saved: ml6/confusion_matrices/fold_0_lr_label_3cls.png
+[INFO]   Saved: ml6/confusion_matrices/fold_0_rule_label_3cls.png
+[INFO]   Saved: ml6/confusion_matrices/fold_0_dummy_label_3cls.png
 [...6 folds...]
 
 [INFO] RESULTS (3-class):
@@ -139,12 +139,12 @@ md5sum nb2/baselines_label_3cls.csv
 [MEAN | 0.XXXX        | 0.XXXX           | ... | 0.XXXX  ]
 [STD  | 0.XXXX        | 0.XXXX           | ... | 0.XXXX  ]
 
-[INFO] Saved: nb2/baselines_label_3cls.csv
-[INFO] Saved: nb2/baseline_stratified_3cls.csv
+[INFO] Saved: ml6/baselines_label_3cls.csv
+[INFO] Saved: ml6/baseline_stratified_3cls.csv
 
 [...similar for 2-class task...]
-[INFO] Saved: nb2/baselines_label_2cls.csv
-[INFO] Saved: nb2/baseline_stratified_2cls.csv
+[INFO] Saved: ml6/baselines_label_2cls.csv
+[INFO] Saved: ml6/baseline_stratified_2cls.csv
 
 [INFO] Generate baselines summary markdown
 ```
@@ -189,7 +189,7 @@ md5sum nb2/baselines_label_3cls.csv
 **Check**:
 
 ```bash
-ls -la nb2/confusion_matrices/
+ls -la ml6/confusion_matrices/
 ```
 
 Should have files like `fold_0_lr_label_3cls.png`
@@ -205,7 +205,7 @@ Should have files like `fold_0_lr_label_3cls.png`
 ### Single Fold Test
 
 ```python
-from src.models.run_nb2 import calendar_cv_folds, run_temporal_cv
+from src.models.run_ml6 import calendar_cv_folds, run_temporal_cv
 import pandas as pd
 
 df = pd.read_csv("data/etl/features_daily_labeled.csv", parse_dates=['date'])
@@ -219,7 +219,7 @@ for fold_idx, df_train, df_val, train_str, val_str in folds:
 
 ### Custom Thresholds
 
-Edit `predict_rule_based()` in `src/models/run_nb2.py`:
+Edit `predict_rule_based()` in `src/models/run_ml6.py`:
 
 ```python
 def predict_rule_based(pbsi_score_val: np.ndarray) -> np.ndarray:
@@ -231,5 +231,5 @@ def predict_rule_based(pbsi_score_val: np.ndarray) -> np.ndarray:
 
 ---
 
-**Version**: NB2-vFinal (2025-11)
+**Version**: ML6-vFinal (2025-11)
 **Last Updated**: 2025-11-07

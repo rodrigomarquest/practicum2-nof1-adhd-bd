@@ -10,7 +10,7 @@ def detect_env():
         os.environ.get("KAGGLE_KERNEL_RUN_TYPE")
     )
     data_root = "/kaggle/input" if is_kaggle else "./data/ai/local"
-    out_root = "/kaggle/working/outputs/NB2" if is_kaggle else "notebooks/outputs/NB2"
+    out_root = "/kaggle/working/outputs/ML6" if is_kaggle else "notebooks/outputs/ML6"
 
     tf_available = False
     torch_available = False

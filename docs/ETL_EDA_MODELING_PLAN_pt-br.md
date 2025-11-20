@@ -138,7 +138,7 @@ Estimar desempenho base e treinar modelos temporais (LSTM) para previsão de est
 
    ```bash
    python NB2_Baseline_and_LSTM.py --participant P000001 --snapshot 2025-09-29 \
-     --outdir notebooks/outputs/NB2/$(date +%Y%m%d_%H%M%S)/
+     --outdir notebooks/outputs/ML6/$(date +%Y%m%d_%H%M%S)/
    ```
 
 3. **LSTM (local smoke test)**
@@ -158,7 +158,7 @@ Estimar desempenho base e treinar modelos temporais (LSTM) para previsão de est
 ### 📊 Artefatos esperados
 
 ```
-notebooks/outputs/NB2/<timestamp>/tables/nb2_baseline_metrics.csv
+notebooks/outputs/ML6/<timestamp>/tables/nb2_baseline_metrics.csv
 notebooks/outputs/LSTM/exp_001/metrics.csv
 reports/model_card/exp_001.md
 models/lstm/exp_001/metadata.json

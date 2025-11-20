@@ -1,10 +1,10 @@
-# NB3 Fix Implementation Plan
+# ML7 Fix Implementation Plan
 
 ## Problem Diagnosis
 
 ### Current Behavior (BROKEN):
 
-1. **NB3 uses `features_nb2_clean.csv`** which has only RAW features:
+1. **ML7 uses `features_nb2_clean.csv`** which has only RAW features:
 
    - sleep_hours, hr_mean, total_steps, etc.
    - NO z-scored features
@@ -26,13 +26,13 @@
 ### Root Cause:
 
 - Line 518 in `run_full_pipeline.py`: `df = pd.read_csv(nb2_clean_path)`
-- NB3 reads from wrong source (NB2 clean instead of labeled with z-features)
+- ML7 reads from wrong source (ML6 clean instead of labeled with z-features)
 
 ---
 
 ## Fix Strategy
 
-### 1. Create NB3 Feature Set (Z-Scored Canonical Features)
+### 1. Create ML7 Feature Set (Z-Scored Canonical Features)
 
 ```python
 NB3_FEATURE_COLS = [
@@ -52,7 +52,7 @@ NB3_FEATURE_COLS = [
 - DO NOT include: `label_3cls`, `label_2cls`, `label_clinical`
 - DO include: `segment_id` for context (but not as predictor)
 
-### 2. Modify Stage 7 (NB3 Analysis)
+### 2. Modify Stage 7 (ML7 Analysis)
 
 **Current** (line 518):
 
@@ -68,7 +68,7 @@ df = pd.read_csv(nb2_clean_path)
 labeled_path = ctx.joined_dir / "features_daily_labeled.csv"
 df_labeled = pd.read_csv(labeled_path)
 
-# Select NB3 features (z-scored canonical)
+# Select ML7 features (z-scored canonical)
 NB3_FEATURE_COLS = [
     "z_sleep_total_h", "z_sleep_efficiency",
     "z_apple_hr_mean", "z_apple_hrv_rmssd", "z_apple_hr_max",
@@ -87,13 +87,13 @@ df_nb3 = df_labeled[['date'] + NB3_FEATURE_COLS + ['label_3cls']].copy()
 
 ### 3. Update SHAP Logic
 
-**Current**: SHAP explains NB2 Logistic on raw features (degener
+**Current**: SHAP explains ML6 Logistic on raw features (degener
 
 ated)
 
 **Fixed Options**:
 
-**Option A**: Explain NB2 Logistic on z-scored features
+**Option A**: Explain ML6 Logistic on z-scored features
 
 ```python
 # Train LogReg on z-scored features
@@ -101,7 +101,7 @@ X_nb3 = df_nb3[NB3_FEATURE_COLS]
 y = df_nb3['label_3cls']
 model = LogisticRegression(...).fit(X_train, y_train)
 
-# SHAP explains NB2 model with correct features
+# SHAP explains ML6 model with correct features
 shap_result = compute_shap_values(model, X_train, X_val, NB3_FEATURE_COLS, ...)
 ```
 
@@ -109,7 +109,7 @@ shap_result = compute_shap_values(model, X_train, X_val, NB3_FEATURE_COLS, ...)
 
 ```python
 # Use KernelExplainer or DeepExplainer on LSTM
-# More computationally expensive but explains the actual NB3 model
+# More computationally expensive but explains the actual ML7 model
 ```
 
 **Recommendation**: Option A (explain LogReg on z-features)
@@ -120,7 +120,7 @@ shap_result = compute_shap_values(model, X_train, X_val, NB3_FEATURE_COLS, ...)
 
 ### 4. Update LSTM Training
 
-**Current**: LSTM uses raw features from NB2 clean
+**Current**: LSTM uses raw features from ML6 clean
 
 ```python
 X_np = X.values  # X from features_nb2_clean.csv (raw)
@@ -142,7 +142,7 @@ n_features = len(NB3_FEATURE_COLS)  # = 7
 ```markdown
 # SHAP Feature Importance Summary
 
-**Model Explained**: Logistic Regression (NB2 baseline)
+**Model Explained**: Logistic Regression (ML6 baseline)
 **Feature Set**: Z-scored canonical features (segment-wise normalized)
 **Features**: 7 physiological/behavioral z-scores
 
@@ -184,17 +184,17 @@ n_features = len(NB3_FEATURE_COLS)  # = 7
 
 ## Implementation Steps
 
-### Step 1: Define NB3 Feature Constants
+### Step 1: Define ML7 Feature Constants
 
-- Add to `nb3_analysis.py` or `run_full_pipeline.py`
+- Add to `ml7_analysis.py` or `run_full_pipeline.py`
 - Clear documentation of what each z-feature represents
 
-### Step 2: Create NB3 Data Preparation Function
+### Step 2: Create ML7 Data Preparation Function
 
 ```python
 def prepare_nb3_features(df_labeled: pd.DataFrame) -> pd.DataFrame:
     """
-    Prepare NB3 dataset with z-scored canonical features.
+    Prepare ML7 dataset with z-scored canonical features.
 
     Uses segment-wise z-scored features from PBSI canonical pipeline.
     Removes anti-leak columns (pbsi_score, subscores, derived labels).
@@ -212,12 +212,12 @@ def prepare_nb3_features(df_labeled: pd.DataFrame) -> pd.DataFrame:
 
     # Verify anti-leak
     for col in anti_leak_cols:
-        assert col not in df_nb3.columns, f"Leak: {col} found in NB3 features"
+        assert col not in df_nb3.columns, f"Leak: {col} found in ML7 features"
 
     return df_nb3
 ```
 
-### Step 3: Refactor Stage 7 (NB3 Analysis)
+### Step 3: Refactor Stage 7 (ML7 Analysis)
 
 - Replace `pd.read_csv(nb2_clean_path)` with `prepare_nb3_features(df_labeled)`
 - Update all references to `feature_names` to use `NB3_FEATURE_COLS`
@@ -225,28 +225,28 @@ def prepare_nb3_features(df_labeled: pd.DataFrame) -> pd.DataFrame:
 
 ### Step 4: Fix SHAP Reporting
 
-- Add header: "Model Explained: Logistic Regression (NB2 baseline)"
+- Add header: "Model Explained: Logistic Regression (ML6 baseline)"
 - Add header: "Feature Set: Z-scored canonical (segment-wise)"
 - Clarify in logs which model is being explained
 
 ### Step 5: Update Drift Detection
 
 - Keep using `df_labeled` for drift on `pbsi_score` (current behavior OK)
-- Update KS test to use `NB3_FEATURE_COLS` instead of `feature_names` from NB2
+- Update KS test to use `NB3_FEATURE_COLS` instead of `feature_names` from ML6
 
 ### Step 6: Add Validation Logging
 
 ```python
-logger.info(f"[NB3] Feature set: {len(NB3_FEATURE_COLS)} z-scored features")
-logger.info(f"[NB3] Features: {', '.join(NB3_FEATURE_COLS)}")
-logger.info(f"[NB3] Anti-leak verified: pbsi_score NOT in features")
+logger.info(f"[ML7] Feature set: {len(NB3_FEATURE_COLS)} z-scored features")
+logger.info(f"[ML7] Features: {', '.join(NB3_FEATURE_COLS)}")
+logger.info(f"[ML7] Anti-leak verified: pbsi_score NOT in features")
 ```
 
 ### Step 7: Update Documentation
 
 - Add inline comments explaining z-scored feature selection
 - Update `RUN_REPORT.md` section headers
-- Clarify SHAP explains NB2, not LSTM
+- Clarify SHAP explains ML6, not LSTM
 
 ---
 
@@ -285,25 +285,25 @@ logger.info(f"[NB3] Anti-leak verified: pbsi_score NOT in features")
 ### RUN_REPORT.md
 
 ```markdown
-## NB2: Logistic Regression (Temporal Calendar CV)
+## ML6: Logistic Regression (Temporal Calendar CV)
 
 - **Features**: 11 raw physiological metrics
 - **Mean Macro-F1**: 1.0000 ± 0.0000 (1 valid fold)
 
-## NB3: SHAP Feature Importance (Logistic on Z-Features)
+## ML7: SHAP Feature Importance (Logistic on Z-Features)
 
-**Model**: Logistic Regression (same as NB2 but with z-scored features)
+**Model**: Logistic Regression (same as ML6 but with z-scored features)
 **Feature Set**: 7 segment-wise z-scored canonical features
 
 1. **z_steps**: 0.XXXX
 2. **z_sleep_efficiency**: 0.XXXX
    ...
 
-## NB3: LSTM M1 (Sequence Model on Z-Features)
+## ML7: LSTM M1 (Sequence Model on Z-Features)
 
 - **Architecture**: LSTM(32) with 7 z-scored inputs
 - **Sequence Length**: 14 days
-- **Mean Macro-F1**: 0.XXXX (realistic, may underperform NB2)
+- **Mean Macro-F1**: 0.XXXX (realistic, may underperform ML6)
 ```
 
 ---
@@ -341,7 +341,7 @@ logger.info(f"[NB3] Anti-leak verified: pbsi_score NOT in features")
 3. **Check Determinism**:
    - Run pipeline twice, compare outputs
    - PBSI scores should be identical (already validated)
-   - NB3 metrics should be identical (new validation)
+   - ML7 metrics should be identical (new validation)
 
 ---
 

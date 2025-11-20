@@ -39,7 +39,7 @@ Checked for imports from:
 | `src/labels/`    | ⚠️ **Candidate** | No imports found (`stage_apply_labels.py` is canonical) |
 | `src/lib/`       | ⚠️ **Candidate** | No imports found in canonical pipeline                  |
 | `src/modeling/`  | ⚠️ **Candidate** | No imports found in canonical pipeline                  |
-| `src/models/`    | ⚠️ **Candidate** | No imports found (nb3_analysis.py uses notebooks/)      |
+| `src/models/`    | ⚠️ **Candidate** | No imports found (ml7_analysis.py uses notebooks/)      |
 | `src/nb_common/` | ⚠️ **Candidate** | No imports found in canonical pipeline                  |
 | `src/tools/`     | ⚠️ **Candidate** | Utility scripts, not imported by pipeline               |
 
@@ -122,11 +122,11 @@ Checked for imports from:
 
 **Canonical Replacement**:
 
-- `src/etl/nb3_analysis.py` (Stage 8 - NB3 LSTM + SHAP)
+- `src/etl/ml7_analysis.py` (Stage 8 - ML7 LSTM + SHAP)
 - `notebooks/NB2_Baseline.py` (baseline models)
 - `notebooks/NB3_DeepLearning.py` (LSTM implementation)
 
-**Recommendation**: **Candidate for archival** if superseded by nb3_analysis.py.
+**Recommendation**: **Candidate for archival** if superseded by ml7_analysis.py.
 
 ---
 
@@ -139,7 +139,7 @@ Checked for imports from:
 **Canonical Replacement**:
 
 - Model architectures now in `notebooks/NB3_DeepLearning.py`
-- TFLite export in `src/etl/nb3_analysis.py`
+- TFLite export in `src/etl/ml7_analysis.py`
 
 **Recommendation**: **Candidate for archival** - canonical implementations exist.
 

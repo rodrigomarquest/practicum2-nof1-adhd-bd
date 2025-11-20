@@ -1,4 +1,4 @@
-# NB2-vFinal: Unified ML Pipeline (2025-11)
+# ML6-vFinal: Unified ML Pipeline (2025-11)
 
 ## Overview
 
@@ -52,12 +52,12 @@ src/labels/
 
 src/models/
   __init__.py
-  run_nb2.py             ← Temporal CV + baselines
+  run_ml6.py             ← Temporal CV + baselines
 
 scripts/
-  run_nb2_pipeline.py    ← Main orchestrator
+  run_ml6_pipeline.py    ← Main orchestrator
 
-nb2/                     ← Output directory
+ml6/                     ← Output directory
   baselines_label_3cls.csv
   baselines_label_2cls.csv
   confusion_matrices/
@@ -76,29 +76,29 @@ data/etl/
 ### Full Pipeline
 
 ```bash
-python scripts/run_nb2_pipeline.py --stage all
+python scripts/run_ml6_pipeline.py --stage all
 ```
 
 ### Individual Stages
 
 ```bash
 # Stage 1: Unify Apple + Zepp
-python scripts/run_nb2_pipeline.py --stage unify
+python scripts/run_ml6_pipeline.py --stage unify
 
 # Stage 2: Build PBSI labels
-python scripts/run_nb2_pipeline.py --stage labels
+python scripts/run_ml6_pipeline.py --stage labels
 
 # Stage 3: Temporal CV with baselines
-python scripts/run_nb2_pipeline.py --stage baselines
+python scripts/run_ml6_pipeline.py --stage baselines
 ```
 
 ### Via Makefile
 
 ```bash
-make nb2-all              # Full pipeline
-make nb2-unify            # Stage 1
-make nb2-labels           # Stage 2
-make nb2-baselines        # Stage 3
+make ml6-all              # Full pipeline
+make ml6-unify            # Stage 1
+make ml6-labels           # Stage 2
+make ml6-baselines        # Stage 3
 ```
 
 ## Pipeline Stages
@@ -157,8 +157,8 @@ make nb2-baselines        # Stage 3
 
 **Output:**
 
-- `nb2/baselines_label_3cls.csv` (6 folds + mean/std)
-- `nb2/baselines_label_2cls.csv` (6 folds + mean/std)
+- `ml6/baselines_label_3cls.csv` (6 folds + mean/std)
+- `ml6/baselines_label_2cls.csv` (6 folds + mean/std)
 - Confusion matrices (PNG per fold per task)
 - Summary markdown
 
@@ -238,7 +238,7 @@ All operations use **random_state=42**:
 2. **Run Full Pipeline**
 
    ```bash
-   python scripts/run_nb2_pipeline.py --stage all
+   python scripts/run_ml6_pipeline.py --stage all
    ```
 
 3. **Check Outputs**
@@ -246,20 +246,20 @@ All operations use **random_state=42**:
    ```bash
    head data/etl/features_daily_unified.csv
    head data/etl/features_daily_labeled.csv
-   cat nb2/baselines_label_3cls.csv
-   ls nb2/confusion_matrices/*.png
+   cat ml6/baselines_label_3cls.csv
+   ls ml6/confusion_matrices/*.png
    ```
 
 4. **Verify Reproducibility**
    ```bash
    # Delete outputs, rerun, compare checksums
-   rm data/etl/features_daily_*.csv nb2/*.csv
-   python scripts/run_nb2_pipeline.py --stage all
+   rm data/etl/features_daily_*.csv ml6/*.csv
+   python scripts/run_ml6_pipeline.py --stage all
    # Should match previous outputs exactly
    ```
 
 ---
 
 **Version**: v1.0 (2025-11)  
-**Author**: NB2 Pipeline Generator  
+**Author**: ML6 Pipeline Generator  
 **Determinism**: ✅ Reproducible (seed=42)

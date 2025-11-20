@@ -21,7 +21,7 @@ The pipeline now uses the exact PBSI methodology documented in the CA2 research 
 
 - **Deterministic & Reproducible**: Validated across two independent pipeline runs
 - **Paper-Aligned**: Segment-wise z-scores, correct formula weights, proper thresholds
-- **Production-Ready**: All downstream stages (NB2/NB3) working correctly
+- **Production-Ready**: All downstream stages (ML6/ML7) working correctly
 
 ### ✅ Methodology Improvements
 
@@ -128,8 +128,8 @@ Where:
 | Label +1 (stable)   | 211 (7.5%)      | 211 (7.5%)      | ✅ IDENTICAL |
 | Label 0 (neutral)   | 2552 (90.2%)    | 2552 (90.2%)    | ✅ IDENTICAL |
 | Label -1 (unstable) | 65 (2.3%)       | 65 (2.3%)       | ✅ IDENTICAL |
-| NB2 F1-score        | 1.0000          | 1.0000          | ✅ IDENTICAL |
-| NB3 Drift (ADWIN)   | 5 changes       | 5 changes       | ✅ IDENTICAL |
+| ML6 F1-score        | 1.0000          | 1.0000          | ✅ IDENTICAL |
+| ML7 Drift (ADWIN)   | 5 changes       | 5 changes       | ✅ IDENTICAL |
 
 **Numerical Precision**: PBSI scores match to 15+ decimal places across runs
 
@@ -194,7 +194,7 @@ activity_sub: 0.565002  ← Low steps (1,787) drive instability
 
 ## 🔄 Downstream Impact
 
-### NB2 (Baseline Models)
+### ML6 (Baseline Models)
 
 - ✅ F1-score: 1.0000±0.0000 (both runs)
 - ✅ Valid folds: 1 (Fold 1: 2019-01-19 → 2019-03-19)
@@ -202,7 +202,7 @@ activity_sub: 0.565002  ← Low steps (1,787) drive instability
 
 **Note**: Perfect F1-score expected given class imbalance (7.5% stable, 2.3% unstable)
 
-### NB3 (Advanced Analysis)
+### ML7 (Advanced Analysis)
 
 1. **SHAP**: Top-5 features identical
    - `total_steps`, `total_distance`, `hr_mean`, `hr_std`, `hr_max`

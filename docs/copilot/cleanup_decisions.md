@@ -30,7 +30,7 @@
 
 - Old notebooks were in mixed formats (.ipynb + .py)
 - Inconsistent naming (NB1_EDA_daily vs NB1_EDA)
-- NB2_Baselines_LSTM.ipynb mixed baseline + LSTM analysis (now split into NB2 + NB3)
+- NB2_Baselines_LSTM.ipynb mixed baseline + LSTM analysis (now split into ML6 + ML7)
 - Python scripts (.py) not suitable for interactive exploration
 - New notebooks follow strict conventions (self-contained, relative paths, graceful errors)
 
@@ -346,7 +346,7 @@ This paper describes a deterministic N-of-1 digital phenotyping pipeline with:
 - 8 years of longitudinal data (2017-2025)
 - 2,828 days of multimodal biosignals
 - 119 behavioral segments detected automatically
-- 2-stage modeling (NB2 logistic regression, NB3 LSTM)
+- 2-stage modeling (ML6 logistic regression, ML7 LSTM)
 - Macro F1 ~0.81 for 3-class behavioral stability prediction
 
 All code is open-source and fully reproducible. See `docs/notebooks_overview.md` for executable notebooks.
@@ -441,8 +441,8 @@ practicum2-nof1-adhd-bd/
 │ │ ├── joined/
 │ │ └── qc/
 │ └── ai/P000001/2025-11-07/
-│ ├── nb2/
-│ └── nb3/
+│ ├── ml6/
+│ └── ml7/
 ├── scripts/
 │ └── run_full_pipeline.py
 ├── src/

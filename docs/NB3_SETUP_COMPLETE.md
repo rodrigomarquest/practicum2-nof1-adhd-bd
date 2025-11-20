@@ -1,8 +1,8 @@
-# NB3 — Setup Complete ✅
+# ML7 — Setup Complete ✅
 
 ## Status Summary
 
-**NB3 Pipeline**: Fully implemented, tested, and ready for production data.
+**ML7 Pipeline**: Fully implemented, tested, and ready for production data.
 
 ### Components Created
 
@@ -17,7 +17,7 @@
    - CLI wrapper with configurable arguments
    - Forwards all parameters to nb3_run.main()
 
-3. ✅ **nb3/ directory structure**
+3. ✅ **ml7/ directory structure**
 
    - `models/` → TFLite export
    - `plots/` → SHAP and ADWIN visualizations
@@ -25,8 +25,8 @@
 
 4. ✅ **Makefile targets**
 
-   - `make nb3-run` → Run NB3 pipeline
-   - `make nb3-all` → Full NB2→NB3 chain
+   - `make ml7-run` → Run ML7 pipeline
+   - `make ml7-all` → Full ML6→ML7 chain
 
 5. ✅ **Documentation**
    - `docs/NB3_QUICK_REFERENCE.md` → Complete guide
@@ -34,7 +34,7 @@
 
 ### Test Execution Results
 
-Ran NB3 on synthetic test data (200 days, 3-class labels):
+Ran ML7 on synthetic test data (200 days, 3-class labels):
 
 ```
 Input:  data/etl/features_daily_labeled_test.csv (200 rows × 25 columns)
@@ -88,19 +88,19 @@ pip install -r requirements/base.txt
 make install-base
 ```
 
-### Step 1: Generate NB2 Output
+### Step 1: Generate ML6 Output
 
 ```bash
 # Generate unified features + PBSI labels
-make nb2-all
+make ml6-all
 # Output: data/etl/features_daily_labeled.csv (35 columns)
 ```
 
-### Step 2: Run NB3
+### Step 2: Run ML7
 
 ```bash
 # Option A: Make target
-make nb3-run
+make ml7-run
 
 # Option B: Direct Python
 python scripts/run_nb3_pipeline.py \
@@ -113,8 +113,8 @@ python scripts/run_nb3_pipeline.py \
 ### Step 3: Full Pipeline
 
 ```bash
-# NB2 → NB3 end-to-end
-make nb3-all
+# ML6 → ML7 end-to-end
+make ml7-all
 ```
 
 ## Configuration Options
@@ -175,12 +175,12 @@ make nb3-all
 
 ## Integration Checkpoints
 
-### After NB3 completes:
+### After ML7 completes:
 
 1. **Validate outputs exist**:
 
    ```bash
-   ls -la nb3/
+   ls -la ml7/
    # Should show: shap_summary.md, drift_report.md, lstm_report.md,
    #              latency_stats.json, models/, plots/
    ```
@@ -188,25 +188,25 @@ make nb3-all
 2. **Check SHAP top-5**:
 
    ```bash
-   head -30 nb3/shap_summary.md
+   head -30 ml7/shap_summary.md
    ```
 
 3. **Review drift findings**:
 
    ```bash
-   cat nb3/drift_report.md
+   cat ml7/drift_report.md
    ```
 
 4. **Verify TFLite**:
 
    ```bash
-   file nb3/models/best_model.tflite
+   file ml7/models/best_model.tflite
    # Should be: "data, with no line terminators" (binary flatbuffer)
    ```
 
 5. **Inspect latency**:
    ```bash
-   cat nb3/latency_stats.json
+   cat ml7/latency_stats.json
    ```
 
 ## Known Limitations
@@ -269,7 +269,7 @@ pip install river>=0.21
 
 ## Next Steps
 
-1. **Run with production data** (data/etl/features_daily_labeled.csv after NB2)
+1. **Run with production data** (data/etl/features_daily_labeled.csv after ML6)
 2. **Review SHAP insights** for clinical interpretation
 3. **Analyze drift findings** for potential retraining triggers
 4. **Export TFLite** to mobile app or edge device

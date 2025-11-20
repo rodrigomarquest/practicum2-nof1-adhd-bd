@@ -2,7 +2,7 @@
 
 **Status**: ✅ **PHASES 1-4 COMPLETE**  
 **Date**: 2025-11-07  
-**Scope**: Full infrastructure for expanding NB2/NB3 analysis without `version_log_enriched.csv`
+**Scope**: Full infrastructure for expanding ML6/ML7 analysis without `version_log_enriched.csv`
 
 ---
 
@@ -14,7 +14,7 @@ Implemented comprehensive pipeline to automatically:
 2. **Unify** Apple+Zepp daily data with source tracking
 3. **Segment** data automatically (4-tier rules, no version_log needed)
 4. **Label** with PBSI stability scores
-5. **Analyze** with NB2 baselines + NB3 advanced analytics
+5. **Analyze** with ML6 baselines + ML7 advanced analytics
 
 **Status**: Infrastructure ready, extraction tested on P000001 (1789 files, 122 MB)
 
@@ -110,7 +110,7 @@ python scripts/run_period_expansion.py \
     --participant P000001 \
     --snapshot 2025-11-07 \
     --n-folds 6 \
-    --skip-nb 0  # Include NB2/NB3
+    --skip-nb 0  # Include ML6/ML7
 ```
 
 **6-Stage Pipeline**:
@@ -124,9 +124,9 @@ Stage 3: Auto-Segmentation (4-tier rules)
          ↓ (segment_id + autolog)
 Stage 4: PBSI Label Computation
          ↓ (35+ columns with labels)
-Stage 5: NB2 Baseline Training (optional)
+Stage 5: ML6 Baseline Training (optional)
          ↓ (5 models × 6 folds)
-Stage 6: NB3 Advanced Analytics (optional)
+Stage 6: ML7 Advanced Analytics (optional)
          ↓ (SHAP, Drift, LSTM, TFLite)
 ```
 
@@ -151,7 +151,7 @@ data/etl/
   segment_autolog.csv                    # Transition log
   features_daily_labeled.csv             # 35+ cols (final)
 
-nb2/, nb3/                               # Baseline + advanced outputs
+ml6/, ml7/                               # Baseline + advanced outputs
 ```
 
 ---
@@ -200,7 +200,7 @@ python scripts/run_period_expansion.py \
     --participant P000001 \
     --snapshot 2025-11-07
 
-# With NB2/NB3 (stages 1-6, takes ~30 min)
+# With ML6/ML7 (stages 1-6, takes ~30 min)
 python scripts/run_period_expansion.py \
     --participant P000001 \
     --snapshot 2025-11-07 \
@@ -242,8 +242,8 @@ df = compute_z_scores_by_segment(df)
 df.to_csv('data/etl/features_daily_labeled.csv', index=False)
 "
 
-# 5. Run NB2 & NB3
-python run_nb2_beiwe.py --pid P000001 --snapshot 2025-11-07 --n-folds 6
+# 5. Run ML6 & ML7
+python run_ml6_beiwe.py --pid P000001 --snapshot 2025-11-07 --n-folds 6
 python scripts/run_nb3_pipeline.py --participant P000001 --snapshot 2025-11-07
 ```
 
@@ -276,7 +276,7 @@ python scripts/run_period_expansion.py \
 
 - ✅ Reuses `src/features/unify_daily.py` (existing)
 - ✅ Reuses `src/labels/build_pbsi.py` (existing)
-- ✅ Reuses `run_nb2_beiwe.py` (existing)
+- ✅ Reuses `run_ml6_beiwe.py` (existing)
 - ✅ Reuses `scripts/run_nb3_pipeline.py` (existing)
 - ✅ Imports from `etl_pipeline.py` (progress_bar pattern)
 
@@ -406,8 +406,8 @@ Result: ✅ Dry run shows all stages would execute
 | Unification            | ~10 sec     | 400 days | ⏳     |
 | Auto-Segmentation      | ~3 sec      | 400 days | ⏳     |
 | PBSI Labels            | ~15 sec     | 400 days | ⏳     |
-| NB2 (6 folds × 5)      | ~5 min      | 6 folds  | ⏳     |
-| NB3 (SHAP+Drift+LSTM)  | ~15 min     | 6 folds  | ⏳     |
+| ML6 (6 folds × 5)      | ~5 min      | 6 folds  | ⏳     |
+| ML7 (SHAP+Drift+LSTM)  | ~15 min     | 6 folds  | ⏳     |
 | **Total Expected**     | **~30 min** | -        | ⏳     |
 
 _Times are estimates; actual depends on data complexity_
@@ -421,10 +421,10 @@ Once data flows through the pipeline:
 - [ ] `features_daily_labeled.csv` covers complete available date range
 - [ ] Segment assignments are reasonable (3-10 segments for ~400 days)
 - [ ] PBSI label distribution matches expectations (-1: 20-30%, 0: 40-50%, +1: 20-30%)
-- [ ] NB2 baselines run without errors (all 5 models × 6 folds)
-- [ ] NB2 confusion matrices show non-trivial performance
-- [ ] NB3 SHAP identifies top-5 meaningful features
-- [ ] NB3 drift detection finds realistic changepoints (aligned with segments)
+- [ ] ML6 baselines run without errors (all 5 models × 6 folds)
+- [ ] ML6 confusion matrices show non-trivial performance
+- [ ] ML7 SHAP identifies top-5 meaningful features
+- [ ] ML7 drift detection finds realistic changepoints (aligned with segments)
 - [ ] LSTM trains and exports TFLite successfully
 - [ ] TFLite inference runs in <10ms
 
@@ -524,7 +524,7 @@ generate_segments(
 
 ### Medium-term (Phase 6+)
 
-4. **Run NB2 + NB3 with Expanded Data**
+4. **Run ML6 + ML7 with Expanded Data**
 
    ```bash
    python scripts/run_period_expansion.py \
@@ -563,7 +563,7 @@ generate_segments(
 
 - ⏳ Execute pipeline with real data
 - ⏳ Validate outputs (date range, segments, labels)
-- ⏳ Run NB2/NB3 with expanded dataset
+- ⏳ Run ML6/ML7 with expanded dataset
 - ⏳ Analyze results and iterate
 
 **Estimated Time to Full Results**: ~30-45 minutes after data unification begins

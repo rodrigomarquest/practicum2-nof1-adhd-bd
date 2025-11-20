@@ -9,7 +9,7 @@ Commit: b616b62
 
 Version 4.0.0 marks the complete repository restructuring for the N-of-1 ADHD + BD longitudinal study, consolidating all ETL, EDA and modeling scripts into a clean, reproducible and drift-aware architecture.
 
-This release transforms the previous experimental layout (v3.x) into a modular, production-ready research environment — separating Local ETL + EDA execution from Kaggle-based modeling (NB2/NB3) while preserving full data provenance and academic traceability.
+This release transforms the previous experimental layout (v3.x) into a modular, production-ready research environment — separating Local ETL + EDA execution from Kaggle-based modeling (ML6/ML7) while preserving full data provenance and academic traceability.
 
 🧩 Structural Highlights
 Area Change Outcome
@@ -38,9 +38,9 @@ ETL, labeling, and modeling scripts are now publishable artifacts, aligned with 
 
 ✅ features_daily_labeled.csv ≥ 90 % coverage
 
-✅ Temporal CV (120/10/60 days) working baseline (NB2)
+✅ Temporal CV (120/10/60 days) working baseline (ML6)
 
-✅ Exported best_model.tflite pipeline scaffold (NB3)
+✅ Exported best_model.tflite pipeline scaffold (ML7)
 
 ✅ Drift (ADWIN/KS) + SHAP explainability modules integrated
 
@@ -48,8 +48,8 @@ ETL, labeling, and modeling scripts are now publishable artifacts, aligned with 
 
 🚀 Next Milestones
 Milestone Target
-NB2 Baseline Evaluation Run full 6-fold temporal CV on Kaggle with heuristic v1 labels.
-NB3 Sequence Models Fine-tune LSTM/CNN variants, measure latency + drift stability.
+ML6 Baseline Evaluation Run full 6-fold temporal CV on Kaggle with heuristic v1 labels.
+ML7 Sequence Models Fine-tune LSTM/CNN variants, measure latency + drift stability.
 Literature Integration Formalize label_rules with citations for HRV / Sleep / Activity heuristics.
 EMA Integration Optional SoM/EMA labels for validation phase.
 Publication Prep Export cleaned notebooks and documentation for CA2 appendices.

@@ -179,7 +179,7 @@ if "apple_hr_mean" in df.columns:
 
 ### Where NaN is Handled
 
-1. **Modeling (NB2, NB3)**:
+1. **Modeling (ML6, ML7)**:
 
    - **Option A**: Row filtering - drop days with any NaN in required features
    - **Option B**: Model-native missing data handling (e.g., LightGBM, XGBoost with `missing` parameter)
@@ -217,7 +217,7 @@ if "apple_hr_mean" in df.columns:
 - Manual labels: Deterministic (loaded from config)
 - Auto-segmentation: Deterministic given NaN policy (70% data density threshold)
 
-⚠️ **Modeling (NB2, NB3)**:
+⚠️ **Modeling (ML6, ML7)**:
 
 - If using imputation: Must use `random_state` for reproducibility
 - If using row filtering: Deterministic (drop NaN rows)
@@ -241,7 +241,7 @@ if "apple_hr_mean" in df.columns:
 
 ---
 
-### 2. NB2 Baseline Models (⚠️ Requires Update)
+### 2. ML6 Baseline Models (⚠️ Requires Update)
 
 **File**: `notebooks/NB2_Baseline.py`
 
@@ -274,7 +274,7 @@ Xnum = pd.DataFrame(imputer.fit_transform(df[numeric_cols]),
 
 ---
 
-### 3. NB3 Deep Learning Models (⚠️ Requires Update)
+### 3. ML7 Deep Learning Models (⚠️ Requires Update)
 
 **File**: `notebooks/NB3_DeepLearning.py`
 
@@ -348,7 +348,7 @@ Xnum_full = imputer.fit_transform(df[numeric_cols])
 
    **Expected**: Distinguish "real sleepless nights" from "sensor missing days"
 
-4. **NB2/NB3 Test**:
+4. **ML6/ML7 Test**:
    - Run notebooks with updated NaN handling
    - Verify models train successfully
    - Compare performance with v4.1.4 (expect minor differences due to data availability changes)
@@ -357,7 +357,7 @@ Xnum_full = imputer.fit_transform(df[numeric_cols])
 
 ✅ **ETL completes without errors**  
 ✅ **PBSI still produces realistic distribution**  
-✅ **NB2/NB3 run to completion (after NaN handling updates)**  
+✅ **ML6/ML7 run to completion (after NaN handling updates)**  
 ✅ **Sleep hourly audit shows clear classification** (sleepless vs sensor_missing)  
 ✅ **No regressions in pipeline determinism**
 
@@ -383,8 +383,8 @@ Xnum_full = imputer.fit_transform(df[numeric_cols])
 
 ### Priority 1 (Next Release)
 
-- [ ] Update NB2 baseline preparation (use `SimpleImputer` or row filtering)
-- [ ] Update NB3 deep learning preparation (use masking layers or explicit imputation)
+- [ ] Update ML6 baseline preparation (use `SimpleImputer` or row filtering)
+- [ ] Update ML7 deep learning preparation (use masking layers or explicit imputation)
 - [ ] Add unit tests for NaN handling in PBSI computation
 
 ### Priority 2 (Later)
@@ -427,7 +427,7 @@ The removal of forward-fill/back-fill from the ETL pipeline (v4.1.5) represents 
 3. ✅ **Maintain Determinism**: Pipeline behavior predictable and reproducible
 4. ✅ **Enable Better Modeling**: Downstream code handles NaN explicitly with domain knowledge
 
-While this change requires updates to modeling code (NB2, NB3), the benefits to data quality and scientific rigor far outweigh the implementation costs. The pipeline is now ready for rigorous peer review and publication.
+While this change requires updates to modeling code (ML6, ML7), the benefits to data quality and scientific rigor far outweigh the implementation costs. The pipeline is now ready for rigorous peer review and publication.
 
 ---
 

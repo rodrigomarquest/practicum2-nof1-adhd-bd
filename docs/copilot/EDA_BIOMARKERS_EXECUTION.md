@@ -101,13 +101,13 @@ make eda-biomarkers PID=P000001 SNAPSHOT=auto
 
 ## Next Steps
 
-1. **Baseline Models (NB2):** Use biomarkers features for machine learning
+1. **Baseline Models (ML6):** Use biomarkers features for machine learning
 
    ```bash
    make nb2 PID=P000001 SNAPSHOT=2025-11-07
    ```
 
-2. **Deep Learning (NB3):** Advanced neural network models
+2. **Deep Learning (ML7):** Advanced neural network models
 
    ```bash
    make nb3 PID=P000001 SNAPSHOT=2025-11-07

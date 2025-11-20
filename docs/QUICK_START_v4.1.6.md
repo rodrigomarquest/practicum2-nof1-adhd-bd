@@ -11,7 +11,7 @@
 1. ✅ **Classes agora balanceadas**: 25/50/25 (antes: 6/94/0)
 2. ✅ **Labels renomeados**: low_pbsi/mid_pbsi/high_pbsi (não mais "stable/unstable")
 3. ✅ **Disclaimer adicionado**: "Não validado clinicamente" (importante para o paper)
-4. ✅ **NB2 agora treina**: Cross-validation funciona com classes balanceadas
+4. ✅ **ML6 agora treina**: Cross-validation funciona com classes balanceadas
 5. ✅ **Backward compatible**: Código antigo continua funcionando
 
 ---
@@ -26,7 +26,7 @@ Distribuição de Labels:
   Neutral (0):   2,643 dias (93.5%)  ← Dominante
   Unstable (-1):     9 dias  (0.3%)   ← Inviável para ML
 
-Problema: NB2 não conseguia treinar (classes degeneradas)
+Problema: ML6 não conseguia treinar (classes degeneradas)
 ```
 
 ### Agora (v4.1.6)
@@ -37,7 +37,7 @@ Distribuição de Labels:
   Mid PBSI (0):   1,414 dias (50%)  ← Típico
   High PBSI (-1):   707 dias (25%)  ← Desregulado fisiologicamente
 
-✓ NB2 treina com sucesso
+✓ ML6 treina com sucesso
 ✓ Cross-validation funciona (6 folds)
 ✓ Classes balanceadas cientificamente
 ```
@@ -56,7 +56,7 @@ make pipeline PID=P000001 SNAPSHOT=2025-11-07 ZPWD="qqQKwnhY"
 
 - Stages 0-9 completos (antes: Stage 6 skipado)
 - Arquivo `features_daily_labeled.csv` com labels balanceados
-- Modelos NB2 treinados em `data/ai/P000001/2025-11-07/nb2/`
+- Modelos ML6 treinados em `data/ai/P000001/2025-11-07/ml6/`
 
 ### 2. Testar Notebooks
 
@@ -64,10 +64,10 @@ make pipeline PID=P000001 SNAPSHOT=2025-11-07 ZPWD="qqQKwnhY"
 # NB1 - EDA
 jupyter notebook notebooks/NB1_EDA.ipynb
 
-# NB2 - Baselines (agora funciona!)
+# ML6 - Baselines (agora funciona!)
 jupyter notebook notebooks/NB2_Baseline.ipynb
 
-# NB3 - Deep Learning
+# ML7 - Deep Learning
 jupyter notebook notebooks/NB3_DeepLearning.ipynb
 ```
 
@@ -159,12 +159,12 @@ Max:     0.92
 ### Model Performance (Expected)
 
 ```
-NB2 (Baseline Models):
+ML6 (Baseline Models):
   - Logistic Regression: ~0.65-0.70 accuracy (3-class)
   - Random Forest: ~0.70-0.75 accuracy
   - XGBoost: ~0.72-0.78 accuracy
 
-NB3 (LSTM):
+ML7 (LSTM):
   - Sequence models: ~0.75-0.80 accuracy
   - Temporal SHAP: Feature importance over time
   - Drift detection: 6 ADWIN points, 45/494 significant KS tests
@@ -267,8 +267,8 @@ patterns)."
 
 - [ ] Pipeline completou (stages 0-9)
 - [ ] NB1 EDA rodou sem erros
-- [ ] NB2 Baseline gerou modelos (não mais skipado)
-- [ ] NB3 Deep Learning rodou completo
+- [ ] ML6 Baseline gerou modelos (não mais skipado)
+- [ ] ML7 Deep Learning rodou completo
 - [ ] Paper atualizado com disclaimer clínico
 - [ ] Terminologia atualizada (low/mid/high PBSI)
 - [ ] Seção Limitations menciona falta de validação clínica

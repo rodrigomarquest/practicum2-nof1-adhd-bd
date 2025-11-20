@@ -45,12 +45,12 @@ Arquivos movidos (9 arquivos, ~1,700 linhas):
 
 **Razão:** Scripts executáveis devem ficar em src/cli/, não em scripts/ ou raiz do projeto.
 
-### 3. ✅ run_nb2_beiwe.py → run_nb2_engage7.py
+### 3. ✅ run_ml6_beiwe.py → run_ml6_engage7.py
 
 **Arquivos atualizados:**
 
-- ✅ `run_nb2_engage7.py` (novo) - Padrão atual
-- ⚠️ `run_nb2_beiwe.py` (DEPRECATED) - Marcado como legado, referencia novo
+- ✅ `run_ml6_engage7.py` (novo) - Padrão atual
+- ⚠️ `run_ml6_beiwe.py` (DEPRECATED) - Marcado como legado, referencia novo
 
 **Mudanças internas:**
 
@@ -94,13 +94,13 @@ prepare-zepp:
 - Antes: `PYTHONPATH=src $(PYTHON) scripts/prepare_zepp_data.py`
 - Agora: `$(PYTHON) -m src.cli.prepare_zepp_data`
 
-#### `nb2-engage7` target (novo)
+#### `ml6-engage7` target (novo)
 
 ```makefile
-.PHONY: nb2-engage7
-nb2-engage7:
-	@echo "[NB2] Running Engage7-grade baseline models..."
-	$(PYTHON) run_nb2_engage7.py \
+.PHONY: ml6-engage7
+ml6-engage7:
+	@echo "[ML6] Running Engage7-grade baseline models..."
+	$(PYTHON) run_ml6_engage7.py \
 	  --pid $(PID) \
 	  --snapshot $(SNAPSHOT) \
 	  --n-folds 6 \
@@ -113,7 +113,7 @@ nb2-engage7:
 	  --verbose 2
 
 .PHONY: nb2
-nb2: nb2-engage7  # Alias
+nb2: ml6-engage7  # Alias
 ```
 
 #### `labels` target (corrigido)
@@ -133,8 +133,8 @@ pipeline: prepare-zepp biomarkers labels nb2
 
 **Arquivos atualizados:**
 
-- ✅ `docs/BIOMARKERS_README.md` - Linha 203: `run_nb2_beiwe.py` → `run_nb2_engage7.py`
-- ✅ `IMPLEMENTATION_BIOMARKERS_COMPLETE.md` - Linha 114: `run_nb2_beiwe.py` → `run_nb2_engage7.py`
+- ✅ `docs/BIOMARKERS_README.md` - Linha 203: `run_ml6_beiwe.py` → `run_ml6_engage7.py`
+- ✅ `IMPLEMENTATION_BIOMARKERS_COMPLETE.md` - Linha 114: `run_ml6_beiwe.py` → `run_ml6_engage7.py`
 - ✅ `scripts/run_etl_with_corrections.sh` - Linha 95: referência atualizada
 - ✅ `scripts/run_pipeline.sh` - Linha 47: referência atualizada
 - ✅ `run_complete_pipeline.py` - Linha 183: referência atualizada
@@ -153,8 +153,8 @@ pipeline: prepare-zepp biomarkers labels nb2
 
 ```
 projeto/
-├── run_nb2_beiwe.py          ⚠️  DEPRECATED (keep for backward compatibility)
-├── run_nb2_engage7.py        ✅ NOVO PADRÃO
+├── run_ml6_beiwe.py          ⚠️  DEPRECATED (keep for backward compatibility)
+├── run_ml6_engage7.py        ✅ NOVO PADRÃO
 ├── run_complete_pipeline.py  ✅ atualizado
 ├── Makefile                  ✅ atualizado
 │
@@ -187,8 +187,8 @@ projeto/
 │   └── ...
 │
 ├── scripts/
-│   ├── run_pipeline.sh                    ✅ atualizado (referência → run_nb2_engage7.py)
-│   ├── run_etl_with_corrections.sh        ✅ atualizado (referência → run_nb2_engage7.py)
+│   ├── run_pipeline.sh                    ✅ atualizado (referência → run_ml6_engage7.py)
+│   ├── run_etl_with_corrections.sh        ✅ atualizado (referência → run_ml6_engage7.py)
 │   └── ... (outros scripts antigos)
 │
 └── docs/
@@ -202,11 +202,11 @@ projeto/
 
 ✅ Todos 9 arquivos biomarkers copiados com sucesso
 ✅ CLI scripts criados com imports corretos
-✅ run_nb2_engage7.py criado
+✅ run_ml6_engage7.py criado
 ✅ Makefile atualizado com novos targets
 ✅ Documentação sincronizada
 ✅ Referências script path atualizadas
-✅ Backward compatibility mantido (run_nb2_beiwe.py ainda existe, marcado DEPRECATED)
+✅ Backward compatibility mantido (run_ml6_beiwe.py ainda existe, marcado DEPRECATED)
 
 ---
 
@@ -224,10 +224,10 @@ make biomarkers PID=P000001 SNAPSHOT=2025-11-07
 # Gerar labels
 make labels PID=P000001 SNAPSHOT=2025-11-07
 
-# Rodar NB2 (novo target)
+# Rodar ML6 (novo target)
 make nb2 PID=P000001 SNAPSHOT=2025-11-07
 # ou
-make nb2-engage7 PID=P000001 SNAPSHOT=2025-11-07
+make ml6-engage7 PID=P000001 SNAPSHOT=2025-11-07
 
 # Pipeline completo
 make pipeline PID=P000001 SNAPSHOT=2025-11-07
@@ -248,8 +248,8 @@ python -m src.cli.extract_biomarkers \
   --snapshot 2025-11-07 \
   --data-dir data/etl/P000001/2025-11-07/extracted
 
-# Rodar NB2 (novo)
-python run_nb2_engage7.py \
+# Rodar ML6 (novo)
+python run_ml6_engage7.py \
   --pid P000001 \
   --snapshot 2025-11-07 \
   --n-folds 6 \
@@ -265,7 +265,7 @@ python run_nb2_engage7.py \
    - Remover `src/biomarkers/` (antigo)
    - Remover `scripts/extract_biomarkers.py` (antigo)
    - Remover `scripts/prepare_zepp_data.py` (antigo)
-   - Remover `run_nb2_beiwe.py` (após período de transição)
+   - Remover `run_ml6_beiwe.py` (após período de transição)
 
 2. **Testes:**
 
@@ -285,9 +285,9 @@ python run_nb2_engage7.py \
 - [x] Criar `src/cli/extract_biomarkers.py` (com import correto)
 - [x] Criar `src/cli/prepare_zepp_data.py` (com import correto)
 - [x] Atualizar `src/cli/__init__.py` com nova documentação
-- [x] Criar `run_nb2_engage7.py` (copy + rename + internal changes)
-- [x] Marcar `run_nb2_beiwe.py` como DEPRECATED
-- [x] Atualizar Makefile (biomarkers, prepare-zepp, nb2-engage7, labels)
+- [x] Criar `run_ml6_engage7.py` (copy + rename + internal changes)
+- [x] Marcar `run_ml6_beiwe.py` como DEPRECATED
+- [x] Atualizar Makefile (biomarkers, prepare-zepp, ml6-engage7, labels)
 - [x] Atualizar todas as referências em scripts e docs
 - [x] Validar imports e paths
 - [x] Documentar reorganização

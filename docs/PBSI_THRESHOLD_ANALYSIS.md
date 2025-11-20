@@ -299,7 +299,7 @@ pbsi_thresholds:
 
 1. Verificar que P25/P75 gera classes balanceadas
 2. Testar CV com novos thresholds
-3. Verificar que NB2/NB3 treinam com sucesso
+3. Verificar que ML6/ML7 treinam com sucesso
 4. Comparar métricas com thresholds antigos
 
 ---

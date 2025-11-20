@@ -212,7 +212,7 @@ Create comprehensive markdown audits following the **exact pattern** of `HR_FEAT
 
 [Document how steps contribute to activity_sub]
 
-## Section 6: Steps in NB2/NB3
+## Section 6: Steps in ML6/ML7
 
 [Verify steps used in modeling]
 

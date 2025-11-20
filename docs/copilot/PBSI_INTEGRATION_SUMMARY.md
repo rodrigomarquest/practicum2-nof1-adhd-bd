@@ -77,7 +77,7 @@ This will:
 
 1. Stage 0-2: Ingest, aggregate, unify daily data
 2. **Stage 3**: Apply canonical PBSI (new implementation)
-3. Stage 4-9: Segment metadata, NB2, NB3, TFLite, reports
+3. Stage 4-9: Segment metadata, ML6, ML7, TFLite, reports
 
 ### Stage 3 Only
 
@@ -254,7 +254,7 @@ print(df['label_3cls'].value_counts())
 
 ### 📋 Future Work
 
-1. **Rerun NB2/NB3**: If paper results were based on old PBSI, rerun with new implementation
+1. **Rerun ML6/ML7**: If paper results were based on old PBSI, rerun with new implementation
 2. **Delete Legacy Code**: After validation, remove `_legacy_calculate_pbsi_score_simple()`
 3. **Behavioral Segmentation**: Evaluate integrating `auto_segment.py`
 4. **HRV Data**: If available, update column mapping to use true HRV
@@ -263,12 +263,12 @@ print(df['label_3cls'].value_counts())
 
 ## Downstream Impact
 
-### NB2 (Baselines)
+### ML6 (Baselines)
 
 - ✅ No code changes needed (reads `label_3cls`)
 - ⚠️ Results may differ from old runs (different labels)
 
-### NB3 (LSTM + Drift)
+### ML7 (LSTM + Drift)
 
 - ✅ No code changes needed
 - ✅ SHAP now explains z-scored features
@@ -313,7 +313,7 @@ print(df['label_3cls'].value_counts())
 **Next Steps**:
 
 1. Run full pipeline on real data (P000001, P000002)
-2. Verify NB2/NB3 results
+2. Verify ML6/ML7 results
 3. Update paper if needed (rerun experiments)
 
 ---

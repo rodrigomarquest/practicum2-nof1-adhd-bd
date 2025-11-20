@@ -205,7 +205,7 @@ Colunas:
 make full PID=P000001 SNAPSHOT=2025-11-07
 make biomarkers PID=P000001 SNAPSHOT=2025-11-07
 make labels PID=P000001 SNAPSHOT=2025-11-07
-python run_nb2_engage7.py --pid P000001 --snapshot 2025-11-07
+python run_ml6_engage7.py --pid P000001 --snapshot 2025-11-07
 ```
 
 ## Troubleshooting
@@ -231,5 +231,5 @@ python run_nb2_engage7.py --pid P000001 --snapshot 2025-11-07
 2. ✅ Implementar Tier 2 features (Sleep timing, HR trends)
 3. ✅ Implementar Tier X validation (Cross-device)
 4. ⏳ Reescrever `build_heuristic_labels.py` com clínica
-5. ⏳ Cross-segment validation em NB2 (S3 train → S4 test)
+5. ⏳ Cross-segment validation em ML6 (S3 train → S4 test)
 6. ⏳ Ring data integration (quando disponível)

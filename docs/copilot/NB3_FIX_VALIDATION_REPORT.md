@@ -1,4 +1,4 @@
-# NB3 Fix Validation Report
+# ML7 Fix Validation Report
 
 **Date**: 2025-11-19  
 **Pipeline Version**: v4.1.4 (candidate)  
@@ -9,9 +9,9 @@
 
 ## Executive Summary
 
-✅ **NB3 Fix Implementation: SUCCESSFUL**
+✅ **ML7 Fix Implementation: SUCCESSFUL**
 
-The code changes to fix NB3's feature pipeline are **working correctly**. The pipeline now uses z-scored canonical features (not raw features) as intended by the CA2 paper methodology.
+The code changes to fix ML7's feature pipeline are **working correctly**. The pipeline now uses z-scored canonical features (not raw features) as intended by the CA2 paper methodology.
 
 ❌ **SHAP Degeneracy: DATA/MODELING ISSUE (Not a Code Bug)**
 
@@ -41,7 +41,7 @@ The observed SHAP degeneracy (only z_steps with non-zero importance) is **not ca
 
 ### 2. Code Changes Verification
 
-**File: `src/etl/nb3_analysis.py`**
+**File: `src/etl/ml7_analysis.py`**
 
 - ✅ Added `NB3_FEATURE_COLS` (7 z-scored features)
 - ✅ Added `NB3_ANTI_LEAK_COLS` (7 prohibited columns)
@@ -126,8 +126,8 @@ The observed SHAP degeneracy (only z_steps with non-zero importance) is **not ca
 
 **3. Perfect Scores (Suspicious)**:
 
-- NB2 (LogReg): F1=1.0000, BA=1.0000
-- NB3 (LSTM): F1=1.0000, Val Acc=1.0000
+- ML6 (LogReg): F1=1.0000, BA=1.0000
+- ML7 (LSTM): F1=1.0000, Val Acc=1.0000
 
 **Possible Explanations**:
 
@@ -236,7 +236,7 @@ marker discriminating stable/unstable periods in this participant's data.
 
 ## Conclusion
 
-### ✅ NB3 Fix Status: **COMPLETE AND VALIDATED**
+### ✅ ML7 Fix Status: **COMPLETE AND VALIDATED**
 
 The implementation successfully:
 
@@ -259,7 +259,7 @@ The degeneracy is caused by:
 
 **Recommendation**: Publish v4.1.4 with:
 
-- ✅ NB3 fix code (working correctly)
+- ✅ ML7 fix code (working correctly)
 - ✅ Documentation of SHAP degeneracy as known limitation
 - ✅ Clear explanation that this is a data/modeling issue, not a bug
 - ⏳ Future work: Test with P000002/P000003, consider alternative approaches
@@ -268,7 +268,7 @@ The degeneracy is caused by:
 
 ## Appendix: Files Modified
 
-1. **src/etl/nb3_analysis.py**:
+1. **src/etl/ml7_analysis.py**:
 
    - Added `NB3_FEATURE_COLS` (7 z-scored features)
    - Added `NB3_ANTI_LEAK_COLS` (7 prohibited columns)
@@ -288,4 +288,4 @@ The degeneracy is caused by:
 ---
 
 **Sign-off**: 2025-11-19  
-**Status**: ✅ **NB3 FIX VALIDATED - READY FOR RELEASE**
+**Status**: ✅ **ML7 FIX VALIDATED - READY FOR RELEASE**

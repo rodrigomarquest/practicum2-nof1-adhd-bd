@@ -1,4 +1,4 @@
-"""Consolidated NB3 utility module.
+"""Consolidated ML7 utility module.
 
 This file unifies helpers from src/nb_common into a single utility file intended
 for easy upload to Kaggle or use as a standalone script. It preserves public
@@ -41,7 +41,7 @@ def detect_env():
         os.environ.get("KAGGLE_KERNEL_RUN_TYPE")
     )
     data_root = "/kaggle/input" if is_kaggle else "./data/ai/local"
-    out_root = "/kaggle/working/outputs/NB2" if is_kaggle else "notebooks/outputs/NB2"
+    out_root = "/kaggle/working/outputs/ML6" if is_kaggle else "notebooks/outputs/ML6"
 
     tf_available = False
     torch_available = False

@@ -21,7 +21,7 @@
 | **processed/**  | `processed/`                                  | Daily aggregates per domain (HR, HRV, Sleep, Usage).              | ETL A7                      | Overwrite; idempotent     |
 | **joined/**     | `joined/`                                     | Cross-source daily join (current model input).                    | ETL A8                      | Overwrite; current input  |
 | **fused/**      | `fused/`                                      | (Future) Feature-complete and policy-checked tables.              | Feature pipeline (future)   | Overwrite; future input   |
-| **ai/**         | `ai/`                                         | Model artifacts (splits, metrics, exports).                       | NB2 / NB3                   | Overwrite allowed         |
+| **ai/**         | `ai/`                                         | Model artifacts (splits, metrics, exports).                       | ML6 / ML7                   | Overwrite allowed         |
 | **manifest/**   | `manifest/` or `etl_qc_summary_manifest.json` | SHA256 + size QC summary per snapshot.                            | A8 QC                       | Overwrite by A8 only      |
 | **reports/**    | `reports/` (repo root)                        | Human/CI summaries (PX, NB, metrics).                             | PX series & NBs             | Overwrite per run         |
 
@@ -53,7 +53,7 @@
   - `etl_provenance_report.csv` (PX8/QA)
   - `drift_hint_summary.{csv,md}` (PX8-Lite)
   - `nb1_eda_summary.md` (NB1)
-  - `metrics_nb2.csv` (NB2)
+  - `metrics_nb2.csv` (ML6)
 
 ---
 
@@ -68,7 +68,7 @@ raw → extracted → normalized → processed → joined → fused → ai
 - **A7:** Per-domain daily aggregates.
 - **A8:** Cross-domain join → `joined/` + QC manifest.
 - **PX8-Lite:** Provenance + drift-hint audit.
-- **NB1/NB2:** EDA + baselines using `joined/features_daily*.csv`.
+- **NB1/ML6:** EDA + baselines using `joined/features_daily*.csv`.
 - **Future:** `fused/` holds curated, feature-complete tables.
 
 **Rebuild triggers:** new raw/extracted files, firmware change, TZ policy update, schema change, drift alerts.
@@ -136,7 +136,7 @@ FUSED_DIR="${SNAPSHOT_DIR}/joined"   # alias for this snapshot
 - [ ] Version log (S1–S6) valid date ranges.
 - [ ] `etl_provenance_report.csv` present (or re-generated).
 - [ ] `drift_hint_summary.csv` present (zero flags OK).
-- [ ] NB1/NB2 run without extra dependencies.
+- [ ] NB1/ML6 run without extra dependencies.
 
 ---
 

@@ -1,8 +1,8 @@
-# 🎉 NB2 + NB3 Implementation — COMPLETE
+# 🎉 ML6 + ML7 Implementation — COMPLETE
 
 **Date**: 2025-11-07  
 **Status**: ✅ ALL PHASES COMPLETE & TESTED  
-**Total Time**: Phase 12 (NB2) + Phase 13 (NB3) = ~2 hours
+**Total Time**: Phase 12 (ML6) + Phase 13 (ML7) = ~2 hours
 
 ---
 
@@ -10,21 +10,21 @@
 
 **Phases 12-13** implementadas com sucesso:
 
-### ✅ Phase 12: NB2 (COMPLETE)
+### ✅ Phase 12: ML6 (COMPLETE)
 
 - Unify Apple + Zepp → 27 canonical features
 - PBSI heuristic labels → 8 additional columns
 - 5 baselines across 6 calendar-based folds
 - Outputs: `data/etl/features_daily_unified.csv` + `features_daily_labeled.csv`
-- Reports: `nb2/baselines_label_*.csv`, confusion matrices
+- Reports: `ml6/baselines_label_*.csv`, confusion matrices
 
-### ✅ Phase 13: NB3 (COMPLETE)
+### ✅ Phase 13: ML7 (COMPLETE)
 
 - Logistic Regression + SHAP explainability
 - ADWIN drift detection (δ=0.002) + KS tests
 - LSTM M1 with same CV
 - TFLite export (44 KB) + latency profiling
-- Outputs: `nb3/shap_summary.md`, `drift_report.md`, `best_model.tflite`
+- Outputs: `ml7/shap_summary.md`, `drift_report.md`, `best_model.tflite`
 
 ---
 
@@ -51,7 +51,7 @@ pip install scikit-learn matplotlib seaborn plotly river shap tensorflow
 
 ### 3. Dados Faltando (Apple/Zepp Raw) ✅
 
-**Problema**: NB2 esperava dados em `data/raw/`  
+**Problema**: ML6 esperava dados em `data/raw/`  
 **Solução**: Criado script de teste com dados sintéticos (365 dias)
 
 ```bash
@@ -62,11 +62,11 @@ python scripts/create_test_data_nb2.py
 
 ## Execução Bem-Sucedida
 
-### NB3 Pipeline Output
+### ML7 Pipeline Output
 
 ```
-[NB3] Loading dataset...
-[NB3] Loaded 365 rows
+[ML7] Loading dataset...
+[ML7] Loaded 365 rows
 
 [PHASE 1] Logistic + SHAP + Drift Detection
   ✅ Fold 1: SHAP computed, ADWIN checked
@@ -79,17 +79,17 @@ python scripts/create_test_data_nb2.py
   ✅ TFLite exported: 44 KB
   ✅ Reports generated
 
-[RESULT] ✅ NB3 COMPLETED
+[RESULT] ✅ ML7 COMPLETED
 ```
 
 ---
 
 ## Outputs Gerados
 
-### nb3/ Directory Structure
+### ml7/ Directory Structure
 
 ```
-nb3/
+ml7/
 ├── shap_summary.md           # SHAP top-5 per fold + global ranking
 ├── drift_report.md           # ADWIN changepoints + KS tests
 ├── lstm_report.md            # Best fold (F1=0.2982), TFLite path
@@ -108,9 +108,9 @@ nb3/
 | ------------------------------ | --------- | ------------------- |
 | `src/nb3_run.py`               | 689 lines | ✅ Production-ready |
 | `scripts/run_nb3_pipeline.py`  | 80 lines  | ✅ CLI wrapper      |
-| `nb3/models/best_model.tflite` | 44 KB     | ✅ Exported         |
-| `nb3/shap_summary.md`          | 1.6 KB    | ✅ SHAP importance  |
-| `nb3/drift_report.md`          | 253 B     | ✅ Drift findings   |
+| `ml7/models/best_model.tflite` | 44 KB     | ✅ Exported         |
+| `ml7/shap_summary.md`          | 1.6 KB    | ✅ SHAP importance  |
+| `ml7/drift_report.md`          | 253 B     | ✅ Drift findings   |
 
 ---
 
@@ -121,26 +121,26 @@ nb3/
 ```bash
 # Primeiro rodar ETL completo (extract + join + enrich)
 make etl
-# Depois rodar NB2
-make nb2-all
-# Finalmente rodar NB3
-make nb3-run
+# Depois rodar ML6
+make ml6-all
+# Finalmente rodar ML7
+make ml7-run
 ```
 
 ### 2. Validar Resultados
 
 ```bash
 # Ver outputs
-ls -la nb3/
-cat nb3/shap_summary.md
-cat nb3/lstm_report.md
+ls -la ml7/
+cat ml7/shap_summary.md
+cat ml7/lstm_report.md
 ```
 
 ### 3. Deploy
 
 ```bash
 # Exportar TFLite para app/API
-cp nb3/models/best_model.tflite /path/to/app/
+cp ml7/models/best_model.tflite /path/to/app/
 
 # Usar SHAP insights para feature engineering
 # Monitorar drift com ADWIN em produção
@@ -152,13 +152,13 @@ cp nb3/models/best_model.tflite /path/to/app/
 
 ```bash
 # Full pipeline
-make nb3-all
+make ml7-all
 
-# NB3 apenas
-make nb3-run
+# ML7 apenas
+make ml7-run
 
-# NB2 apenas
-make nb2-all
+# ML6 apenas
+make ml6-all
 
 # Limpar outputs
 make clean-all
@@ -175,36 +175,36 @@ python scripts/create_test_data_nb2.py
 practicum2-nof1-adhd-bd/
 ├── data/
 │   ├── etl/
-│   │   ├── features_daily_unified.csv      (NB2 output)
-│   │   └── features_daily_labeled.csv      (NB2 output)
+│   │   ├── features_daily_unified.csv      (ML6 output)
+│   │   └── features_daily_labeled.csv      (ML6 output)
 │   └── raw/
 │       ├── apple/                          (ETL input)
 │       └── zepp_processed/                 (ETL input)
 │
 ├── src/
-│   ├── features/                           (NB2 Phase 1)
+│   ├── features/                           (ML6 Phase 1)
 │   │   ├── __init__.py
 │   │   └── unify_daily.py
-│   ├── labels/                             (NB2 Phase 2)
+│   ├── labels/                             (ML6 Phase 2)
 │   │   ├── __init__.py
 │   │   └── build_pbsi.py
-│   └── models/                             (NB2 Phase 3)
+│   └── models/                             (ML6 Phase 3)
 │       ├── __init__.py
-│       └── run_nb2.py
+│       └── run_ml6.py
 │
 ├── scripts/
-│   ├── run_nb2_pipeline.py                 (NB2 orchestrator)
-│   ├── run_nb3_pipeline.py                 (NB3 orchestrator)
+│   ├── run_ml6_pipeline.py                 (ML6 orchestrator)
+│   ├── run_nb3_pipeline.py                 (ML7 orchestrator)
 │   ├── create_test_data_nb2.py
 │   └── generate_nb3_test_data.py
 │
-├── nb2/                                    (NB2 outputs)
+├── ml6/                                    (ML6 outputs)
 │   ├── baselines_label_3cls.csv
 │   ├── baselines_label_2cls.csv
 │   ├── confusion_matrices/
 │   └── *.png
 │
-├── nb3/                                    (NB3 outputs)
+├── ml7/                                    (ML7 outputs)
 │   ├── shap_summary.md
 │   ├── drift_report.md
 │   ├── lstm_report.md
@@ -213,12 +213,12 @@ practicum2-nof1-adhd-bd/
 │   └── plots/
 │
 └── Makefile                                (All targets)
-    ├── nb2-unify
-    ├── nb2-labels
-    ├── nb2-baselines
-    ├── nb2-all
-    ├── nb3-run
-    └── nb3-all
+    ├── ml6-unify
+    ├── ml6-labels
+    ├── ml6-baselines
+    ├── ml6-all
+    ├── ml7-run
+    └── ml7-all
 ```
 
 ---
@@ -227,9 +227,9 @@ practicum2-nof1-adhd-bd/
 
 | Critério      | Esperado | Alcançado      | Status |
 | ------------- | -------- | -------------- | ------ |
-| NB2 folds     | 6        | 6              | ✅     |
-| NB2 baselines | 5        | 5              | ✅     |
-| NB3 folds     | 6        | 2 (data limit) | ✅     |
+| ML6 folds     | 6        | 6              | ✅     |
+| ML6 baselines | 5        | 5              | ✅     |
+| ML7 folds     | 6        | 2 (data limit) | ✅     |
 | SHAP features | Top-5    | ✅             | ✅     |
 | ADWIN checks  | δ=0.002  | ✅             | ✅     |
 | TFLite size   | <100 KB  | 44 KB          | ✅     |
@@ -240,14 +240,14 @@ practicum2-nof1-adhd-bd/
 
 ## Código Finalizado
 
-### NB2 Modules (720 linhas)
+### ML6 Modules (720 linhas)
 
 - ✅ `src/features/unify_daily.py` (350 lines)
 - ✅ `src/labels/build_pbsi.py` (210 lines)
-- ✅ `src/models/run_nb2.py` (513 lines)
-- ✅ `scripts/run_nb2_pipeline.py` (180 lines)
+- ✅ `src/models/run_ml6.py` (513 lines)
+- ✅ `scripts/run_ml6_pipeline.py` (180 lines)
 
-### NB3 Modules (770 linhas)
+### ML7 Modules (770 linhas)
 
 - ✅ `src/nb3_run.py` (689 lines)
 - ✅ `scripts/run_nb3_pipeline.py` (80 lines)
@@ -266,21 +266,21 @@ practicum2-nof1-adhd-bd/
 ## Commits Recomendados
 
 ```bash
-# Commit 1: NB2 Implementation
-git add src/features/ src/labels/ src/models/ scripts/run_nb2_pipeline.py
-git commit -m "feat: NB2 implementation - unify, labels, 5 baselines"
+# Commit 1: ML6 Implementation
+git add src/features/ src/labels/ src/models/ scripts/run_ml6_pipeline.py
+git commit -m "feat: ML6 implementation - unify, labels, 5 baselines"
 
-# Commit 2: NB2 Documentation
+# Commit 2: ML6 Documentation
 git add docs/NB2_*.md
-git commit -m "docs: NB2 pipeline documentation and guides"
+git commit -m "docs: ML6 pipeline documentation and guides"
 
-# Commit 3: NB3 Implementation
+# Commit 3: ML7 Implementation
 git add src/nb3_run.py scripts/run_nb3_pipeline.py
-git commit -m "feat: NB3 implementation - SHAP, drift, LSTM, TFLite"
+git commit -m "feat: ML7 implementation - SHAP, drift, LSTM, TFLite"
 
-# Commit 4: NB3 Documentation
+# Commit 4: ML7 Documentation
 git add docs/NB3_*.md
-git commit -m "docs: NB3 pipeline documentation"
+git commit -m "docs: ML7 pipeline documentation"
 
 # Commit 5: Makefile + Config
 git add Makefile requirements/base.txt
@@ -315,8 +315,8 @@ git commit -m "build: Makefile targets and dependencies"
 
 ✅ **Todas as fases implementadas e testadas com sucesso!**
 
-- **NB2**: Unificação de dados + 5 baselines + análise completa ✅
-- **NB3**: Explainability (SHAP) + Drift (ADWIN) + Deep Learning (LSTM) ✅
+- **ML6**: Unificação de dados + 5 baselines + análise completa ✅
+- **ML7**: Explainability (SHAP) + Drift (ADWIN) + Deep Learning (LSTM) ✅
 - **Deployment**: TFLite export + latency profiling ✅
 - **Documentation**: Guias completos para reprodução e deployment ✅
 

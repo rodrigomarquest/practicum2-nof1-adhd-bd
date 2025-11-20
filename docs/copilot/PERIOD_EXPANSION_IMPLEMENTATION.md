@@ -100,8 +100,8 @@ seg_df.to_csv("data/etl/features_daily_with_segments.csv", index=False)
 2. Daily Unification (Apple+Zepp merge)
 3. Auto-Segmentation (without version_log)
 4. PBSI Label Computation
-5. NB2 Baseline Training (optional)
-6. NB3 Advanced Analytics (optional)
+5. ML6 Baseline Training (optional)
+6. ML7 Advanced Analytics (optional)
 
 **Features**:
 
@@ -119,7 +119,7 @@ python scripts/run_period_expansion.py \
     --participant P000001 \
     --snapshot 2025-11-07
 
-# Include NB2/NB3 (stages 1-6)
+# Include ML6/ML7 (stages 1-6)
 python scripts/run_period_expansion.py \
     --participant P000001 \
     --snapshot 2025-11-07 \
@@ -227,7 +227,7 @@ data/extracted/
    "
    ```
 
-4. **Run NB2 & NB3**
+4. **Run ML6 & ML7**
    ```bash
    python scripts/run_period_expansion.py \
        --participant P000001 \
@@ -304,7 +304,7 @@ Simple temporal windows lose clinical information:
 - ✅ Auto-segmentation: Tested on synthetic 180-day data
 - ✅ Pipeline orchestration: Dry-run tested, ready for full execution
 - ⏳ PBSI computation: Uses existing validated functions
-- ⏳ NB2/NB3: Uses existing tested modules
+- ⏳ ML6/ML7: Uses existing tested modules
 
 ### Type Safety
 
@@ -329,8 +329,8 @@ Simple temporal windows lose clinical information:
 | Unification           | ~10 sec     | ~400 days      | ⏳     |
 | Auto-Segmentation     | ~3 sec      | 400 days       | ⏳     |
 | PBSI Labels           | ~15 sec     | 400 days       | ⏳     |
-| NB2 (6 folds × 5)     | ~5 min      | 6 folds        | ⏳     |
-| NB3 (SHAP+Drift+LSTM) | ~15 min     | 6 folds        | ⏳     |
+| ML6 (6 folds × 5)     | ~5 min      | 6 folds        | ⏳     |
+| ML7 (SHAP+Drift+LSTM) | ~15 min     | 6 folds        | ⏳     |
 | **Total**             | **~25 min** | -              | ⏳     |
 
 ---
@@ -353,7 +353,7 @@ Simple temporal windows lose clinical information:
 2. Unify: Manual script or `unify_daily` module
 3. Segment: `python -c "from src.labels.auto_segment import auto_segment; ..."`
 4. Labels: `build_pbsi` module
-5. NB2/NB3: Existing scripts
+5. ML6/ML7: Existing scripts
 
 ### Option B: Full Automated Pipeline (Recommended)
 
@@ -361,7 +361,7 @@ Simple temporal windows lose clinical information:
 python scripts/run_period_expansion.py \
     --participant P000001 \
     --snapshot 2025-11-07 \
-    --skip-nb 0  # Include NB2/NB3
+    --skip-nb 0  # Include ML6/ML7
 ```
 
 ### Option C: Dry Run First (Safe)
@@ -386,8 +386,8 @@ python scripts/run_period_expansion.py \
 - [x] Pipeline orchestrator runs dry-run without errors
 - [x] Pipeline produces JSON stats
 - [ ] Full pipeline runs end-to-end with real data
-- [ ] NB2 outputs match expected schema
-- [ ] NB3 outputs include all 5 files (SHAP, drift, LSTM, latency, TFLite)
+- [ ] ML6 outputs match expected schema
+- [ ] ML7 outputs include all 5 files (SHAP, drift, LSTM, latency, TFLite)
 - [ ] Documentation is clear and complete
 
 ---
@@ -399,8 +399,8 @@ Once data flows through the pipeline:
 1. ✅ `features_daily_labeled.csv` covers full available date range
 2. ✅ Segment assignments are reasonable (3-10 segments typical)
 3. ✅ PBSI labels show expected distribution (-1: 20-30%, 0: 40-50%, +1: 20-30%)
-4. ✅ NB2 baselines run without errors
-5. ✅ NB3 SHAP identifies top-5 features
+4. ✅ ML6 baselines run without errors
+5. ✅ ML7 SHAP identifies top-5 features
 6. ✅ Drift detection finds realistic changepoints
 7. ✅ LSTM trains and exports TFLite successfully
 

@@ -1,7 +1,7 @@
 # Practicum 2 N-of-1 ADHD+BD — Implementation Summary
 
 **Project**: Neurobiological Models (NB) for Individual Prediction  
-**Duration**: Phase 12-13 (NB2 + NB3)  
+**Duration**: Phase 12-13 (ML6 + ML7)  
 **Status**: ✅ COMPLETE & TESTED  
 **Date**: 2025-11-07
 
@@ -11,7 +11,7 @@
 
 ### ✨ What Was Built
 
-#### Phase 12: NB2 — Baseline Models
+#### Phase 12: ML6 — Baseline Models
 
 A complete temporal cross-validation pipeline comparing 5 baseline models:
 
@@ -31,11 +31,11 @@ A complete temporal cross-validation pipeline comparing 5 baseline models:
 
 - `data/etl/features_daily_unified.csv` — 27 canonical columns (Apple+Zepp merged)
 - `data/etl/features_daily_labeled.csv` — 35 columns (unified + PBSI labels)
-- `nb2/baselines_label_3cls.csv` — 3-class metrics (F1, Accuracy, Kappa, AUROC)
-- `nb2/baselines_label_2cls.csv` — 2-class metrics + McNemar p-values
-- `nb2/confusion_matrices/*.png` — 18 confusion matrices (6 folds × 3 models)
+- `ml6/baselines_label_3cls.csv` — 3-class metrics (F1, Accuracy, Kappa, AUROC)
+- `ml6/baselines_label_2cls.csv` — 2-class metrics + McNemar p-values
+- `ml6/confusion_matrices/*.png` — 18 confusion matrices (6 folds × 3 models)
 
-#### Phase 13: NB3 — Advanced Analytics
+#### Phase 13: ML7 — Advanced Analytics
 
 A three-component module for explainability, drift detection, and deep learning:
 
@@ -60,19 +60,19 @@ A three-component module for explainability, drift detection, and deep learning:
 **Component 3: LSTM M1 + TFLite**
 
 - **Architecture**: LSTM(32) → Dense(32, ReLU) → Dropout(0.2) → Dense(n_classes, softmax)
-- **Training**: Same 6-fold CV as NB2, EarlyStopping (patience=10)
+- **Training**: Same 6-fold CV as ML6, EarlyStopping (patience=10)
 - **Best Model**: Selected by F1-macro on validation fold
 - **Export**: TensorFlow Lite (quantized, 44 KB)
 - **Latency**: 200 inference runs, mean/p50/p95/std in milliseconds
 
 **Outputs**:
 
-- `nb3/shap_summary.md` — Per-fold top-5 features + global ranking
-- `nb3/drift_report.md` — ADWIN changepoints + KS hits + segment drift
-- `nb3/lstm_report.md` — Best fold ID, F1-macro, TFLite path, latency
-- `nb3/plots/*.png` — SHAP bar charts + ADWIN changepoint visualizations
-- `nb3/models/best_model.tflite` — Quantized LSTM model
-- `nb3/latency_stats.json` — 200-run latency measurement
+- `ml7/shap_summary.md` — Per-fold top-5 features + global ranking
+- `ml7/drift_report.md` — ADWIN changepoints + KS hits + segment drift
+- `ml7/lstm_report.md` — Best fold ID, F1-macro, TFLite path, latency
+- `ml7/plots/*.png` — SHAP bar charts + ADWIN changepoint visualizations
+- `ml7/models/best_model.tflite` — Quantized LSTM model
+- `ml7/latency_stats.json` — 200-run latency measurement
 
 ---
 
@@ -172,16 +172,16 @@ python scripts/create_test_data_nb2.py
 | ----------------------------- | ----- | ---------------------------------------- |
 | `src/features/unify_daily.py` | 350   | Apple+Zepp merge, canonical schema       |
 | `src/labels/build_pbsi.py`    | 210   | PBSI computation, segment-aware z-scores |
-| `src/models/run_nb2.py`       | 513   | 5 baselines, calendar CV, metrics        |
+| `src/models/run_ml6.py`       | 513   | 5 baselines, calendar CV, metrics        |
 | `src/nb3_run.py`              | 689   | SHAP, ADWIN, LSTM, TFLite                |
-| `scripts/run_nb2_pipeline.py` | 180   | NB2 orchestrator                         |
-| `scripts/run_nb3_pipeline.py` | 80    | NB3 orchestrator                         |
+| `scripts/run_ml6_pipeline.py` | 180   | ML6 orchestrator                         |
+| `scripts/run_nb3_pipeline.py` | 80    | ML7 orchestrator                         |
 
 ### Configuration & Data
 
 | File                              | Purpose                      |
 | --------------------------------- | ---------------------------- |
-| `Makefile`                        | Build targets (nb2-_, nb3-_) |
+| `Makefile`                        | Build targets (ml6-_, ml7-_) |
 | `requirements/base.txt`           | Python dependencies          |
 | `scripts/create_test_data_nb2.py` | Synthetic data generator     |
 
@@ -189,10 +189,10 @@ python scripts/create_test_data_nb2.py
 
 | Document                          | Purpose                  |
 | --------------------------------- | ------------------------ |
-| `docs/NB2_PIPELINE_README.md`     | Complete NB2 guide       |
+| `docs/NB2_PIPELINE_README.md`     | Complete ML6 guide       |
 | `docs/NB2_FINALIZATION.md`        | Implementation checklist |
 | `docs/NB2_TESTING_GUIDE.md`       | Testing procedures       |
-| `docs/NB3_QUICK_REFERENCE.md`     | NB3 usage guide          |
+| `docs/NB3_QUICK_REFERENCE.md`     | ML7 usage guide          |
 | `docs/NB3_SETUP_COMPLETE.md`      | Setup & troubleshooting  |
 | `docs/NB3_COMMIT_SUMMARY.md`      | Implementation summary   |
 | `docs/FINAL_COMPLETION_REPORT.md` | Project conclusion       |
@@ -201,7 +201,7 @@ python scripts/create_test_data_nb2.py
 
 ## Performance Metrics
 
-### NB2 Baselines (365-day test data)
+### ML6 Baselines (365-day test data)
 
 | Baseline        | F1-Weighted | F1-Macro | Balanced Acc | Notes                |
 | --------------- | ----------- | -------- | ------------ | -------------------- |
@@ -211,7 +211,7 @@ python scripts/create_test_data_nb2.py
 | Rule-based      | 0.25        | 0.26     | 0.38         | Threshold-based      |
 | LogReg          | 0.32        | 0.33     | 0.37         | L2, balanced weights |
 
-### NB3 Models (best folds)
+### ML7 Models (best folds)
 
 | Component | Metric   | Value                  |
 | --------- | -------- | ---------------------- |
@@ -245,37 +245,37 @@ python scripts/create_test_data_nb2.py
 # Create test data
 python scripts/create_test_data_nb2.py
 
-# Run full pipeline (NB2 → NB3)
-make nb3-all
+# Run full pipeline (ML6 → ML7)
+make ml7-all
 
 # Or separately
-make nb2-all      # NB2 only
-make nb3-run      # NB3 only
+make ml6-all      # ML6 only
+make ml7-run      # ML7 only
 ```
 
 ### Inspect Results
 
 ```bash
 # SHAP insights
-cat nb3/shap_summary.md
+cat ml7/shap_summary.md
 
 # Drift findings
-cat nb3/drift_report.md
+cat ml7/drift_report.md
 
 # LSTM metadata
-cat nb3/lstm_report.md
+cat ml7/lstm_report.md
 
 # TFLite model
-ls -lh nb3/models/best_model.tflite
+ls -lh ml7/models/best_model.tflite
 ```
 
 ### With Real Data
 
 ```bash
 # After ETL pipeline
-make nb3-all
+make ml7-all
 
-# Outputs in nb3/ and data/etl/
+# Outputs in ml7/ and data/etl/
 ```
 
 ---
@@ -333,22 +333,22 @@ make nb3-all
 ```
 practicum2-nof1-adhd-bd/
 ├── src/
-│   ├── features/             (NB2 unify)
-│   ├── labels/               (NB2 labels)
-│   └── models/               (NB2 baselines)
-│   └── nb3_run.py            (NB3 pipeline)
+│   ├── features/             (ML6 unify)
+│   ├── labels/               (ML6 labels)
+│   └── models/               (ML6 baselines)
+│   └── nb3_run.py            (ML7 pipeline)
 ├── scripts/
-│   ├── run_nb2_pipeline.py   (NB2 CLI)
-│   ├── run_nb3_pipeline.py   (NB3 CLI)
+│   ├── run_ml6_pipeline.py   (ML6 CLI)
+│   ├── run_nb3_pipeline.py   (ML7 CLI)
 │   └── create_test_data_nb2.py
 ├── data/etl/
-│   ├── features_daily_unified.csv    (NB2 output)
-│   └── features_daily_labeled.csv    (NB2 output)
-├── nb2/
+│   ├── features_daily_unified.csv    (ML6 output)
+│   └── features_daily_labeled.csv    (ML6 output)
+├── ml6/
 │   ├── baselines_label_3cls.csv
 │   ├── baselines_label_2cls.csv
 │   └── confusion_matrices/
-├── nb3/
+├── ml7/
 │   ├── shap_summary.md
 │   ├── drift_report.md
 │   ├── lstm_report.md
@@ -368,8 +368,8 @@ practicum2-nof1-adhd-bd/
 
 ✅ **All objectives met:**
 
-- [x] NB2: 5 baselines with calendar-based CV
-- [x] NB3: SHAP explainability + drift detection + LSTM + TFLite
+- [x] ML6: 5 baselines with calendar-based CV
+- [x] ML7: SHAP explainability + drift detection + LSTM + TFLite
 - [x] Documentation: Complete guides and references
 - [x] Testing: Successful on synthetic 365-day dataset
 - [x] Deployment-ready: Makefile targets, CLI wrappers, error handling

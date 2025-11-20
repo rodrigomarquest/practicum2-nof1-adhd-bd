@@ -23,8 +23,8 @@ The project extends the previous Practicum (Part 1) phase and focuses on reproce
 | ---------------------------------------------------------- | --------------------------- | ------- | -------------- |
 | [NB0_DataRead.ipynb](notebooks/NB0_DataRead.ipynb)         | Pipeline readiness check    | <5s     | -              |
 | [NB1_EDA.ipynb](notebooks/NB1_EDA.ipynb)                   | 8-year exploratory analysis | 30-60s  | Fig 3, 4       |
-| [NB2_Baseline.ipynb](notebooks/NB2_Baseline.ipynb)         | Logistic regression results | 10-20s  | Fig 5, Table 3 |
-| [NB3_DeepLearning.ipynb](notebooks/NB3_DeepLearning.ipynb) | LSTM evaluation             | 15-30s  | Fig 6, Table 3 |
+| [ML6_Baseline.ipynb](notebooks/ML6_Baseline.ipynb)         | Logistic regression results | 10-20s  | Fig 5, Table 3 |
+| [ML7_DeepLearning.ipynb](notebooks/ML7_DeepLearning.ipynb) | LSTM evaluation             | 15-30s  | Fig 6, Table 3 |
 
 See [📖 Notebooks Overview](docs/notebooks_overview.md) for detailed documentation.
 
@@ -47,16 +47,16 @@ jupyter notebook notebooks/
 notebooks/
   NB0_DataRead.ipynb           # Stage detection & readiness
   NB1_EDA.ipynb                # Comprehensive 8-year EDA
-  NB2_Baseline.ipynb           # Logistic regression results
-  NB3_DeepLearning.ipynb       # LSTM evaluation
+  ML6_Baseline.ipynb           # Logistic regression results
+  ML7_DeepLearning.ipynb       # LSTM evaluation
   archive/                     # Deprecated notebooks (pre-v4.1.5)
 data/
   raw/                         # única fonte persistente (Apple Health exports, Zepp data)
   etl/                         # gerado; outputs canônicos (joined/qc/segment_autolog)
-  ai/                          # gerado; artefatos NB2/NB3 por snapshot
+  ai/                          # gerado; artefatos ML6/ML7 por snapshot
 src/
   etl/                         # ETL pipeline stages (aggregation, unify, labels)
-  modeling/                    # NB2, NB3, LSTM training modules
+  modeling/                    # ML6, ML7, LSTM training modules
   utils/                       # zip extraction, IO guards, paths, logger
 scripts/
   run_full_pipeline.py         # orquestrador determinístico 10 stages (0-9)
@@ -87,8 +87,8 @@ python scripts/run_full_pipeline.py --participant P000001 --snapshot 2025-11-07
 
 # Outputs:
 #   data/etl/P000001/2025-11-07/joined/features_daily_unified.csv
-#   data/ai/P000001/2025-11-07/nb2/cv_summary.json
-#   data/ai/P000001/2025-11-07/nb3/shap_summary.md
+#   data/ai/P000001/2025-11-07/ml6/cv_summary.json
+#   data/ai/P000001/2025-11-07/ml7/shap_summary.md
 #   RUN_REPORT.md
 ```
 
@@ -99,9 +99,9 @@ Pipeline Stages:
 - Stage 2: Unify Daily (canonical features)
 - Stage 3: Apply Labels (3-class classification)
 - Stage 4: Segmentation (period boundaries)
-- Stage 5: Prep NB2 (anti-leak safeguards)
-- Stage 6: NB2 Training (Logistic Regression, temporal CV)
-- Stage 7: NB3 Analysis (SHAP + Drift + LSTM)
+- Stage 5: Prep ML6 (anti-leak safeguards)
+- Stage 6: ML6 Training (Logistic Regression, temporal CV)
+- Stage 7: ML7 Analysis (SHAP + Drift + LSTM)
 - Stage 8: TFLite Export (model conversion + latency)
 - Stage 9: Generate Report (RUN_REPORT.md)
 

@@ -1,5 +1,5 @@
 """
-NB2 Baselines: 6-fold calendar-based temporal CV with 5 baselines.
+ML6 Baselines: 6-fold calendar-based temporal CV with 5 baselines.
 
 Protocol:
     - 6 calendar folds: 4 months train / 2 months validation (strict calendar boundaries)
@@ -14,11 +14,11 @@ Protocol:
       - 3-class: f1_macro, f1_weighted, balanced_acc, kappa
       - 2-class: above + roc_auc + mcnemar_p (LogReg vs Dummy)
     - Outputs:
-      - nb2/baseline_stratified_3cls.csv (Dummy only)
-      - nb2/baseline_stratified_2cls.csv (Dummy only)
-      - nb2/baselines_label_3cls.csv (all 5 baselines)
-      - nb2/baselines_label_2cls.csv (all 5 baselines + mcnemar_p)
-      - nb2/confusion_matrices/*.png (per fold per model)
+      - ml6/baseline_stratified_3cls.csv (Dummy only)
+      - ml6/baseline_stratified_2cls.csv (Dummy only)
+      - ml6/baselines_label_3cls.csv (all 5 baselines)
+      - ml6/baselines_label_2cls.csv (all 5 baselines + mcnemar_p)
+      - ml6/confusion_matrices/*.png (per fold per model)
 """
 
 import pandas as pd

@@ -9,10 +9,10 @@ Padronizar repositório para estrutura canônica determinística sem deletar arq
 data/
   raw/          # única fonte persistente
   etl/          # outputs canônicos (joined/qc/segment_autolog)
-  ai/           # artefatos NB2/NB3 por snapshot
+  ai/           # artefatos ML6/ML7 por snapshot
 src/
-  etl/          # 24 módulos ETL (stage_csv_aggregation, nb3_analysis, etc)
-  modeling/     # (reservado para NB2/NB3 futuros)
+  etl/          # 24 módulos ETL (stage_csv_aggregation, ml7_analysis, etc)
+  modeling/     # (reservado para ML6/ML7 futuros)
   utils/        # (reservado para utilitários)
 scripts/
   run_full_pipeline.py    # orquestrador 9 stages
@@ -23,7 +23,7 @@ docs/
 archive/
   root_scripts/           # 7 scripts legados (.py antigos)
   root_docs/              # 12 documentos de sessão (.md)
-  root_artifacts/         # 4 pastas (nb2/, nb3/, latest/, reports/)
+  root_artifacts/         # 4 pastas (ml6/, ml7/, latest/, reports/)
   etl_modules/            # pasta antiga (conteúdo copiado para src/etl/)
   etl_tools/              # ferramentas antigas
 ```
@@ -33,8 +33,8 @@ archive/
 ### Categoria: Scripts Python (7 arquivos)
 - run_complete_pipeline.py → archive/root_scripts/
 - run_pipeline_deterministic.py → archive/root_scripts/
-- run_nb2_beiwe.py → archive/root_scripts/
-- run_nb2_engage7.py → archive/root_scripts/
+- run_ml6_beiwe.py → archive/root_scripts/
+- run_ml6_engage7.py → archive/root_scripts/
 - build_heuristic_labels.py → archive/root_scripts/
 - make_eda_biomarkers.py → archive/root_scripts/
 - rebuild_pipeline.sh → archive/root_scripts/
@@ -65,8 +65,8 @@ Mantidos na raiz:
 - RUN_REPORT.md (gerado pelo pipeline)
 
 ### Categoria: Artefatos (4 pastas)
-- nb2/ → archive/root_artifacts/nb2/
-- nb3/ → archive/root_artifacts/nb3/
+- ml6/ → archive/root_artifacts/ml6/
+- ml7/ → archive/root_artifacts/ml7/
 - latest/ → archive/root_artifacts/latest/
 - reports/ → archive/root_artifacts/reports/
 
@@ -98,7 +98,7 @@ python scripts/run_full_pipeline.py --participant P000001 --snapshot 2025-11-07 
 - Date Range: 2017-12-04 to 2025-10-21 ✓
 - Total Rows: 2828 ✓
 - Label Distribution: 61.4% / 10.0% / 28.5% ✓
-- NB2 Mean F1: 0.7038 ± 0.1721 ✓
+- ML6 Mean F1: 0.7038 ± 0.1721 ✓
 - SHAP Top-10 features: gerados ✓
 - Drift: ADWIN 11 changes, KS 102/1180 ✓
 - LSTM F1: 0.2648 (mean) ✓
@@ -106,10 +106,10 @@ python scripts/run_full_pipeline.py --participant P000001 --snapshot 2025-11-07 
 
 ### Outputs Canônicos
 - data/etl/P000001/2025-11-07/joined/features_daily_unified.csv
-- data/ai/P000001/2025-11-07/nb2/cv_summary.json
-- data/ai/P000001/2025-11-07/nb3/shap_summary.md
-- data/ai/P000001/2025-11-07/nb3/drift_report.md
-- data/ai/P000001/2025-11-07/nb3/models/best_model.tflite
+- data/ai/P000001/2025-11-07/ml6/cv_summary.json
+- data/ai/P000001/2025-11-07/ml7/shap_summary.md
+- data/ai/P000001/2025-11-07/ml7/drift_report.md
+- data/ai/P000001/2025-11-07/ml7/models/best_model.tflite
 - RUN_REPORT.md
 
 ## Estatísticas Finais
@@ -132,7 +132,7 @@ refactor: canonical structure + archive legacy files (no deletion) + determinist
 
 - Moved 7 legacy scripts to archive/root_scripts/
 - Moved 12 session docs to archive/root_docs/
-- Moved artifacts (nb2/, nb3/, latest/, reports/) to archive/root_artifacts/
+- Moved artifacts (ml6/, ml7/, latest/, reports/) to archive/root_artifacts/
 - Migrated etl_modules/ → src/etl/ (24 modules)
 - Updated all imports: etl_modules → src.etl
 - Updated README.md with canonical structure

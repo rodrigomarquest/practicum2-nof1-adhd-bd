@@ -37,7 +37,7 @@ high_pbsi: pbsi ≥ P75 (0.172)  →  707 days (25%)
 **Impact**:
 
 - ✅ **Balanced classes**: All 3 classes have sufficient samples for ML training
-- ✅ **Cross-validation viable**: Stage 6 (NB2) no longer skips training
+- ✅ **Cross-validation viable**: Stage 6 (ML6) no longer skips training
 - ✅ **Adaptive**: Thresholds adjust to each participant's data distribution
 - ✅ **Scientifically defensible**: Quartile-based interpretation
 
@@ -109,8 +109,8 @@ Added explicit documentation that PBSI labels:
 
 | Pipeline Stage       | v4.1.5     | v4.1.6  | Notes                      |
 | -------------------- | ---------- | ------- | -------------------------- |
-| **Stage 6 (NB2)**    | ❌ Skipped | ✅ Runs | Sufficient class diversity |
-| **Stage 7 (NB3)**    | ⚠️ Partial | ✅ Full | LSTM training enabled      |
+| **Stage 6 (ML6)**    | ❌ Skipped | ✅ Runs | Sufficient class diversity |
+| **Stage 7 (ML7)**    | ⚠️ Partial | ✅ Full | LSTM training enabled      |
 | **Stage 8 (TFLite)** | ❌ Skipped | ✅ Runs | Model export enabled       |
 
 ---

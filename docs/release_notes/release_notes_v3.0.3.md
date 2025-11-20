@@ -34,7 +34,7 @@
 | apple_state_of_mind_autoexport.csv |     ✅ |  5750 bytes | `2bac8a1a7ae8e0153b386a3f0b1787bde39a10fb01bee88882597484f9878716` |
 | apple_state_of_mind.csv            |     ✅ | 18533 bytes | `73564f468820e30be9ea94cc541d99a466d59be16518f621626feacfe23bc961` |
 
-## 🧪 Impact on NB2
+## 🧪 Impact on ML6
 
 - Baselines unchanged; 54 real labels now available for training.
 - Expect fewer single-class folds and improved class distribution metrics.
@@ -47,7 +47,7 @@
 ```
 make etl-extract PARTICIPANT=P000001 SNAPSHOT=2025-09-29
 make labels PARTICIPANT=P000001 SNAPSHOT=2025-09-29
-make nb2-run PARTICIPANT=P000001
+make ml6-run PARTICIPANT=P000001
 ```
 
 3. Verify manifest at `data/etl/P000001/snapshots/2025-09-29/labels_manifest.json`.
@@ -61,7 +61,7 @@ Commits since `v3.0.2` (up to 5):
 1fec1cc chore: checkpoint before enduring SoM extratction
 e8e197e chore: checkpoint before implementing labels subcommand (safe state post-full)
 8eea5b1 chore: checkpoint before Copilot interventions
-c1fef18 chore(makefile): stabilize ETL → AI → NB2 workflow targets
+c1fef18 chore(makefile): stabilize ETL → AI → ML6 workflow targets
 ```
 
 ---

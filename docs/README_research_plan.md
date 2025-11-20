@@ -34,8 +34,8 @@ Create the **state-of-the-art single-participant (N-of-1) study** on mental-heal
 | Phase                            | Notebook                              | Core Purpose                                                             | Key Outputs |
 | -------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ | ----------- |
 | **NB1 – ETL & EDA**              | Data engineering, QC & sanity checks  | `features_daily_labeled.csv`, `etl_qc_summary.csv`, `NB1-EDA_Summary.md` |
-| **NB2 – Baseline & LSTM**        | Predictive modeling (Naïve → LSTM M1) | `nb2_model_results.csv`, `best_model.tflite`, `NB2_Modeling_Summary.md`  |
-| **NB3 – Explainability & Drift** | SHAP temporal, ADWIN / KS drift       | `nb3_shap_summary.csv`, `nb3_drift_report.md`, interpretability plots    |
+| **ML6 – Baseline & LSTM**        | Predictive modeling (Naïve → LSTM M1) | `nb2_model_results.csv`, `best_model.tflite`, `NB2_Modeling_Summary.md`  |
+| **ML7 – Explainability & Drift** | SHAP temporal, ADWIN / KS drift       | `nb3_shap_summary.csv`, `nb3_drift_report.md`, interpretability plots    |
 | **CA2 Report**                   | Academic documentation                | `main.tex` + Appendices C–D (Sensor Mapping & Feature Glossary)          |
 
 ---
@@ -56,7 +56,7 @@ Create the **state-of-the-art single-participant (N-of-1) study** on mental-heal
 
 | Week  | Goal                             | Focus                         | Deliverable                |
 | ----- | -------------------------------- | ----------------------------- | -------------------------- |
-| **1** | Finalize NB2 baselines + LSTM M1 | Temporal CV, ICs, calibration | `NB2_Modeling_Summary.md`  |
+| **1** | Finalize ML6 baselines + LSTM M1 | Temporal CV, ICs, calibration | `NB2_Modeling_Summary.md`  |
 | **2** | Explainability + Drift           | SHAP temporal + ADWIN/KS      | `NB3_Explainability.ipynb` |
 | **3** | Reporting & Packaging            | LaTeX final + ethics appendix | `CA2_LaTeX_phd_ready.zip`  |
 
@@ -121,8 +121,8 @@ Create the **state-of-the-art single-participant (N-of-1) study** on mental-heal
 | Phase                            | Notebook                              | Core Purpose                                                             | Key Outputs |
 | -------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ | ----------- |
 | **NB1 – ETL & EDA**              | Data engineering, QC & sanity checks  | `features_daily_labeled.csv`, `etl_qc_summary.csv`, `NB1-EDA_Summary.md` |
-| **NB2 – Baseline & LSTM**        | Predictive modeling (Naïve → LSTM M1) | `nb2_model_results.csv`, `best_model.tflite`, `NB2_Modeling_Summary.md`  |
-| **NB3 – Explainability & Drift** | SHAP temporal, ADWIN / KS drift       | `nb3_shap_summary.csv`, `nb3_drift_report.md`, interpretability plots    |
+| **ML6 – Baseline & LSTM**        | Predictive modeling (Naïve → LSTM M1) | `nb2_model_results.csv`, `best_model.tflite`, `NB2_Modeling_Summary.md`  |
+| **ML7 – Explainability & Drift** | SHAP temporal, ADWIN / KS drift       | `nb3_shap_summary.csv`, `nb3_drift_report.md`, interpretability plots    |
 | **CA2 Report**                   | Academic documentation                | `main.tex` + Appendices C–D (Sensor Mapping & Feature Glossary)          |
 
 ---
@@ -143,7 +143,7 @@ Create the **state-of-the-art single-participant (N-of-1) study** on mental-heal
 
 | Week  | Goal                             | Focus                         | Deliverable                |
 | ----- | -------------------------------- | ----------------------------- | -------------------------- |
-| **1** | Finalize NB2 baselines + LSTM M1 | Temporal CV, ICs, calibration | `NB2_Modeling_Summary.md`  |
+| **1** | Finalize ML6 baselines + LSTM M1 | Temporal CV, ICs, calibration | `NB2_Modeling_Summary.md`  |
 | **2** | Explainability + Drift           | SHAP temporal + ADWIN/KS      | `NB3_Explainability.ipynb` |
 | **3** | Reporting & Packaging            | LaTeX final + ethics appendix | `CA2_LaTeX_phd_ready.zip`  |
 

@@ -43,8 +43,8 @@ AI_DIR  := data/ai/$(PID)/$(SNAPSHOT_RESOLVED)
 
 # -------- Phony --------
 .PHONY: help env check-dirs \
-        ingest aggregate unify segment label prep-nb2 nb2 nb3 report \
-        pipeline quick nb2-only nb3-only \
+        ingest aggregate unify segment label prep-ml6 nb2 nb3 report \
+        pipeline quick ml6-only ml7-only \
         qc-hr qc-steps qc-sleep qc-all qc-etl \
         clean-outputs clean-all verify \
         help-release release-notes version-guard changelog release-assets provenance release-draft publish-release print-version
@@ -53,7 +53,7 @@ AI_DIR  := data/ai/$(PID)/$(SNAPSHOT_RESOLVED)
 help:
 > echo "Usage:"
 > echo "  make pipeline PID=$(PID) SNAPSHOT=$(SNAPSHOT) [ZPWD=***]"
-> echo "  make nb2-only | nb3-only | quick"
+> echo "  make ml6-only | ml7-only | quick"
 > echo "  make qc-hr | qc-steps | qc-sleep | qc-all"
 > echo "  make verify | clean-outputs | help-release"
 > echo "Vars: PID=$(PID) SNAPSHOT=$(SNAPSHOT) -> $(SNAPSHOT_RESOLVED)"
@@ -89,13 +89,13 @@ segment: env
 label: env
 > $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 3 --end-stage 3 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-prep-nb2: env
-> $(PYTHON) scripts/prepare_nb2_dataset.py $(ETL_DIR)/joined/features_daily_labeled.csv --output $(ETL_DIR)/joined/features_nb2_clean.csv
+prep-ml6: env
+> $(PYTHON) scripts/prepare_ml6_dataset.py $(ETL_DIR)/joined/features_daily_labeled.csv --output $(ETL_DIR)/joined/features_ml6_clean.csv
 
-nb2: env
+ml6: env
 > $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 5 --end-stage 6 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-nb3: env
+ml7: env
 > $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 7 --end-stage 8 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
 report: env
@@ -128,10 +128,10 @@ pipeline: env
 quick: env
 > $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 2 --end-stage 9 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-nb2-only: env
+ml6-only: env
 > $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 5 --end-stage 6 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
-nb3-only: env
+ml7-only: env
 > $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 7 --end-stage 8 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 
 # -------- Cleaning --------
@@ -148,14 +148,14 @@ verify:
 > echo "Check outputs for $(PID)/$(SNAPSHOT_RESOLVED)..."
 > test -f $(ETL_DIR)/joined/features_daily_unified.csv
 > test -f $(ETL_DIR)/joined/features_daily_labeled.csv
-> test -f $(ETL_DIR)/joined/features_nb2_clean.csv
+> test -f $(ETL_DIR)/joined/features_ml6_clean.csv
 > test -f $(ETL_DIR)/segment_autolog.csv
-> test -f $(AI_DIR)/nb2/cv_summary.json
-> test -f $(AI_DIR)/nb3/shap_summary.md
-> test -f $(AI_DIR)/nb3/drift_report.md
-> test -f $(AI_DIR)/nb3/lstm_report.md
-> test -f $(AI_DIR)/nb3/models/best_model.tflite
-> test -f $(AI_DIR)/nb3/latency_stats.json
+> test -f $(AI_DIR)/ml6/cv_summary.json
+> test -f $(AI_DIR)/ml7/shap_summary.md
+> test -f $(AI_DIR)/ml7/drift_report.md
+> test -f $(AI_DIR)/ml7/lstm_report.md
+> test -f $(AI_DIR)/ml7/models/best_model.tflite
+> test -f $(AI_DIR)/ml7/latency_stats.json
 > echo "OK"
 
 # -------- Release & Publication --------
@@ -184,7 +184,7 @@ release-notes:
 > echo "" >> $(NOTES_FILE)
 > echo "Artifacts:" >> $(NOTES_FILE)
 > echo "- $(ETL_DIR)/joined/features_daily_labeled.csv" >> $(NOTES_FILE)
-> echo "- $(AI_DIR)/nb3/models/best_model.tflite" >> $(NOTES_FILE)
+> echo "- $(AI_DIR)/ml7/models/best_model.tflite" >> $(NOTES_FILE)
 > echo "- RUN_REPORT.md" >> $(NOTES_FILE)
 > echo "Done -> $(NOTES_FILE)"
 
@@ -202,7 +202,7 @@ release-assets:
 > echo "Collecting assets into $(ASSET_DIR)..."
 > mkdir -p $(ASSET_DIR)
 > cp -f $(ETL_DIR)/joined/features_daily_labeled.csv $(ASSET_DIR)/ 2>/dev/null || true
-> cp -f $(AI_DIR)/nb3/models/best_model.tflite $(ASSET_DIR)/ 2>/dev/null || true
+> cp -f $(AI_DIR)/ml7/models/best_model.tflite $(ASSET_DIR)/ 2>/dev/null || true
 > cp -f RUN_REPORT.md $(ASSET_DIR)/ 2>/dev/null || true
 > echo "OK"
 

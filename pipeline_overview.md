@@ -11,7 +11,7 @@ This document provides a high-level overview of the deterministic end-to-end dat
 
 - Integrate multi-modal wearable data (Apple Health, Zepp/Amazfit) into a single, **100% reproducible** pipeline
 - Produce daily, participant-level features suitable for time-series modeling and clinical interpretation
-- Support **research reproducibility**: ETL transparency, feature provenance, and modeling traceability (NB0–NB3)
+- Support **research reproducibility**: ETL transparency, feature provenance, and modeling traceability (NB0–ML7)
 - Enable **deterministic execution** with fixed random seeds across all stages
 
 The focus of this document is on what each stage does and how the pieces connect. For implementation details, see `docs/ETL_ARCHITECTURE_COMPLETE.md`.
@@ -60,13 +60,13 @@ practicum2-nof1-adhd-bd/
 │   │   ├── joined/                       # Stage 2-4: Unified features + segments
 │   │   └── qc/                           # Quality control reports
 │   └── ai/P000001/2025-11-07/           # Modeling outputs
-│       ├── nb2/                          # Stage 6: Logistic regression
-│       └── nb3/                          # Stage 7: LSTM models
+│       ├── ml6/                          # Stage 6: Logistic regression
+│       └── ml7/                          # Stage 7: LSTM models
 ├── notebooks/
 │   ├── NB0_DataRead.ipynb               # Stage detection & readiness
 │   ├── NB1_EDA.ipynb                    # Exploratory data analysis
-│   ├── NB2_Baseline.ipynb               # Baseline model results
-│   ├── NB3_DeepLearning.ipynb           # LSTM evaluation
+│   ├── ML6_Baseline.ipynb               # Baseline model results
+│   ├── ML7_DeepLearning.ipynb           # LSTM evaluation
 │   └── archive/                         # Deprecated notebooks
 ├── src/
 │   ├── etl_pipeline.py                  # Stage 0: Extraction orchestrator
@@ -113,10 +113,10 @@ The pipeline consists of **10 deterministic stages** orchestrated by `scripts/ru
 | 2     | **Unify**     | Per-metric CSVs  | `features_daily_unified.csv`    | Merge all metrics by date                                                |
 | 3     | **Label**     | Unified features | `features_daily_labeled.csv`    | Apply PBSI v4.1.7 labels (3-class)                                       |
 | 4     | **Segment**   | Labeled features | `segment_autolog.csv`           | Detect behavioral segments (2 rules)                                     |
-| 5     | **Prep-NB2**  | Segments         | `ai/nb2/features_daily_nb2.csv` | **v4.1.7**: Temporal filter (>=2021-05-11) + MICE imputation + anti-leak |
-| 6     | **NB2**       | MICE data        | `data/ai/.../nb2/`              | Train logistic regression (6-fold CV)                                    |
-| 7     | **NB3**       | MICE data        | `data/ai/.../nb3/`              | Train LSTM + SHAP + drift detection                                      |
-| 8     | **TFLite**    | NB3 model        | `model.tflite`                  | Export to mobile format                                                  |
+| 5     | **Prep-ML6**  | Segments         | `ai/ml6/features_daily_nb2.csv` | **v4.1.7**: Temporal filter (>=2021-05-11) + MICE imputation + anti-leak |
+| 6     | **ML6**       | MICE data        | `data/ai/.../ml6/`              | Train logistic regression (6-fold CV)                                    |
+| 7     | **ML7**       | MICE data        | `data/ai/.../ml7/`              | Train LSTM + SHAP + drift detection                                      |
+| 8     | **TFLite**    | ML7 model        | `model.tflite`                  | Export to mobile format                                                  |
 | 9     | **Report**    | All outputs      | `RUN_REPORT.md`                 | Generate execution summary                                               |
 
 **Segmentation Rules** (Stage 4):
@@ -218,9 +218,9 @@ This rule-based mapping is documented in Appendix D (feature glossary & label ru
 
 Labels are joined on date (and optionally participant_id).
 
-Output: features_daily_labeled.csv, used by NB2/NB3.
+Output: features_daily_labeled.csv, used by ML6/ML7.
 
-8. Modeling Pipelines (NB1–NB3)
+8. Modeling Pipelines (NB1–ML7)
    8.1 NB1 – Exploratory Data Analysis (EDA)
 
 Purpose: Understand basic properties of the dataset before modeling.
@@ -241,7 +241,7 @@ Time series of key features (steps, HR, sleep).
 
 Histograms / boxplots for distribution sanity checks.
 
-8.2 NB2 – Baseline Models (Daily Classification)
+8.2 ML6 – Baseline Models (Daily Classification)
 
 Purpose: Provide interpretable baselines for daily mood/label prediction.
 
@@ -307,7 +307,7 @@ Confusion matrices per fold.
 
 Feature importance (coefficients) for logistic regression.
 
-8.3 NB3 – Sequence Models & Drift (LSTM / CNN1D)
+8.3 ML7 – Sequence Models & Drift (LSTM / CNN1D)
 
 Purpose: Model temporal dependencies and evaluate performance under concept drift.
 
@@ -329,7 +329,7 @@ Optional 1D-CNN configurations.
 
 Evaluation
 
-Same 6-fold temporal CV as NB2.
+Same 6-fold temporal CV as ML6.
 
 Early stopping (patience=10 on validation loss).
 
@@ -358,7 +358,7 @@ The pipeline includes 4 canonical Jupyter notebooks for reproducible analysis:
 - **Key visualizations**: Temporal trends, missingness, distributions, segments (119)
 - **Paper figures**: Fig 3(a,b), Fig 4
 
-### NB2 – Baseline Models (`notebooks/NB2_Baseline.ipynb`)
+### ML6 – Baseline Models (`notebooks/ML6_Baseline.ipynb`)
 
 - **Purpose**: Logistic regression performance evaluation
 - **Model**: L2-regularized logistic regression
@@ -366,7 +366,7 @@ The pipeline includes 4 canonical Jupyter notebooks for reproducible analysis:
 - **Performance**: Macro F1 ~0.81
 - **Paper figures**: Fig 5, Table 3
 
-### NB3 – Deep Learning (`notebooks/NB3_DeepLearning.ipynb`)
+### ML7 – Deep Learning (`notebooks/ML7_DeepLearning.ipynb`)
 
 - **Purpose**: LSTM sequence model evaluation
 - **Architecture**: BiLSTM(64) + Dense(32) + softmax(3)

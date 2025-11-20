@@ -115,7 +115,7 @@ make biomarkers PID=P000001 SNAPSHOT=2025-11-07
 # 3. Gerar labels
 make labels PID=P000001 SNAPSHOT=2025-11-07
 
-# 4. Treinar NB2
+# 4. Treinar ML6
 make nb2 PID=P000001 SNAPSHOT=2025-11-07
 ```
 

@@ -20,7 +20,7 @@
 ### Scripts (4 files)
 
 - ✅ `scripts/run_full_pipeline.py` ⭐ MAIN ORCHESTRATOR
-- ✅ `scripts/prepare_nb2_dataset.py`
+- ✅ `scripts/prepare_ml6_dataset.py`
 - ✅ `scripts/extract_biomarkers.py`
 - ✅ `scripts/prepare_zepp_data.py`
 
@@ -29,7 +29,7 @@
 - ✅ `src/etl/stage_csv_aggregation.py`
 - ✅ `src/etl/stage_unify_daily.py`
 - ✅ `src/etl/stage_apply_labels.py`
-- ✅ `src/etl/nb3_analysis.py`
+- ✅ `src/etl/ml7_analysis.py`
 
 ### Domain Loaders (4 files)
 
@@ -59,7 +59,7 @@
 #### scripts/ (4 files - ALL CANONICAL)
 
 - ✅ `scripts/run_full_pipeline.py` - Makefile: all pipeline targets
-- ✅ `scripts/prepare_nb2_dataset.py` - Makefile: prep-nb2 target
+- ✅ `scripts/prepare_ml6_dataset.py` - Makefile: prep-nb2 target
 - ✅ `scripts/extract_biomarkers.py` - Not in Makefile but canonical
 - ✅ `scripts/prepare_zepp_data.py` - Not in Makefile but canonical
 
@@ -117,8 +117,8 @@
 - ❓ `src/utils.py` - Check imports
 - ❓ `src/eda.py` - Check if referenced
 - ❓ `src/etl_pipeline.py` - Check if used (vs run_full_pipeline.py)
-- ❓ `src/models_nb2.py` - Check if used by nb3_analysis.py
-- ❓ `src/models_nb3.py` - Check if used by nb3_analysis.py
+- ❓ `src/models_nb2.py` - Check if used by ml7_analysis.py
+- ❓ `src/models_nb3.py` - Check if used by ml7_analysis.py
 - ❓ `src/nb3_run.py` - Check if used
 
 **Action Plan:**
@@ -314,7 +314,7 @@ archive/
 - `src.etl.stage_csv_aggregation.run_csv_aggregation`
 - `src.etl.stage_unify_daily.run_unify_daily`
 - `src.etl.stage_apply_labels.run_apply_labels`
-- `src.etl.nb3_analysis.*` (lazy imports for NB3 stages)
+- `src.etl.ml7_analysis.*` (lazy imports for ML7 stages)
 
 #### From scripts/extract_biomarkers.py:
 
@@ -414,7 +414,7 @@ Found **7 root-level modules** in `src/`:
 2. `etl_pipeline.py` (large) - Legacy ETL pipeline
 3. `models_nb2.py` (1598 lines!) - Baseline models script
 4. `models_nb3.py` - Notebook wrapper (importlib)
-5. `nb3_run.py` (699 lines) - NB3 prototype
+5. `nb3_run.py` (699 lines) - ML7 prototype
 6. `eda.py` (138 lines) - EDA notebook wrapper
 7. `utils.py` - Small utilities
 
@@ -432,23 +432,23 @@ Found **7 root-level modules** in `src/`:
 
 1. **`models_nb2.py`** (1598 lines)
 
-   - **Purpose**: "NB2 — Baseline models and LSTM scaffold"
-   - **Replacement**: `src/etl/nb3_analysis.py` (implements NB2 CV logic)
+   - **Purpose**: "ML6 — Baseline models and LSTM scaffold"
+   - **Replacement**: `src/etl/ml7_analysis.py` (implements ML6 CV logic)
    - **Risk**: Low (prototype superseded by canonical implementation)
    - **Destination**: `archive/src_root_legacy/models_nb2.py`
 
 2. **`models_nb3.py`** (small wrapper)
 
    - **Purpose**: Dynamic loader for `notebooks/NB3_DeepLearning.py`
-   - **Replacement**: `src/etl/nb3_analysis.py` (canonical NB3)
+   - **Replacement**: `src/etl/ml7_analysis.py` (canonical ML7)
    - **Risk**: Low (wrapper for old notebook, canonical version exists)
    - **Destination**: `archive/src_root_legacy/models_nb3.py`
 
 3. **`nb3_run.py`** (699 lines)
 
-   - **Purpose**: "NB3 — Logistic SHAP + Drift Detection + LSTM M1 + TFLite Export"
+   - **Purpose**: "ML7 — Logistic SHAP + Drift Detection + LSTM M1 + TFLite Export"
    - **Features**: ADWIN drift (δ=0.002), KS test, SHAP, LSTM training
-   - **Replacement**: `src/etl/nb3_analysis.py` (used by run_full_pipeline.py Stage 9)
+   - **Replacement**: `src/etl/ml7_analysis.py` (used by run_full_pipeline.py Stage 9)
    - **Risk**: Low (older prototype, canonical version in production)
    - **Destination**: `archive/src_root_legacy/nb3_run.py`
 
@@ -500,13 +500,13 @@ Found **7 root-level modules** in `src/`:
 **Immediate Actions (Low Risk)**:
 
 ```bash
-# Archive 4 safe modules (NB2/NB3 prototypes + notebook wrappers)
+# Archive 4 safe modules (ML6/ML7 prototypes + notebook wrappers)
 mkdir -p archive/src_root_legacy
 git mv src/models_nb2.py archive/src_root_legacy/
 git mv src/models_nb3.py archive/src_root_legacy/
 git mv src/nb3_run.py archive/src_root_legacy/
 git mv src/eda.py archive/src_root_legacy/
-git commit -m "refactor(Phase3A): archive legacy NB2/NB3 prototype modules"
+git commit -m "refactor(Phase3A): archive legacy ML6/ML7 prototype modules"
 ```
 
 **User Decision Required**:
@@ -530,13 +530,13 @@ python -m scripts.run_full_pipeline --help    # Expected: 0 (canonical pipeline)
 
 ### 3.5 Execution Summary
 
-✅ **Phase 3A: NB2/NB3 Prototypes** (Commit: 65f6935)
+✅ **Phase 3A: ML6/ML7 Prototypes** (Commit: 65f6935)
 
 - `src/models_nb2.py` → `archive/src_root_legacy/` (58KB, 1598-line baseline model prototype)
 - `src/models_nb3.py` → `archive/src_root_legacy/` (1.1KB, notebook wrapper)
-- `src/nb3_run.py` → `archive/src_root_legacy/` (25KB, 699-line NB3 prototype with SHAP/Drift)
+- `src/nb3_run.py` → `archive/src_root_legacy/` (25KB, 699-line ML7 prototype with SHAP/Drift)
 - `src/eda.py` → `archive/src_root_legacy/` (5.6KB, EDA notebook wrapper)
-- **Replaced by**: `src/etl/nb3_analysis.py` (canonical NB3 implementation)
+- **Replaced by**: `src/etl/ml7_analysis.py` (canonical ML7 implementation)
 
 ✅ **Phase 3B: Legacy ETL Pipeline** (Commit: 929c396)
 

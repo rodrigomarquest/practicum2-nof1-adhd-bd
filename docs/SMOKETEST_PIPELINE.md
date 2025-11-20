@@ -42,7 +42,7 @@ python -m scripts.run_full_pipeline \
   --end-stage 5
 ```
 
-**Note**: Stages 0-5 cover the core ETL (Ingest → Aggregate → Unify → Label → Segment → Prep-NB2). Stages 6-9 (NB2 → NB3 → TFLite → Report) require more computational resources and are optional for smoke testing.
+**Note**: Stages 0-5 cover the core ETL (Ingest → Aggregate → Unify → Label → Segment → Prep-ML6). Stages 6-9 (ML6 → ML7 → TFLite → Report) require more computational resources and are optional for smoke testing.
 
 ### Quick Test (Stages 1-3 only)
 
@@ -88,7 +88,7 @@ This runs:
 
 - `data/etl/P000001/2025-09-29/joined/segments/*.csv` (by episode/phase)
 
-### Stage 5: Prep-NB2
+### Stage 5: Prep-ML6
 
 - `ai/local/P000001/2025-09-29/nb2_features_train.csv`
 - `ai/local/P000001/2025-09-29/nb2_features_test.csv`
@@ -105,10 +105,10 @@ This runs:
 | 2       | Unify                | ~5-10s         |
 | 3       | Labels               | ~2-5s          |
 | 4       | Segment              | ~2-5s          |
-| 5       | Prep-NB2             | ~5-10s         |
+| 5       | Prep-ML6             | ~5-10s         |
 | **0-5** | **Total**            | **~1-2 min**   |
-| 6-7     | NB2 (Baselines + CV) | ~5-10 min      |
-| 8       | NB3 (LSTM + SHAP)    | ~10-20 min     |
+| 6-7     | ML6 (Baselines + CV) | ~5-10 min      |
+| 8       | ML7 (LSTM + SHAP)    | ~10-20 min     |
 | 9       | Report               | ~1-2s          |
 | **0-9** | **Full**             | **~15-30 min** |
 
@@ -209,8 +209,8 @@ set ZEPP_ZIP_PASSWORD=your_password       # Windows
 
 **Solution**:
 
-- Run stages 0-5 only for smoke test (skip NB2/NB3)
-- Check available RAM (NB2/NB3 can use 4-8GB)
+- Run stages 0-5 only for smoke test (skip ML6/ML7)
+- Check available RAM (ML6/ML7 can use 4-8GB)
 - Use `--start-stage` to skip completed stages
 
 ---

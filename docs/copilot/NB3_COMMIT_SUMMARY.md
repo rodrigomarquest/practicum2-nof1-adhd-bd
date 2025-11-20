@@ -1,4 +1,4 @@
-# NB3 Phase Implementation — Commit Summary
+# ML7 Phase Implementation — Commit Summary
 
 **Date**: 2025-11-07  
 **Status**: ✅ COMPLETE & TESTED  
@@ -8,9 +8,9 @@
 
 ## What Was Implemented
 
-### Phase 13: NB3 — Explainability, Drift, and LSTM
+### Phase 13: ML7 — Explainability, Drift, and LSTM
 
-Complete implementation of neurobiological model (NB3) with three key components:
+Complete implementation of neurobiological model (ML7) with three key components:
 
 1. **Logistic Regression + SHAP**
 
@@ -50,7 +50,7 @@ Complete implementation of neurobiological model (NB3) with three key components
 ### Directory Structure
 
 ```
-nb3/
+ml7/
 ├── models/
 │   └── best_model.tflite
 ├── plots/
@@ -138,23 +138,23 @@ All tested and verified to install correctly.
 Added two new targets:
 
 ```makefile
-.PHONY: nb3-run
-nb3-run:
-  @echo "[NB3] Run SHAP + Drift Detection + LSTM M1 + TFLite"
+.PHONY: ml7-run
+ml7-run:
+  @echo "[ML7] Run SHAP + Drift Detection + LSTM M1 + TFLite"
   $(PYTHON) scripts/run_nb3_pipeline.py \
     --csv data/etl/features_daily_labeled.csv \
     --outdir nb3
 
-.PHONY: nb3-all
-nb3-all: nb2-all nb3-run
-  @echo "[NB3] Complete NB2 → NB3 pipeline"
+.PHONY: ml7-all
+ml7-all: ml6-all ml7-run
+  @echo "[ML7] Complete ML6 → ML7 pipeline"
 ```
 
 **Usage**:
 
 ```bash
-make nb3-run              # NB3 only
-make nb3-all              # Full NB2→NB3 chain
+make ml7-run              # ML7 only
+make ml7-all              # Full ML6→ML7 chain
 ```
 
 ---
@@ -260,9 +260,9 @@ python scripts/run_nb3_pipeline.py \
 
 ### Upstream Dependencies
 
-- **Input**: `data/etl/features_daily_labeled.csv` (from NB2)
+- **Input**: `data/etl/features_daily_labeled.csv` (from ML6)
 - **Required columns**: date, label\_\* (configurable), 27+ numeric features
-- **Runs after**: `make nb2-all` completes successfully
+- **Runs after**: `make ml6-all` completes successfully
 
 ### Downstream Usage
 
@@ -278,11 +278,11 @@ python scripts/run_nb3_pipeline.py \
 All acceptance criteria from user spec satisfied:
 
 - [x] Load features_daily_labeled.csv (35 cols)
-- [x] Run 6 calendar-based folds (same CV as NB2)
+- [x] Run 6 calendar-based folds (same CV as ML6)
 - [x] Compute SHAP (top-5 per fold) for Logistic across all 6
 - [x] Drift checks: ADWIN δ=0.002 + KS tests p<0.01 at boundaries
-- [x] Produce nb3/shap_summary.md + plots (PNGs per fold)
-- [x] Produce nb3/drift_report.md
+- [x] Produce ml7/shap_summary.md + plots (PNGs per fold)
+- [x] Produce ml7/drift_report.md
 - [x] Prep LSTM M1 with same CV
 - [x] Export best model as best_model.tflite with latency stats
 - [x] Measure latency: 200 runs, mean/p50/p95/std in ms
@@ -294,11 +294,11 @@ All acceptance criteria from user spec satisfied:
 
 For production deployment:
 
-- [ ] Update `--csv` to point to actual NB2 output
+- [ ] Update `--csv` to point to actual ML6 output
 - [ ] Adjust `--seq_len` if needed (default 14 days is reasonable)
-- [ ] Run `make nb3-run` after `make nb2-all`
-- [ ] Review `nb3/shap_summary.md` for clinical insights
-- [ ] Check `nb3/drift_report.md` for drift findings
+- [ ] Run `make ml7-run` after `make ml6-all`
+- [ ] Review `ml7/shap_summary.md` for clinical insights
+- [ ] Check `ml7/drift_report.md` for drift findings
 - [ ] Validate TFLite model in deployment environment
 - [ ] Build Flex delegate if deploying to mobile
 
@@ -312,12 +312,12 @@ For production deployment:
 - Drift detection (ADWIN + KS) ✅
 - LSTM M1 with calendar CV ✅
 - TFLite export with latency ✅
-- nb3/shap_summary.md + plots ✅
-- nb3/drift_report.md ✅
-- nb3/models/best_model.tflite + latency_stats.json ✅
+- ml7/shap_summary.md + plots ✅
+- ml7/drift_report.md ✅
+- ml7/models/best_model.tflite + latency_stats.json ✅
 
 **GitHub Issue**: N/A (internal phase)  
-**Related Work**: NB2 (Phase 12) — complete, tested, deployed
+**Related Work**: ML6 (Phase 12) — complete, tested, deployed
 
 ---
 

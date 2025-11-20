@@ -162,7 +162,7 @@ This is a light touch - only for daily metrics when we have sparse coverage.
 
 These occur in notebook/model preparation code, not in ETL. They affect model inputs but are more transparent and easier to replace.
 
-#### 4. NB2 Baseline Model Preparation
+#### 4. ML6 Baseline Model Preparation
 
 | Property             | Value                                                                   |
 | -------------------- | ----------------------------------------------------------------------- |
@@ -183,7 +183,7 @@ These occur in notebook/model preparation code, not in ETL. They affect model in
 
 - **Baseline Models**: Low-Moderate - affects LogisticRegression baseline performance
 - **Transparency**: High - code is in notebook, easy to see and modify
-- **Scope**: Limited - only affects NB2 baseline comparisons, not production pipeline
+- **Scope**: Limited - only affects ML6 baseline comparisons, not production pipeline
 
 **Recommendation**: Replace with explicit imputation strategy:
 
@@ -192,7 +192,7 @@ These occur in notebook/model preparation code, not in ETL. They affect model in
 
 ---
 
-#### 5. NB3 Deep Learning Model Preparation
+#### 5. ML7 Deep Learning Model Preparation
 
 | Property             | Value                                                   |
 | -------------------- | ------------------------------------------------------- |
@@ -207,13 +207,13 @@ These occur in notebook/model preparation code, not in ETL. They affect model in
 
 **Rationale**: Prepare sequences for LSTM/GRU models (cannot have NaN in input tensors).
 
-**Problem**: Same as NB2 - forward-fill + zero-fill creates artificial sequences.
+**Problem**: Same as ML6 - forward-fill + zero-fill creates artificial sequences.
 
 **Impact**:
 
 - **Deep Learning Models**: Low-Moderate - affects LSTM/GRU performance
 - **Sequence Learning**: Compromised - models may learn from padded/filled sequences
-- **Scope**: Limited - only affects NB3 experiments
+- **Scope**: Limited - only affects ML7 experiments
 
 **Recommendation**:
 
@@ -328,8 +328,8 @@ These occur in notebook/model preparation code, not in ETL. They affect model in
 | **ETL: Unified Join**           | `stage_unify_daily.py`       | 🔴 HIGH    | ALL core physiological signals forward-filled                        |
 | **ETL: Label Computation**      | `auto_segment.py`            | 🔴 HIGH    | Auto-segmentation triggers computed from forward-filled HR/HRV/sleep |
 | **Enrichment: Post-Join**       | `postjoin_enricher.py`       | 🟡 MEDIUM  | Enriched metrics forward-filled after interpolation                  |
-| **Notebook: NB2 Baseline**      | `NB2_Baseline.py`            | 🟢 LOW     | Baseline model inputs forward-filled + zero-filled                   |
-| **Notebook: NB3 Deep Learning** | `NB3_DeepLearning.py`        | 🟢 LOW     | LSTM/GRU inputs forward-filled + zero-filled                         |
+| **Notebook: ML6 Baseline**      | `NB2_Baseline.py`            | 🟢 LOW     | Baseline model inputs forward-filled + zero-filled                   |
+| **Notebook: ML7 Deep Learning** | `NB3_DeepLearning.py`        | 🟢 LOW     | LSTM/GRU inputs forward-filled + zero-filled                         |
 | **Feature Engineering**         | `portable.py`, `features.py` | 🟢 LOW     | Rolling window edges zero-filled (standard)                          |
 | **Model Training**              | `baseline_train.py`          | 🟢 LOW     | Model inputs zero-filled                                             |
 | **Activity Features**           | `activity_features.py`       | 🟢 LOW     | Missing activity defaults to 0 (reasonable)                          |
@@ -461,7 +461,7 @@ These occur in notebook/model preparation code, not in ETL. They affect model in
 
 ### Phase 2: Model Code Updates (HIGH)
 
-6. **Update NB2 baseline preparation**:
+6. **Update ML6 baseline preparation**:
 
    ```python
    # Replace: Xnum = df[numeric_cols].ffill().fillna(0)
@@ -471,7 +471,7 @@ These occur in notebook/model preparation code, not in ETL. They affect model in
    #                           columns=numeric_cols)
    ```
 
-7. **Update NB3 deep learning preparation**:
+7. **Update ML7 deep learning preparation**:
    ```python
    # Add masking layer to LSTM/GRU models
    # Or use explicit imputation with domain knowledge
@@ -668,7 +668,7 @@ make pipeline PID=P000001 SNAPSHOT=2025-11-07 ZPWD="qqQKwnhY"
 - ✅ Z-scores preserve NaN (same counts as raw features)
 - ✅ PBSI computed successfully (handles NaN by using available sub-scores)
 - ✅ Labels assigned successfully
-- ✅ NB2/NB3 generated outputs
+- ✅ ML6/ML7 generated outputs
 
 **Key Finding**: NaN policy working as designed. Missing data is now explicitly represented at all pipeline stages.
 
@@ -676,5 +676,5 @@ make pipeline PID=P000001 SNAPSHOT=2025-11-07 ZPWD="qqQKwnhY"
 
 1. ✅ Run full pipeline validation - **COMPLETE**
 2. ⏳ Run sleep hourly audit to verify NaN policy
-3. ⏳ Update NB2/NB3 notebooks for NaN handling (if needed)
+3. ⏳ Update ML6/ML7 notebooks for NaN handling (if needed)
 4. ⏳ Update PBSI documentation to mention NaN policy

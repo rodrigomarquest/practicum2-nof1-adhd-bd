@@ -2,14 +2,14 @@
 
 ## Overview
 
-Complete pipeline to expand NB2/NB3 analysis across all available data with automatic segmentation:
+Complete pipeline to expand ML6/ML7 analysis across all available data with automatic segmentation:
 
 1. **ZIP Discovery & Extraction** — Recursive scan of `data/raw/` for Apple/Zepp archives
 2. **Daily Unification** — Merge Apple+Zepp measurements per day
 3. **Auto-Segmentation** — Detect context changes without `version_log_enriched.csv`
 4. **PBSI Labels** — Compute stability index scores and 2/3-class labels
-5. **NB2 Baselines** — Train 5 models across 6 calendar-based folds
-6. **NB3 Analytics** — SHAP, Drift, LSTM, and TFLite export
+5. **ML6 Baselines** — Train 5 models across 6 calendar-based folds
+6. **ML7 Analytics** — SHAP, Drift, LSTM, and TFLite export
 
 ## Quick Start
 
@@ -37,7 +37,7 @@ python scripts/run_period_expansion.py \
     --participant P000001 \
     --snapshot 2025-11-07
 
-# Include NB2/NB3 (stages 1-6)
+# Include ML6/ML7 (stages 1-6)
 python scripts/run_period_expansion.py \
     --participant P000001 \
     --snapshot 2025-11-07 \
@@ -132,10 +132,10 @@ print(f'Created {len(df)} rows with PBSI labels')
 
 **Output**: `data/etl/features_daily_labeled.csv` (35+ columns)
 
-#### Step 5: NB2 Baselines
+#### Step 5: ML6 Baselines
 
 ```bash
-python run_nb2_beiwe.py \
+python run_ml6_beiwe.py \
     --pid P000001 \
     --snapshot 2025-11-07 \
     --n-folds 6 \
@@ -146,11 +146,11 @@ python run_nb2_beiwe.py \
 
 **Output**:
 
-- `nb2/baselines_label_3cls.csv` (6 folds × 5 models)
-- `nb2/baselines_label_2cls.csv` (includes McNemar p-values)
-- `nb2/confusion_matrices/*.png` (18 confusion matrices)
+- `ml6/baselines_label_3cls.csv` (6 folds × 5 models)
+- `ml6/baselines_label_2cls.csv` (includes McNemar p-values)
+- `ml6/confusion_matrices/*.png` (18 confusion matrices)
 
-#### Step 6: NB3 Analytics
+#### Step 6: ML7 Analytics
 
 ```bash
 python scripts/run_nb3_pipeline.py \
@@ -160,11 +160,11 @@ python scripts/run_nb3_pipeline.py \
 
 **Output**:
 
-- `nb3/shap_summary.md` (top-5 features per fold + global)
-- `nb3/drift_report.md` (ADWIN + KS changepoints)
-- `nb3/lstm_report.md` (best model metrics)
-- `nb3/models/best_model.tflite` (quantized model)
-- `nb3/plots/*.png` (SHAP + ADWIN visualizations)
+- `ml7/shap_summary.md` (top-5 features per fold + global)
+- `ml7/drift_report.md` (ADWIN + KS changepoints)
+- `ml7/lstm_report.md` (best model metrics)
+- `ml7/models/best_model.tflite` (quantized model)
+- `ml7/plots/*.png` (SHAP + ADWIN visualizations)
 
 ## Auto-Segmentation Rules
 
@@ -218,7 +218,7 @@ data/
     segment_autolog.csv                   # Transition log (date, reason, metric, old_seg, new_seg)
     features_daily_labeled.csv            # 35+ cols: final dataset with PBSI labels
 
-nb2/
+ml6/
   baselines_label_3cls.csv                # 6 folds × 5 models, F1/Acc/Kappa/AUROC
   baselines_label_2cls.csv                # 2-class metrics + McNemar p-values
   confusion_matrices/
@@ -226,7 +226,7 @@ nb2/
     fold_0_naive.png
     ...
 
-nb3/
+ml7/
   shap_summary.md                         # Top-5 features per fold + global ranking
   drift_report.md                         # ADWIN changepoints + KS hits
   lstm_report.md                          # LSTM metrics + TFLite info
@@ -347,8 +347,8 @@ print('Rows per segment:', df['segment_id'].value_counts().sort_index())
 - **Unification**: ~5 sec for 400 days
 - **Auto-Segmentation**: ~2 sec for 400 days
 - **PBSI Computation**: ~10 sec for 400 days
-- **NB2 Training**: ~5 min for 6 folds × 5 models
-- **NB3 SHAP+Drift+LSTM**: ~15 min for 6 folds
+- **ML6 Training**: ~5 min for 6 folds × 5 models
+- **ML7 SHAP+Drift+LSTM**: ~15 min for 6 folds
 
 **Total time**: ~30 min for full pipeline (P000001)
 

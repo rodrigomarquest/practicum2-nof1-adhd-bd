@@ -62,10 +62,10 @@ The canonical PBSI integration is **deterministic** and **production-ready**.
 |                               | time_boundary       | 91                       | 91                       | ✅     |
 |                               | gap                 | 27                       | 27                       | ✅     |
 |                               | initial             | 1                        | 1                        | ✅     |
-| **5: Prep NB2**               | Anti-leak removed   | pbsi_score, pbsi_quality | pbsi_score, pbsi_quality | ✅     |
-| **6: NB2 Training**           | F1-score            | 1.0000±0.0000            | 1.0000±0.0000            | ✅     |
+| **5: Prep ML6**               | Anti-leak removed   | pbsi_score, pbsi_quality | pbsi_score, pbsi_quality | ✅     |
+| **6: ML6 Training**           | F1-score            | 1.0000±0.0000            | 1.0000±0.0000            | ✅     |
 |                               | Valid folds         | 1 (Fold 1)               | 1 (Fold 1)               | ✅     |
-| **7: NB3 Analysis**           | SHAP ✓              | ✓                        | ✓                        | ✅     |
+| **7: ML7 Analysis**           | SHAP ✓              | ✓                        | ✓                        | ✅     |
 |                               | Drift (ADWIN)       | 5 changes                | 5 changes                | ✅     |
 |                               | Drift (KS)          | 102/1180 significant     | 102/1180 significant     | ✅     |
 |                               | LSTM ✓              | ✓                        | ✓                        | ✅     |
@@ -160,7 +160,7 @@ z_exercise_min      = -0.5464782883542917
 
 ## Downstream Impact Validation
 
-### NB2 (Baseline Models)
+### ML6 (Baseline Models)
 
 - **F1-score**: 1.0000±0.0000 (both runs)
 - **Valid folds**: 1 (Fold 1: 2019-01-19 → 2019-03-19)
@@ -169,7 +169,7 @@ z_exercise_min      = -0.5464782883542917
 
 **Note**: Perfect F1-score is expected given extreme class imbalance (7.5% stable, 2.3% unstable).
 
-### NB3 (Advanced Analysis)
+### ML7 (Advanced Analysis)
 
 1. **SHAP**: Top-5 features identical
    - total_steps, total_distance, hr_mean, hr_std, hr_max
@@ -245,7 +245,7 @@ z_exercise_min      = -0.5464782883542917
 - [x] PBSI formula matches paper exactly
 - [x] Label thresholds correct (-0.5 / +0.5)
 - [x] Anti-leak safeguards implemented (pbsi_score removed in Stage 5)
-- [x] Downstream models working (NB2 F1=1.0, NB3 SHAP/Drift/LSTM ✓)
+- [x] Downstream models working (ML6 F1=1.0, ML7 SHAP/Drift/LSTM ✓)
 - [x] Documentation complete (3 new markdown files)
 - [x] Smoke test created (tests/test_canonical_pbsi_integration.py)
 
@@ -286,9 +286,9 @@ Stage 1 (Aggregate)  : ~120s (XML parsing, CSV aggregation)
 Stage 2 (Unify)      : ~1s
 Stage 3 (Label)      : ~2s (canonical PBSI computation)
 Stage 4 (Segment)    : <1s
-Stage 5 (Prep NB2)   : <1s
-Stage 6 (NB2)        : ~2s
-Stage 7 (NB3)        : ~17s (SHAP, Drift, LSTM)
+Stage 5 (Prep ML6)   : <1s
+Stage 6 (ML6)        : ~2s
+Stage 7 (ML7)        : ~17s (SHAP, Drift, LSTM)
 Stage 8 (TFLite)     : ~1s
 Stage 9 (Report)     : <1s
 ```
@@ -305,7 +305,7 @@ The canonical PBSI integration:
 
 1. **Produces deterministic outputs** across independent pipeline runs
 2. **Aligns with CA2 research paper methodology** (segment-wise z-scores, correct formula)
-3. **Maintains downstream compatibility** (NB2/NB3 working correctly)
+3. **Maintains downstream compatibility** (ML6/ML7 working correctly)
 4. **Preserves floating-point precision** (15+ significant digits)
 5. **Is production-ready** for further research and analysis
 

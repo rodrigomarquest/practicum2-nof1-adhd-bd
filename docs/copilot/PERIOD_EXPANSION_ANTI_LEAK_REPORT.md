@@ -12,7 +12,7 @@ Successfully implemented period expansion pipeline with anti-leak safeguards:
 - **Data**: Expanded from 365 days → **2,828 days** (8+ years: 2017-2025)
 - **Quality**: Clean aggregation from raw Apple + Zepp data
 - **Safety**: PBSI label features removed to prevent leakage
-- **Verification**: NB2 F1 score realistic (**0.82** not 1.00)
+- **Verification**: ML6 F1 score realistic (**0.82** not 1.00)
 
 ---
 
@@ -23,7 +23,7 @@ Successfully implemented period expansion pipeline with anti-leak safeguards:
 1. **Bypass**: Using hardcoded `features_daily_labeled.csv` copy (365 days)
 2. **No Period Expansion**: Data limited to 2024 only
 3. **Label Leakage**: PBSI score features could be used to predict labels directly
-4. **Unrealistic Results**: NB2 F1=1.000 suggesting information leakage
+4. **Unrealistic Results**: ML6 F1=1.000 suggesting information leakage
 
 ### Root Cause
 
@@ -127,7 +127,7 @@ Remove features that could leak label information
 | **Label Features** | pbsi_score present | Removed     | Safe ✅      |
 | **Missing Values** | Variable           | 0 (filled)  | Complete ✅  |
 
-### NB2 Model Performance
+### ML6 Model Performance
 
 | Metric                | Before                  | After        | Interpretation |
 | --------------------- | ----------------------- | ------------ | -------------- |
@@ -238,9 +238,9 @@ python -m scripts.run_period_expansion_no_bypass \
     --snapshot 2025-11-07
 ```
 
-### 5. scripts/prepare_nb2_dataset.py (220 lines)
+### 5. scripts/prepare_ml6_dataset.py (220 lines)
 
-Clean data for NB2 training
+Clean data for ML6 training
 
 **Features**:
 
@@ -252,7 +252,7 @@ Clean data for NB2 training
 **Usage**:
 
 ```bash
-python scripts/prepare_nb2_dataset.py \
+python scripts/prepare_ml6_dataset.py \
     features_daily_labeled.csv \
     --output features_nb2_clean.csv
 ```
@@ -300,7 +300,7 @@ python scripts/prepare_nb2_dataset.py \
 ✅ Target: label_3cls present
 ```
 
-### NB2 Baseline Training
+### ML6 Baseline Training
 
 ```
 Dataset: features_nb2_clean.csv (2,828 × 12)
@@ -342,12 +342,12 @@ python -m scripts.run_period_expansion_no_bypass \
     --snapshot 2025-11-07
 
 # 2. Prepare clean data
-python scripts/prepare_nb2_dataset.py \
+python scripts/prepare_ml6_dataset.py \
     data/etl/P000001/2025-11-07/joined/features_daily_labeled.csv \
     --output data/etl/P000001/2025-11-07/joined/features_nb2_clean.csv
 
-# 3. Train NB2 (with clean data)
-python run_nb2_beiwe.py \
+# 3. Train ML6 (with clean data)
+python run_ml6_beiwe.py \
     --pid P000001 \
     --snapshot 2025-11-07 \
     --input features_nb2_clean.csv
@@ -375,14 +375,14 @@ python run_nb2_beiwe.py \
 
 ## Next Steps
 
-### For NB2 Training
+### For ML6 Training
 
 1. Use `features_nb2_clean.csv` (with anti-leak safeguards)
 2. Expect realistic F1 scores (0.4-0.8)
 3. Compare baseline models
 4. Validate temporal split (no overlap)
 
-### For NB3 Analytics
+### For ML7 Analytics
 
 1. Use same `features_nb2_clean.csv`
 2. Run SHAP analysis (should show actual feature importance)

@@ -213,22 +213,22 @@ If you have old results (simple PBSI), you can compare:
 
 ## Downstream Impact
 
-### NB2 (Baselines)
+### ML6 (Baselines)
 
-- ✅ **No changes needed**: NB2 reads `label_3cls` column
+- ✅ **No changes needed**: ML6 reads `label_3cls` column
 - ✅ Temporal CV still works (6-fold, 4mo/2mo)
 - ⚠️ **Results may differ** from old runs (different labels)
 
-### NB3 (LSTM + Drift)
+### ML7 (LSTM + Drift)
 
-- ✅ **No changes needed**: NB3 uses same labels
+- ✅ **No changes needed**: ML7 uses same labels
 - ✅ SHAP will now explain z-scored features
 - ✅ Drift detection (ADWIN, KS) works with new PBSI
 
-### Stage 5 (Prep NB2)
+### Stage 5 (Prep ML6)
 
 - ✅ **No changes needed**: Blacklist columns still removed
-- ✅ `pbsi_score` and `pbsi_quality` excluded from NB2 features
+- ✅ `pbsi_score` and `pbsi_quality` excluded from ML6 features
 
 ---
 
@@ -288,7 +288,7 @@ If you have old results (simple PBSI), you can compare:
 
 1. ✅ **Claim alignment**: Paper can now correctly state "segment-wise z-scored PBSI"
 2. ✅ **Anti-leak safeguards**: Can claim z-score normalization per segment
-3. ⚠️ **Rerun analysis**: If paper results were based on old PBSI, rerun NB2/NB3
+3. ⚠️ **Rerun analysis**: If paper results were based on old PBSI, rerun ML6/ML7
 
 ### For Code Quality
 

@@ -53,7 +53,7 @@ Each day receives exactly one segment identifier assigned in chronological order
 exclusively on the two rules above. All features used in modelling (and all PBSI components)
 are z-scored \emph{within} their segment, preventing global statistics from leaking future
 information into past days. This design eliminates temporal shortcuts and ensures that
-NB2/NB3 models learn only within-segment structure rather than long-term trends.
+ML6/ML7 models learn only within-segment structure rather than long-term trends.
 
 \subsubsection{Final Segment Structure}
 

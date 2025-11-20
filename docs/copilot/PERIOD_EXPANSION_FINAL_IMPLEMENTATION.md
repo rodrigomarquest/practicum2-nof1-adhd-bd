@@ -1,6 +1,6 @@
 # Period Expansion Pipeline - Complete Implementation
 
-**Status**: ✅ **COMPLETE - READY FOR NB2/NB3 WITH ANTI-LEAK MEASURES**
+**Status**: ✅ **COMPLETE - READY FOR ML6/ML7 WITH ANTI-LEAK MEASURES**
 
 ## Summary
 
@@ -102,16 +102,16 @@ python -m scripts.run_period_expansion_no_bypass \
 - ✅ Stage 1: CSV aggregation complete
 - ✅ Stage 2: 2,828 unified days
 - ✅ Stage 3: Labels applied
-- ✅ Ready for NB2/NB3
+- ✅ Ready for ML6/ML7
 
 ---
 
 ## Data Preparation with Anti-Leak Safeguards
 
-### Prepare Clean Data for NB2
+### Prepare Clean Data for ML6
 
 ```bash
-python scripts/prepare_nb2_dataset.py \
+python scripts/prepare_ml6_dataset.py \
     data/etl/P000001/2025-11-07/joined/features_daily_labeled.csv \
     --output data/etl/P000001/2025-11-07/joined/features_nb2_clean.csv
 ```
@@ -138,7 +138,7 @@ python scripts/prepare_nb2_dataset.py \
 
 ---
 
-## Next Steps: NB2 Training (Anti-Leak)
+## Next Steps: ML6 Training (Anti-Leak)
 
 ### 1. Load clean dataset
 
@@ -216,7 +216,7 @@ print(f"F1-macro: {f1:.4f}")  # Expected: <0.7 (not 1.000)
 - **Stage 1**: `data/extracted/apple|zepp/P000001/daily_*.csv`
 - **Stage 2**: `data/etl/P000001/2025-11-07/joined/features_daily_unified.csv`
 - **Stage 3**: `data/etl/P000001/2025-11-07/joined/features_daily_labeled.csv`
-- **Clean for NB2**: `data/etl/P000001/2025-11-07/joined/features_nb2_clean.csv`
+- **Clean for ML6**: `data/etl/P000001/2025-11-07/joined/features_nb2_clean.csv`
 
 ### Configuration
 
@@ -238,7 +238,7 @@ print(f"F1-macro: {f1:.4f}")  # Expected: <0.7 (not 1.000)
 
 ---
 
-## Expected NB2 Results (After Anti-Leak Fix)
+## Expected ML6 Results (After Anti-Leak Fix)
 
 **Previous** (with leak):
 
@@ -252,9 +252,9 @@ print(f"F1-macro: {f1:.4f}")  # Expected: <0.7 (not 1.000)
 
 ---
 
-## NB3 Execution (After NB2)
+## ML7 Execution (After ML6)
 
-After successful NB2 training with anti-leak data:
+After successful ML6 training with anti-leak data:
 
 ```bash
 python scripts/run_nb3_pipeline.py \
@@ -265,10 +265,10 @@ python scripts/run_nb3_pipeline.py \
 
 Will generate:
 
-- nb3/shap_summary.md (feature importance - realistic)
-- nb3/drift_report.md (changepoint detection)
-- nb3/lstm_report.md (deep learning with expanded data)
-- nb3/models/best_model.tflite (production model)
+- ml7/shap_summary.md (feature importance - realistic)
+- ml7/drift_report.md (changepoint detection)
+- ml7/lstm_report.md (deep learning with expanded data)
+- ml7/models/best_model.tflite (production model)
 
 ---
 
@@ -287,7 +287,7 @@ df = pd.read_csv("data/etl/P000001/2025-11-07/joined/features_daily_unified.csv"
 print(f"Days: {len(df)}, Range: {df['date'].min()} to {df['date'].max()}")
 ```
 
-### Q: NB2 F1 still 1.000?
+### Q: ML6 F1 still 1.000?
 
 **A**: Ensure you're using `features_nb2_clean.csv` which has pbsi_score removed. Verify:
 
@@ -302,7 +302,7 @@ assert "pbsi_quality" not in df.columns
 **A**: Run preparation with flag:
 
 ```bash
-python scripts/prepare_nb2_dataset.py INPUT_CSV --remove-segment-id --output OUTPUT_CSV
+python scripts/prepare_ml6_dataset.py INPUT_CSV --remove-segment-id --output OUTPUT_CSV
 ```
 
 ---
@@ -313,9 +313,9 @@ python scripts/prepare_nb2_dataset.py INPUT_CSV --remove-segment-id --output OUT
 ✅ **Data Volume**: 2,828 days (expanded from 365)  
 ✅ **Quality**: Clean, no label leakage, no missing values  
 ✅ **Safeguards**: PBSI/label features removed, temporal split ready  
-✅ **Ready for**: NB2 baseline training + NB3 advanced analytics
+✅ **Ready for**: ML6 baseline training + ML7 advanced analytics
 
-**Next Action**: Execute NB2 with anti-leak dataset. Expect realistic F1 values (0.4-0.7 range), not perfect 1.0.
+**Next Action**: Execute ML6 with anti-leak dataset. Expect realistic F1 values (0.4-0.7 range), not perfect 1.0.
 
 ---
 

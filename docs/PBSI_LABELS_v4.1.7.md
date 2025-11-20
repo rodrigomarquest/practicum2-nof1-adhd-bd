@@ -326,7 +326,7 @@ def compute_pbsi_score(df, segment_col='segment_id', ...):
 ```python
 def stage_5_prep_nb2(ctx: PipelineContext) -> bool:
     """
-    Stage 5: Prepare NB2 data with temporal filter + MICE imputation.
+    Stage 5: Prepare ML6 data with temporal filter + MICE imputation.
     """
     # Load unified + labeled data
     df = pd.read_csv(ctx.joined_dir / "features_daily_labeled.csv")
@@ -393,9 +393,9 @@ python scripts/run_full_pipeline.py \
 
 **Expected output**:
 
-- Stage 5: `data/ai/P000001/2025-11-07/nb2/features_daily_nb2.csv` (1,625 days, 0 NaN)
-- Stage 6: `data/ai/P000001/2025-11-07/nb2/cv_summary.json` (F1=0.69±0.16)
-- Stage 7: `data/ai/P000001/2025-11-07/nb3/shap/`, `drift/`, `models/`
+- Stage 5: `data/ai/P000001/2025-11-07/ml6/features_daily_nb2.csv` (1,625 days, 0 NaN)
+- Stage 6: `data/ai/P000001/2025-11-07/ml6/cv_summary.json` (F1=0.69±0.16)
+- Stage 7: `data/ai/P000001/2025-11-07/ml7/shap/`, `drift/`, `models/`
 
 ### Example 2: Load MICE-imputed Data
 
@@ -403,8 +403,8 @@ python scripts/run_full_pipeline.py \
 import pandas as pd
 from pathlib import Path
 
-# Load MICE-imputed NB2 data
-df = pd.read_csv("data/ai/P000001/2025-11-07/nb2/features_daily_nb2.csv")
+# Load MICE-imputed ML6 data
+df = pd.read_csv("data/ai/P000001/2025-11-07/ml6/features_daily_nb2.csv")
 df['date'] = pd.to_datetime(df['date'])
 
 print(f"Shape: {df.shape}")
@@ -516,8 +516,8 @@ def test_mice_imputation():
 
 ```python
 def test_anti_leak():
-    """Verify no target leakage in NB2 features."""
-    df = pd.read_csv("data/ai/P000001/2025-11-07/nb2/features_daily_nb2.csv")
+    """Verify no target leakage in ML6 features."""
+    df = pd.read_csv("data/ai/P000001/2025-11-07/ml6/features_daily_nb2.csv")
 
     # Prohibited columns
     prohibited = ['pbsi_score', 'pbsi_quality', 'sleep_sub', 'cardio_sub', 'activity_sub', 'segment_id']
@@ -541,9 +541,9 @@ python scripts/run_full_pipeline.py \
   --start-stage 1
 
 # Verify outputs
-ls data/ai/P000001/2025-11-07/nb2/features_daily_nb2.csv
-ls data/ai/P000001/2025-11-07/nb2/cv_summary.json
-ls data/ai/P000001/2025-11-07/nb3/shap/
+ls data/ai/P000001/2025-11-07/ml6/features_daily_nb2.csv
+ls data/ai/P000001/2025-11-07/ml6/cv_summary.json
+ls data/ai/P000001/2025-11-07/ml7/shap/
 ```
 
 **Expected log**:
@@ -576,10 +576,10 @@ ValueError: Input X contains NaN.
 **Solution**:
 
 1. Check Stage 5 completed successfully
-2. Verify `data/ai/.../nb2/features_daily_nb2.csv` exists
+2. Verify `data/ai/.../ml6/features_daily_nb2.csv` exists
 3. Verify 0 NaN in output:
    ```python
-   df = pd.read_csv("data/ai/.../nb2/features_daily_nb2.csv")
+   df = pd.read_csv("data/ai/.../ml6/features_daily_nb2.csv")
    print(df.isna().sum().sum())  # Should be 0
    ```
 
@@ -604,13 +604,13 @@ Label distribution: +1=80%, 0=15%, -1=5%
 **Symptom**:
 
 ```
-[NB3] Loading: features_daily_labeled.csv (2828 days)
+[ML7] Loading: features_daily_labeled.csv (2828 days)
 ValueError: Input X contains NaN.
 ```
 
 **Solution**:
 
-- Update `scripts/run_full_pipeline.py` Stage 7 to load `ai/nb2/features_daily_nb2.csv`
+- Update `scripts/run_full_pipeline.py` Stage 7 to load `ai/ml6/features_daily_nb2.csv`
 - Verify v4.1.7 implementation (see line ~585)
 
 ---

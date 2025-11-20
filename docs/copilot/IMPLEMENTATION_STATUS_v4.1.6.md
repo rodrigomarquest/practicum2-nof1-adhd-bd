@@ -2,7 +2,7 @@
 
 **Date**: November 20, 2025 02:33 UTC  
 **Status**: ✅ PBSI Labels Implemented Successfully  
-**Issue Found**: ⚠️ Pre-existing NaN handling in NB2/NB3 (unrelated to v4.1.6)
+**Issue Found**: ⚠️ Pre-existing NaN handling in ML6/ML7 (unrelated to v4.1.6)
 
 ---
 
@@ -36,7 +36,7 @@ LABEL DISTRIBUTION (v4.1.6):
 
 ## ⚠️ PRE-EXISTING ISSUE (Not v4.1.6)
 
-### Stage 6 & 7 (NB2/NB3) - NaN Values in Features
+### Stage 6 & 7 (ML6/ML7) - NaN Values in Features
 
 ```
 ERROR: Input X contains NaN.
@@ -51,7 +51,7 @@ LogisticRegression does not accept missing values encoded as NaN
 
 - Stage 3 (Labels) completed successfully ✅
 - Stage 4 (Segments) completed successfully ✅
-- Stage 5 (Prep NB2) completed successfully ✅
+- Stage 5 (Prep ML6) completed successfully ✅
 - Stages 6 & 7 fail at sklearn model fitting (feature matrix has NaNs)
 
 ---
@@ -174,8 +174,8 @@ model = HistGradientBoostingClassifier(random_state=42)
 
 **What to skip for now**:
 
-- NB2 baseline model training ⚠️ (NaN issue)
-- NB3 LSTM training ⚠️ (NaN issue)
+- ML6 baseline model training ⚠️ (NaN issue)
+- ML7 LSTM training ⚠️ (NaN issue)
 - Model performance metrics ⚠️ (no trained models)
 
 ---
@@ -194,8 +194,8 @@ model = HistGradientBoostingClassifier(random_state=42)
 
 **Exclude from Paper** (mention as "Future Work"):
 
-1. ⚠️ Baseline model comparisons (NB2)
-2. ⚠️ LSTM temporal models (NB3)
+1. ⚠️ Baseline model comparisons (ML6)
+2. ⚠️ LSTM temporal models (ML7)
 3. ⚠️ Model performance metrics
 4. ⚠️ SHAP explanations
 
@@ -265,7 +265,7 @@ git tag v4.1.6
 2. **✅ Run NB1 EDA**: Verify labels, plot distributions
 3. **✅ Update paper**: Add methods section + limitations disclaimer
 4. **✅ Commit v4.1.6**: Tag release
-5. **⏸️ Skip NB2/NB3**: Leave for v4.1.7 (after CA2)
+5. **⏸️ Skip ML6/ML7**: Leave for v4.1.7 (after CA2)
 
 ---
 

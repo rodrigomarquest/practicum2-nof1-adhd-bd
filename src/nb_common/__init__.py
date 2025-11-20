@@ -1,4 +1,4 @@
-"""Common helpers for NB2/NB3 notebooks."""
+"""Common helpers for ML6/ML7 notebooks."""
 
 __all__ = [
     "env",

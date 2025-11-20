@@ -37,10 +37,10 @@ The pipeline consists of **10 stages** (0-9):
 | 2     | **Unify**     | Per-metric CSVs    | `features_daily_unified.csv`     | `run_full_pipeline.py` stage 2 |
 | 3     | **Label**     | Unified features   | `features_daily_labeled.csv`     | `run_full_pipeline.py` stage 3 |
 | 4     | **Segment**   | Labeled features   | `segment_autolog.csv`            | `run_full_pipeline.py` stage 4 |
-| 5     | **Prep-NB2**  | Segments           | `X_train.npy`, `y_train.npy`     | `run_full_pipeline.py` stage 5 |
-| 6     | **NB2**       | Training arrays    | `data/ai/.../nb2/`               | `run_full_pipeline.py` stage 6 |
-| 7     | **NB3**       | Training sequences | `data/ai/.../nb3/`               | `run_full_pipeline.py` stage 7 |
-| 8     | **TFLite**    | NB3 model          | `model.tflite`                   | `run_full_pipeline.py` stage 8 |
+| 5     | **Prep-ML6**  | Segments           | `X_train.npy`, `y_train.npy`     | `run_full_pipeline.py` stage 5 |
+| 6     | **ML6**       | Training arrays    | `data/ai/.../ml6/`               | `run_full_pipeline.py` stage 6 |
+| 7     | **ML7**       | Training sequences | `data/ai/.../ml7/`               | `run_full_pipeline.py` stage 7 |
+| 8     | **TFLite**    | ML7 model          | `model.tflite`                   | `run_full_pipeline.py` stage 8 |
 | 9     | **Report**    | All outputs        | `report.pdf`                     | `run_full_pipeline.py` stage 9 |
 
 **Data Structure**:
@@ -64,11 +64,11 @@ data/
     qc/                             # Quality control reports
       qc_report.json
   ai/P000001/2025-11-07/
-    nb2/                            # Stage 6 outputs
+    ml6/                            # Stage 6 outputs
       metrics_summary.csv
       confusion_matrix.csv
       predictions.csv
-    nb3/                            # Stage 7 outputs
+    ml7/                            # Stage 7 outputs
       training_log.json
       metrics_summary.csv
       predictions.csv
@@ -182,18 +182,18 @@ REPO_ROOT = Path.cwd().parent if Path.cwd().name == "notebooks" else Path.cwd()
 
 ### What It Does
 
-1. **Load NB2 Outputs**: Per-fold metrics, confusion matrices, predictions
+1. **Load ML6 Outputs**: Per-fold metrics, confusion matrices, predictions
 2. **Performance Metrics**: Visualize macro F1, balanced accuracy, Cohen's kappa across folds
 3. **Confusion Matrix**: Heatmaps (raw counts + normalized)
-4. **Baseline Comparison**: NB2 vs dummy/naive/rule-based models
+4. **Baseline Comparison**: ML6 vs dummy/naive/rule-based models
 5. **Time Series Predictions**: Ground truth vs predictions over 8 years
 
 ### Key Visualizations
 
 - **Figure 5** [Paper]: Confusion matrix (normalized) → Shows classification performance
-- **Table 3** [Paper]: NB2 vs baselines comparison → Demonstrates model superiority
+- **Table 3** [Paper]: ML6 vs baselines comparison → Demonstrates model superiority
 
-### NB2 Architecture
+### ML6 Architecture
 
 - **Model**: Regularized logistic regression (L2 penalty, C=1.0)
 - **Features**: 7 physiological signals (sleep, HR, HRV, steps, screen time)
@@ -208,13 +208,13 @@ REPO_ROOT = Path.cwd().parent if Path.cwd().name == "notebooks" else Path.cwd()
 | Dummy (most frequent)         | ~0.20     | Always predicts neutral |
 | Naive (previous day)          | ~0.35     | Simple persistence      |
 | Rule-based (thresholds)       | ~0.50     | Hand-crafted rules      |
-| **NB2 (Logistic Regression)** | **~0.81** | **Learned from data**   |
+| **ML6 (Logistic Regression)** | **~0.81** | **Learned from data**   |
 
 ### When to Use
 
-- **Model validation**: Verify NB2 training succeeded
+- **Model validation**: Verify ML6 training succeeded
 - **Performance reporting**: Extract metrics for paper
-- **Baseline establishment**: Before comparing with NB3
+- **Baseline establishment**: Before comparing with ML7
 - **Confusion analysis**: Identify systematic misclassifications
 
 ### Expected Runtime
@@ -233,22 +233,22 @@ REPO_ROOT = Path.cwd().parent if Path.cwd().name == "notebooks" else Path.cwd()
 
 **File**: `notebooks/NB3_DeepLearning.ipynb`  
 **Lines**: ~500  
-**Purpose**: LSTM sequence model evaluation and NB2 comparison
+**Purpose**: LSTM sequence model evaluation and ML6 comparison
 
 ### What It Does
 
-1. **Load NB3 Outputs**: Training logs, metrics, predictions
+1. **Load ML7 Outputs**: Training logs, metrics, predictions
 2. **Training Curves**: Loss + accuracy over epochs (train/val)
 3. **Performance Metrics**: Per-fold macro F1, balanced accuracy, Cohen's kappa
-4. **NB2 vs NB3 Comparison**: Side-by-side bar chart with improvement %
+4. **ML6 vs ML7 Comparison**: Side-by-side bar chart with improvement %
 5. **Sequence Predictions**: 3-panel visualization (truth, predictions, errors)
 
 ### Key Visualizations
 
 - **Figure 6** [Paper]: Training curves → Shows LSTM convergence
-- **Table 3** [Paper]: NB2 vs NB3 comparison → Quantifies deep learning benefit
+- **Table 3** [Paper]: ML6 vs ML7 comparison → Quantifies deep learning benefit
 
-### NB3 Architecture
+### ML7 Architecture
 
 - **Model**: Bidirectional LSTM with dropout
 - **Input**: 14-day windows (7-day stride)
@@ -260,15 +260,15 @@ REPO_ROOT = Path.cwd().parent if Path.cwd().name == "notebooks" else Path.cwd()
 
 ### Expected Performance
 
-| Scenario         | NB3 Macro F1 | vs NB2 | Interpretation             |
+| Scenario         | ML7 Macro F1 | vs ML6 | Interpretation             |
 | ---------------- | ------------ | ------ | -------------------------- |
 | **Best case**    | 0.83-0.87    | +3-5%  | Temporal patterns captured |
 | **Typical case** | 0.79-0.82    | ±2%    | Parity with baseline       |
-| **Worst case**   | < 0.79       | -3%+   | Overfitting (use NB2)      |
+| **Worst case**   | < 0.79       | -3%+   | Overfitting (use ML6)      |
 
 ### When to Use
 
-- **Model selection**: Decide between NB2 and NB3 for deployment
+- **Model selection**: Decide between ML6 and ML7 for deployment
 - **Training validation**: Verify no overfitting (val_loss stable)
 - **Performance reporting**: Extract metrics for paper/thesis
 - **Sequence analysis**: Understand multi-day behavioral patterns
@@ -281,7 +281,7 @@ REPO_ROOT = Path.cwd().parent if Path.cwd().name == "notebooks" else Path.cwd()
 
 - Requires stage 7 completed
 - Training log stored in `training_log.json` or `history.json`
-- If NB3 < NB2, recommend using NB2 as final model
+- If ML7 < ML6, recommend using ML6 as final model
 - TFLite export (stage 8) uses best performing model
 
 ---
@@ -331,15 +331,15 @@ python -m scripts.run_full_pipeline \
 | Figure 3(a) | Missingness      | NB1      | Section 3 | Data quality bar chart     |
 | Figure 3(b) | Yearly trends    | NB1      | Section 5 | 4-panel time series        |
 | Figure 4    | Segments         | NB1      | Section 8 | Timeline with 119 segments |
-| Figure 5    | Confusion matrix | NB2      | Section 3 | Normalized heatmap         |
-| Figure 6    | Training curves  | NB3      | Section 2 | Loss + accuracy            |
+| Figure 5    | Confusion matrix | ML6      | Section 3 | Normalized heatmap         |
+| Figure 6    | Training curves  | ML7      | Section 2 | Loss + accuracy            |
 
 ### Tables for Paper
 
 | Table   | Source           | Notebook  | Cell          | Description                 |
 | ------- | ---------------- | --------- | ------------- | --------------------------- |
 | Table 2 | Dataset summary  | NB1       | Section 2     | Feature groups, missingness |
-| Table 3 | Model comparison | NB2 + NB3 | Sections 4, 4 | NB2 vs NB3 metrics          |
+| Table 3 | Model comparison | ML6 + ML7 | Sections 4, 4 | ML6 vs ML7 metrics          |
 
 ### Exporting Figures
 
@@ -374,8 +374,8 @@ All notebooks are **100% reproducible** given:
 
 ### Random Seed Locations
 
-- **NB2**: `np.random.seed(42)`, `random.seed(42)` in `run_full_pipeline.py` stage 6
-- **NB3**: `tf.random.set_seed(42)`, `np.random.seed(42)`, `random.seed(42)` in stage 7
+- **ML6**: `np.random.seed(42)`, `random.seed(42)` in `run_full_pipeline.py` stage 6
+- **ML7**: `tf.random.set_seed(42)`, `np.random.seed(42)`, `random.seed(42)` in stage 7
 - **Segmentation**: Deterministic (calendar boundaries + gaps)
 - **Labeling**: Deterministic (PBSI thresholds)
 
@@ -393,8 +393,8 @@ python -m scripts.run_full_pipeline --participant P000001 --snapshot 2025-11-07 
 python -m scripts.run_full_pipeline --participant P000001 --snapshot 2025-11-07 --start-stage 0 --end-stage 7
 
 # Compare metrics (should be identical)
-diff data/ai/P000001/2025-11-07/nb2/metrics_summary.csv \
-     data/ai/P000001/2025-11-07/nb2/metrics_summary.csv.bak
+diff data/ai/P000001/2025-11-07/ml6/metrics_summary.csv \
+     data/ai/P000001/2025-11-07/ml6/metrics_summary.csv.bak
 ```
 
 ---
@@ -419,7 +419,7 @@ diff data/ai/P000001/2025-11-07/nb2/metrics_summary.csv \
 
 - **External validation**: Compare with clinical assessments (PHQ-9, MDQ)
 - **Feature engineering**: Add circadian rhythm features, sleep architecture
-- **Ensemble models**: Combine NB2 + NB3 predictions (voting/stacking)
+- **Ensemble models**: Combine ML6 + ML7 predictions (voting/stacking)
 - **Explainability**: SHAP values, attention weights, saliency maps
 
 ---
