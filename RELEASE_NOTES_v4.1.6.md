@@ -17,6 +17,7 @@ Version 4.1.6 implements **percentile-based thresholds** for PBSI labels, resolv
 ### 1. Percentile-Based Thresholds (Default)
 
 **Before (v4.1.5)**:
+
 ```python
 # Fixed thresholds
 stable:   pbsi ≤ -0.5  →  176 days (6.2%)
@@ -25,6 +26,7 @@ unstable: pbsi ≥ 0.5  →    9 days (0.3%)
 ```
 
 **After (v4.1.6)**:
+
 ```python
 # Percentile-based thresholds (P25/P75)
 low_pbsi:  pbsi ≤ P25 (-0.117)  →  707 days (25%)
@@ -33,6 +35,7 @@ high_pbsi: pbsi ≥ P75 (0.172)  →  707 days (25%)
 ```
 
 **Impact**:
+
 - ✅ **Balanced classes**: All 3 classes have sufficient samples for ML training
 - ✅ **Cross-validation viable**: Stage 6 (NB2) no longer skips training
 - ✅ **Adaptive**: Thresholds adjust to each participant's data distribution
@@ -41,16 +44,19 @@ high_pbsi: pbsi ≥ P75 (0.172)  →  707 days (25%)
 ### 2. Renamed Labels (Clinical Coherence)
 
 **Before (v4.1.5)**:
+
 - `+1`: "stable" (❌ vague, implies psychiatric state)
 - `0`: "neutral" (❌ clinically ambiguous)
 - `-1`: "unstable" (❌ does not map to DSM-5 diagnoses)
 
 **After (v4.1.6)**:
+
 - `+1`: **"low_pbsi (regulated)"** - Physiologically regulated patterns
 - `0`: **"mid_pbsi (typical)"** - Typical physiological patterns
 - `-1`: **"high_pbsi (dysregulated)"** - Physiologically dysregulated patterns
 
 **Impact**:
+
 - ✅ **Descriptive, not prescriptive**: Labels describe data, not diagnoses
 - ✅ **Avoids psychiatric terminology**: Does not claim to detect mania/depression/ADHD
 - ✅ **Transparent**: Clear that these are composite physiological indices
@@ -58,12 +64,14 @@ high_pbsi: pbsi ≥ P75 (0.172)  →  707 days (25%)
 ### 3. Clinical Validity Disclaimers
 
 Added explicit documentation that PBSI labels:
+
 - ❌ Are **NOT validated** against mood diaries, clinician ratings, or DSM-5 criteria
 - ❌ Do **NOT represent** psychiatric states (mania, depression, ADHD severity)
 - ✅ Are **exploratory** physiological composites requiring validation
 - ✅ Should be cross-referenced with clinical context (medications, life events)
 
 **Where**:
+
 - Module docstring (`src/labels/build_pbsi.py`)
 - Function docstrings
 - Logger output
@@ -72,12 +80,14 @@ Added explicit documentation that PBSI labels:
 ### 4. Backward Compatibility
 
 **Maintained**:
+
 - Legacy fixed thresholds available via flag: `use_percentile_thresholds=False`
 - Label integer values unchanged (+1, 0, -1)
 - Column names unchanged (`label_3cls`, `label_2cls`)
 - Pipeline integration unchanged (Stage 3)
 
 **Deprecated**:
+
 - `label_clinical` column (replaced by `label_3cls`)
 - "stable/neutral/unstable" terminology (documentation only)
 
@@ -87,21 +97,21 @@ Added explicit documentation that PBSI labels:
 
 ### Class Distribution
 
-| Metric | v4.1.5 (Fixed) | v4.1.6 (Percentile) | Improvement |
-|--------|----------------|---------------------|-------------|
-| **Low PBSI (regulated)** | 176 (6.2%) | 707 (25%) | +4.0x samples |
-| **Mid PBSI (typical)** | 2,643 (93.5%) | 1,414 (50%) | -46.5% (balanced) |
-| **High PBSI (dysregulated)** | 9 (0.3%) | 707 (25%) | +78.5x samples |
-| **Min class size** | 9 days | 707 days | Viable for 6-fold CV |
-| **Class ratio** | 1:294:20 | 1:2:1 | Balanced |
+| Metric                       | v4.1.5 (Fixed) | v4.1.6 (Percentile) | Improvement          |
+| ---------------------------- | -------------- | ------------------- | -------------------- |
+| **Low PBSI (regulated)**     | 176 (6.2%)     | 707 (25%)           | +4.0x samples        |
+| **Mid PBSI (typical)**       | 2,643 (93.5%)  | 1,414 (50%)         | -46.5% (balanced)    |
+| **High PBSI (dysregulated)** | 9 (0.3%)       | 707 (25%)           | +78.5x samples       |
+| **Min class size**           | 9 days         | 707 days            | Viable for 6-fold CV |
+| **Class ratio**              | 1:294:20       | 1:2:1               | Balanced             |
 
 ### Training Impact
 
-| Pipeline Stage | v4.1.5 | v4.1.6 | Notes |
-|----------------|--------|--------|-------|
-| **Stage 6 (NB2)** | ❌ Skipped | ✅ Runs | Sufficient class diversity |
-| **Stage 7 (NB3)** | ⚠️ Partial | ✅ Full | LSTM training enabled |
-| **Stage 8 (TFLite)** | ❌ Skipped | ✅ Runs | Model export enabled |
+| Pipeline Stage       | v4.1.5     | v4.1.6  | Notes                      |
+| -------------------- | ---------- | ------- | -------------------------- |
+| **Stage 6 (NB2)**    | ❌ Skipped | ✅ Runs | Sufficient class diversity |
+| **Stage 7 (NB3)**    | ⚠️ Partial | ✅ Full | LSTM training enabled      |
+| **Stage 8 (TFLite)** | ❌ Skipped | ✅ Runs | Model export enabled       |
 
 ---
 
@@ -110,6 +120,7 @@ Added explicit documentation that PBSI labels:
 ### `build_pbsi_labels()` Function
 
 **New Parameters**:
+
 ```python
 def build_pbsi_labels(
     unified_df: pd.DataFrame,
@@ -125,6 +136,7 @@ def build_pbsi_labels(
 ```
 
 **Usage Examples**:
+
 ```python
 # Default (v4.1.6 behavior - percentile-based)
 df_labeled = build_pbsi_labels(unified_df)
@@ -145,11 +157,13 @@ df_labeled = build_pbsi_labels(
 ## 📝 Documentation Updates
 
 ### New Files
+
 - **`docs/PBSI_LABELS_v4.1.6.md`**: Technical reference for v4.1.6 labels
 - **`docs/CLINICAL_COHERENCE_ANALYSIS.md`**: Full analysis of clinical validity issues
 - **`docs/PBSI_THRESHOLD_ANALYSIS.md`**: Statistical rationale for percentile approach
 
 ### Updated Files
+
 - **`src/labels/build_pbsi.py`**: Implementation with percentile logic
 - **`README.md`**: (to be updated) Mention v4.1.6 improvements
 - **Paper draft**: (to be updated) Add clinical validity disclaimer
@@ -161,6 +175,7 @@ df_labeled = build_pbsi_labels(
 ### For Existing Analyses
 
 **Option 1: Adopt v4.1.6 (Recommended)**
+
 ```bash
 # Re-run pipeline with new defaults
 make pipeline PID=P000001 SNAPSHOT=2025-11-07
@@ -170,6 +185,7 @@ make pipeline PID=P000001 SNAPSHOT=2025-11-07
 ```
 
 **Option 2: Keep v4.1.5 Behavior**
+
 ```python
 # In Python scripts
 df_labeled = build_pbsi_labels(
@@ -181,6 +197,7 @@ df_labeled = build_pbsi_labels(
 ```
 
 **Option 3: Custom Thresholds**
+
 ```python
 # For specific research questions
 df_labeled = build_pbsi_labels(
@@ -193,10 +210,12 @@ df_labeled = build_pbsi_labels(
 ### For Papers / Reports
 
 **Update Terminology**:
+
 - ❌ "periods of stability/instability"
 - ✅ "periods of physiological regulation/dysregulation"
 
 **Add Disclaimer** (suggested text):
+
 > The PBSI labels (low/mid/high) represent composite physiological indices derived from sleep, cardiovascular, and activity patterns. These labels have not been validated against psychiatric ground truth (mood diaries, clinician ratings, or DSM-5 diagnostic criteria) and should not be interpreted as direct proxies for psychiatric states (mania, depression, ADHD severity). They are exploratory constructs suitable for hypothesis generation, requiring prospective validation with ecological momentary assessments (EMA) and clinical interviews.
 
 ---
@@ -220,6 +239,7 @@ df_labeled = build_pbsi_labels(
 ### Future Validation (v5.x)
 
 Planned for v5.0.0:
+
 - **Ground Truth Collection**: Retrospective mood diary + medication timeline
 - **Clinical Mapping**: Validate PBSI patterns against documented psychiatric states
 - **State-Specific Biomarkers**: Separate indices for mania, depression, ADHD
@@ -230,6 +250,7 @@ Planned for v5.0.0:
 ## 🐛 Known Issues
 
 1. **Segment Info Loading**: `segment_autolog.csv` format (date_start/date_end) not yet fully integrated
+
    - **Workaround**: Currently uses global z-scores
    - **Fix**: Planned for v4.1.7
 
@@ -242,6 +263,7 @@ Planned for v5.0.0:
 ## 🙏 Acknowledgments
 
 This release addresses critical feedback about clinical coherence and class balancing. Special thanks to:
+
 - Scientific rigor > convenience
 - Transparent limitations > overstated claims
 - Data-driven thresholds > arbitrary values
@@ -251,6 +273,7 @@ This release addresses critical feedback about clinical coherence and class bala
 ## 📚 References
 
 - **Internal Docs**:
+
   - `docs/PBSI_LABELS_v4.1.6.md` - Technical specs
   - `docs/CLINICAL_COHERENCE_ANALYSIS.md` - Validity analysis
   - `docs/PBSI_THRESHOLD_ANALYSIS.md` - Threshold rationale

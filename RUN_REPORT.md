@@ -1,6 +1,6 @@
 # RUN_REPORT.md - Pipeline Execution Summary
 
-**Generated**: 2025-11-19 06:28:17
+**Generated**: 2025-11-20 02:33:34
 **Participant**: P000001
 **Snapshot**: 2025-11-07
 
@@ -12,14 +12,14 @@
 
 ## Label Distribution
 
-- **Label -1 (Unstable)**: 10 (0.4%)
-- **Label +0 (Neutral)**: 2682 (94.8%)
-- **Label +1 (Stable)**: 136 (4.8%)
+- **Label -1 (Unstable)**: 707 (25.0%)
+- **Label +0 (Neutral)**: 1414 (50.0%)
+- **Label +1 (Stable)**: 707 (25.0%)
 
 ## NB3: Drift Detection
 
-- **ADWIN Changes Detected (δ=0.002)**: 5
-- **KS Significant Tests (p<0.05)**: 44
+- **ADWIN Changes Detected (δ=0.002)**: 0
+- **KS Significant Tests (p<0.05)**: 0
 
 ## Artifact Paths
 

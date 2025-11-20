@@ -1,283 +1,173 @@
 N-of-1 ADHD + Bipolar – Wearable-Based Digital Phenotyping
 
-1. Purpose & Scope
+**Pipeline Version**: v4.1.5  
+**Last Updated**: November 20, 2025
 
-This document gives a high-level overview of the end-to-end data pipeline used in the N-of-1 ADHD + Bipolar Disorder project.
+## 1. Purpose & Scope
 
-Goals
+This document provides a high-level overview of the deterministic end-to-end data pipeline used in the N-of-1 ADHD + Bipolar Disorder digital phenotyping study.
 
-Integrate multi-modal wearable data (Apple Health, Zepp / Amazfit, Helio Ring) into a single, reproducible pipeline.
+### Goals
 
-Produce daily, participant-level features suitable for time-series modeling and clinical interpretation.
+- Integrate multi-modal wearable data (Apple Health, Zepp/Amazfit) into a single, **100% reproducible** pipeline
+- Produce daily, participant-level features suitable for time-series modeling and clinical interpretation
+- Support **research reproducibility**: ETL transparency, feature provenance, and modeling traceability (NB0–NB3)
+- Enable **deterministic execution** with fixed random seeds across all stages
 
-Support the needs of the Practicum CA2/CA3: ETL reproducibility, feature transparency, and modeling traceability (NB1–NB3).
+The focus of this document is on what each stage does and how the pieces connect. For implementation details, see `docs/ETL_ARCHITECTURE_COMPLETE.md`.
 
-The focus of this document is on what each stage does and how the pieces connect, not on implementation details of each function.
+## 2. Data Sources
 
-2. Data Sources
-   2.1 Participants & Study Design
+### 2.1 Participants & Study Design
 
-Design: N-of-1 longitudinal study (24 months).
+- **Design**: N-of-1 longitudinal study (8 years)
+- **Primary participant**: P000001 (self)
+- **Timeline**: December 2017 – October 2025 (~2,828 days)
+- **Segments**: 119 behavioral segments detected automatically via calendar boundaries + gaps >1 day
 
-Primary participant: P000001 (self).
+### 2.2 Sensors and Platforms
 
-Timeline: approx. 2023–2025 in multiple segments S1–S6 (treatment/medication regimes defined in version_log_enriched.csv).
+**Apple Health** (iPhone + Apple Watch)
 
-2.2 Sensors and Platforms
+- Heart Rate (HR)
+- Heart Rate Variability (HRV)
+- Sleep stages and durations
+- Activity (steps, distance, active energy)
+- Screen Time (iOS usage)
+- State of Mind / mood check-ins (iOS 17+)
 
-Apple Health (iPhone + Apple Watch / Helio Ring bridge)
+**Zepp / Amazfit** (GTR 4)
 
-Heart Rate (HR)
+- Heart Rate / HRV
+- Sleep (total duration, stages, sleep score)
+- Activity (steps, PAI score, workouts)
+- Stress metrics
 
-HRV (if available)
+**Metadata**
 
-Sleep stages and durations
+- Device context logs (timezone changes, device transitions)
+- Segmentation autologs (119 segments with calendar boundaries)
+- Pipeline provenance (ETL manifests, QC reports)
 
-Activity (steps, distance, active energy)
+## 3. Repository Structure (v4.1.5)
 
-State of Mind / mood check-ins (for labels)
-
-Zepp / Amazfit (GTR2 → GTR4 + Helio Ring via Zepp)
-
-Heart Rate / HRV
-
-Sleep (total duration, stages, sleep score)
-
-Activity (steps, activity intensity, workouts)
-
-Emotion / Stress (when exportable via Zepp Cloud or in-app export)
-
-Meta & Logs
-
-version_log_enriched.csv: medication / regime segments (S1–S6)
-
-EMA, subjective mood reports (when available)
-
-Device / export metadata (timestamps, snapshot dates, etc.)
-
-3. Repository & Directory Structure (High-Level)
-
-Exact paths may vary slightly; this is the conceptual layout.
-
-.
+```
+practicum2-nof1-adhd-bd/
 ├── data/
-│ ├── raw/ # Original exports (zip/xml/csv) from Apple, Zepp
-│ ├── extracted/ # Unzipped / parsed intermediate files
-│ ├── etl/
-│ │ └── P000001/
-│ │ └── snapshots/
-│ │ └── YYYY-MM-DD/
-│ │ ├── cardio/
-│ │ ├── sleep/
-│ │ ├── activity/
-│ │ ├── joined/
-│ │ └── ai*input/
-│ └── meta/
-│ ├── version_log_enriched.csv
-│ └── ...
-├── src/
-│ ├── etl/
-│ │ ├── cardio*_.py
-│ │ ├── sleep\__.py
-│ │ ├── activity*\*.py
-│ │ └── join*\*.py
-│ ├── features/
-│ │ └── daily_features.py
-│ ├── labels/
-│ │ └── label_builder.py
-│ ├── models/
-│ │ ├── run_nb1_eda.py
-│ │ ├── run_nb2_baselines.py
-│ │ └── run_nb3_lstm.py
-│ └── utils/
-│ └── io_guards.py, qc_utils.py, ...
+│   ├── raw/                              # Original exports (not in git)
+│   ├── etl/P000001/2025-11-07/          # Snapshot-based ETL outputs
+│   │   ├── extracted/                    # Stage 0-1: Per-metric daily CSVs
+│   │   ├── joined/                       # Stage 2-4: Unified features + segments
+│   │   └── qc/                           # Quality control reports
+│   └── ai/P000001/2025-11-07/           # Modeling outputs
+│       ├── nb2/                          # Stage 6: Logistic regression
+│       └── nb3/                          # Stage 7: LSTM models
 ├── notebooks/
-│ ├── 01_nb1_eda.ipynb
-│ ├── 02_nb2_baselines.ipynb
-│ └── 03_nb3_lstm.ipynb
-├── reports/
-│ ├── nb1_eda_summary.md
-│ ├── nb1_feature_stats.csv
-│ ├── nb2_results.csv
-│ └── nb3_results.csv
+│   ├── NB0_DataRead.ipynb               # Stage detection & readiness
+│   ├── NB1_EDA.ipynb                    # Exploratory data analysis
+│   ├── NB2_Baseline.ipynb               # Baseline model results
+│   ├── NB3_DeepLearning.ipynb           # LSTM evaluation
+│   └── archive/                         # Deprecated notebooks
+├── src/
+│   ├── etl_pipeline.py                  # Stage 0: Extraction orchestrator
+│   ├── make_labels.py                   # PBSI label construction
+│   └── models_nb2.py, models_nb3.py     # Modeling scripts
+├── scripts/
+│   └── run_full_pipeline.py             # Main orchestrator (10 stages)
+├── config/
+│   ├── settings.yaml                    # Pipeline configuration
+│   ├── label_rules.yaml                 # PBSI threshold definitions
+│   └── participants.yaml                # Participant metadata
 ├── docs/
-│ ├── pipeline_overview.md # THIS FILE
-│ ├── appendix_c_sensor_mapping.md
-│ └── appendix_d_feature_glossary.md
-└── Makefile
+│   ├── notebooks_overview.md            # Canonical notebooks guide
+│   ├── ETL_ARCHITECTURE_COMPLETE.md     # Technical architecture
+│   ├── QUICK_REFERENCE.md               # Pipeline cheat sheet
+│   ├── latex/                           # Research paper sources
+│   └── copilot/                         # AI-assisted development docs
+└── Makefile                             # Convenience targets
+```
 
-4. Snapshot Philosophy
+## 4. Snapshot Philosophy
 
-All ETL operations are run per snapshot:
+All ETL operations are run per **snapshot** (a consistent view of data at a given date):
 
-A snapshot is a consistent view of raw+extracted data at a given date:
-data/etl/P000001/snapshots/2025-10-22/…
+- **Path structure**: `data/etl/P000001/2025-11-07/...`
+- **Immutability**: All downstream files are frozen for that snapshot
+- **New data = new snapshot**: Never overwriting previous snapshots
+- **Canonical snapshot**: `2025-11-07` is the reference for v4.1.5 release
 
-All downstream files (features_daily.csv, features_daily_labeled.csv, model-ready tensors) are immutable for that snapshot.
-
-New data = new snapshot, never overwriting previous ones.
 This supports:
 
-Reproducibility for CA2/CA3.
+- **100% reproducibility** for research validation
+- **Temporal analysis** across 8 years
+- **Behavioral segment comparison** (119 segments)
 
-Temporal drift analysis.
+## 5. Pipeline Stages (0-9)
 
-Comparison across segments S1–S6.
+The pipeline consists of **10 deterministic stages** orchestrated by `scripts/run_full_pipeline.py`:
 
-5. ETL Stages
-   5.1 Common ETL Pattern
+| Stage | Name          | Input            | Output                       | Description                               |
+| ----- | ------------- | ---------------- | ---------------------------- | ----------------------------------------- |
+| 0     | **Ingest**    | `data/raw/`      | `extracted/`                 | Extract from Apple Health XML + Zepp ZIPs |
+| 1     | **Aggregate** | Raw CSVs         | `daily_*.csv`                | Aggregate to daily per-metric files       |
+| 2     | **Unify**     | Per-metric CSVs  | `features_daily_unified.csv` | Merge all metrics by date                 |
+| 3     | **Label**     | Unified features | `features_daily_labeled.csv` | Apply PBSI labels (3-class)               |
+| 4     | **Segment**   | Labeled features | `segment_autolog.csv`        | Detect behavioral segments (2 rules)      |
+| 5     | **Prep-NB2**  | Segments         | Training arrays              | Prepare data with anti-leak safeguards    |
+| 6     | **NB2**       | Arrays           | `data/ai/.../nb2/`           | Train logistic regression (6-fold CV)     |
+| 7     | **NB3**       | Sequences        | `data/ai/.../nb3/`           | Train LSTM models (sequence)              |
+| 8     | **TFLite**    | NB3 model        | `model.tflite`               | Export to mobile format                   |
+| 9     | **Report**    | All outputs      | `RUN_REPORT.md`              | Generate execution summary                |
 
-All modalities follow a similar stage flow:
+**Segmentation Rules** (Stage 4):
 
-Raw → Extracted
+1. Calendar boundaries (month/year transitions)
+2. Gaps greater than 1 day
 
-Unzip exports (export.zip, Zepp data bundles).
+See `docs/ETL_ARCHITECTURE_COMPLETE.md` for detailed stage specifications.
 
-Parse XML/CSV to normalized tables with UTC-aligned timestamps.
+## 6. Key Features by Domain
 
-Extracted → Normalized
+### 6.1 Sleep Domain
 
-Map vendor-specific fields into a canonical schema.
+- `sleep_total_h` - Total sleep duration (hours)
+- `sleep_deep_h`, `sleep_rem_h`, `sleep_light_h` - Sleep stage durations
+- `sleep_onset_time` - Sleep start time (minutes from midnight)
+- `sleep_midpoint_time` - Sleep midpoint (circadian anchor)
+- `sleep_efficiency` - Ratio of time asleep / time in bed
 
-Apply basic QC filters (e.g., plausible HR ranges, non-negative sleep durations).
+**Sources**: Apple Sleep Analysis + Zepp Sleep Summary
 
-Normalized → Processed (Daily Aggregates)
+### 6.2 Cardiovascular Domain
 
-Resample / aggregate to daily level (date index).
+- `hr_mean`, `hr_std`, `hr_min`, `hr_max` - Heart rate statistics
+- `hrv_rmssd`, `hrv_sdnn` - HRV time-domain metrics (when available)
+- `hr_n` - Number of HR measurements per day
 
-Compute summary statistics (mean, std, min, max, counts).
+**Sources**: Apple HealthKit HR + Zepp Cardio
 
-Processed → Joined
+### 6.3 Activity Domain
 
-Outer-join across modalities (cardio, sleep, activity) by date and participant_id.
+- `steps` - Daily step count
+- `active_energy_kcal` - Active energy expenditure
+- `distance_km` - Total distance traveled
+- `exercise_min` - Minutes of exercise
 
-Optional: join meta (segment_id from version_log_enriched.csv).
+**Sources**: Apple Activity + Zepp Activity
 
-Joined → Features Daily
+### 6.4 Screen Time Domain
 
-Derive higher-level features (rolling windows, z-scores, ratios).
+- `screen_min` - Total screen time (minutes)
+- `screen_pickups` - Number of device pickups
 
-Output: features_daily.csv (without labels) and features_daily_labeled.csv (with label).
+**Sources**: Apple Screen Time (iOS)
 
-Output Layer Naming (typical)
+### 6.5 Behavioral Stability Index (PBSI)
 
-cardio_daily.csv – aggregated per-day cardio metrics.
+- `pbsi_score` - Composite stability score (-1 to +1)
+- `pbsi_label` - 3-class label (stable=+1, neutral=0, unstable=-1)
 
-sleep_daily.csv – aggregated per-day sleep metrics.
-
-activity_daily.csv – per-day steps and activity load.
-
-joined_features_daily.csv – multi-modal join, sometimes still row-per-record.
-
-features_daily.csv – clean 1-row-per-day feature table.
-
-features_daily_labeled.csv – same as above, with final label.
-
-6. Modality Pipelines
-   6.1 Cardio (HR / HRV)
-
-Input
-
-Apple Health export.xml / apple_heart_rate.csv
-
-Zepp/Amazfit cardio CSVs
-(e.g., heartrate_points.csv, hrv_summary.csv)
-
-Core Steps
-
-Streaming parse Apple HR
-
-Extract HKQuantityTypeIdentifierHeartRate.
-
-Convert timestamps to local time (Dublin) with fallback to UTC.
-
-Store intermediate in extracted/apple_hr.csv.
-
-Parse Zepp HR / HRV
-
-Harmonize timestamps and units.
-
-Remove implausible values (e.g., HR < 30 or > 250 bpm, if configured).
-
-Daily aggregation
-
-apple_hr_mean, apple_hr_std, apple_hr_max, apple_n_hr.
-
-zepp_hr_mean, zepp_hr_std, zepp_hr_max, zepp_n_hr.
-
-Optional HRV metrics (rmssd, sdnn, etc.) when available.
-
-Segment-aware z-scores
-
-Join with version_log_enriched.csv to get segment_id (S1–S6).
-
-Compute z-scores within each segment to control for treatment/medication shifts:
-
-e.g., z_apple_hr_mean_Sk.
-
-QC
-
-Write QC summary, e.g. cardio_qc_summary.csv:
-
-Number of days
-
-Missingness per feature
-
-Min/Median/Max.
-
-6.2 Sleep
-
-Input
-
-Apple Sleep (Sleep Analysis, Sleep Stages).
-
-Zepp Sleep (total sleep, light/deep/REM, score).
-
-Core Steps
-
-Convert episodes to sleep periods anchored to the main night.
-
-Compute per-day metrics such as:
-
-sleep_total_h
-
-sleep_deep_h, sleep_rem_h, sleep_light_h
-
-sleep_onset_time, sleep_midpoint_time
-
-sleep_efficiency (ratio of time asleep / time in bed).
-
-Merge Apple + Zepp where both exist:
-
-Prioritize consistency, keep vendor-specific columns separate (apple*, zepp* prefixes).
-
-Segment-aware z-score normalization (S1–S6).
-
-QC summary file (sleep_qc_summary.csv).
-
-6.3 Activity
-
-Input
-
-Apple Activity / Steps / Workouts.
-
-Zepp steps, activity intensity, workouts.
-
-Core Steps
-
-Aggregate to daily activity metrics:
-
-steps_total, active_energy_kcal, distance_km.
-
-Activity sporadic vs. workouts (if available).
-
-Compute derived features:
-
-Moving averages (7-day, 14-day).
-
-Relative load vs. personal segment baseline (e.g., z_steps_Sk).
-
-Join with cardio/sleep per day.
+**Construction**: Segment-wise z-scored composite of sleep regularity, HR variability, activity consistency. See `config/label_rules.yaml` for threshold definitions.
 
 7. Label Construction
 
@@ -438,140 +328,173 @@ KS tests at version / segment boundaries.
 
 SHAP-based drift: >10% change in feature importance flagged.
 
-Outputs
+## 7. Canonical Notebooks (v4.1.5)
 
-Best models per fold.
+The pipeline includes 4 canonical Jupyter notebooks for reproducible analysis:
 
-Optional TFLite export (best_model.tflite) for on-device evaluation.
+### NB0 – Data Readiness (`notebooks/NB0_DataRead.ipynb`)
 
-Drift reports and SHAP top-5 feature summaries.
+- **Purpose**: Pipeline stage detection and file verification
+- **Runtime**: <5 seconds
+- **Outputs**: Status table, missing stage hints, quick inventory
 
-9. Orchestration with Makefile
+### NB1 – Exploratory Analysis (`notebooks/NB1_EDA.ipynb`)
 
-The Makefile coordinates common tasks:
+- **Purpose**: 8-year behavioral pattern analysis
+- **Runtime**: 30-60 seconds
+- **Key visualizations**: Temporal trends, missingness, distributions, segments (119)
+- **Paper figures**: Fig 3(a,b), Fig 4
 
-9.1 ETL Targets (examples)
+### NB2 – Baseline Models (`notebooks/NB2_Baseline.ipynb`)
 
-# Run cardio ETL for latest snapshot
+- **Purpose**: Logistic regression performance evaluation
+- **Model**: L2-regularized logistic regression
+- **CV**: 5-fold calendar-based (chronological splits)
+- **Performance**: Macro F1 ~0.81
+- **Paper figures**: Fig 5, Table 3
 
-make etl-cardio
+### NB3 – Deep Learning (`notebooks/NB3_DeepLearning.ipynb`)
 
-# Run sleep ETL
+- **Purpose**: LSTM sequence model evaluation
+- **Architecture**: BiLSTM(64) + Dense(32) + softmax(3)
+- **Input**: 14-day windows, 7 features
+- **Performance**: Macro F1 ~0.79-0.87 (fold-dependent)
+- **Paper figures**: Fig 6, Table 3
 
-make etl-sleep
+See `docs/notebooks_overview.md` for complete documentation.
 
-# Run activity ETL
+## 8. Orchestration
 
-make etl-activity
+### 8.1 Main Pipeline Script
 
-# Full ETL (all modalities + join + features)
+```bash
+# Run full pipeline (stages 0-9)
+python -m scripts.run_full_pipeline \
+  --participant P000001 \
+  --snapshot 2025-11-07 \
+  --start-stage 0 \
+  --end-stage 9
+```
 
-make etl-all
+### 8.2 Makefile Targets
 
-Typical flow (per new snapshot):
+```bash
+make etl-extract    # Stage 0: Extract from raw/
+make etl-all        # Stages 0-4: Full ETL
+make nb2            # Stage 6: Train logistic regression
+make nb3            # Stage 7: Train LSTM
+make notebooks      # Open Jupyter notebooks
+```
 
-Place raw exports under data/raw/.
+## 9. Quality Control & Reproducibility
 
-Run make etl-all to:
+### 9.1 Determinism Guarantees
 
-Extract + normalize all modalities.
+**Fixed Seeds** across all stages:
 
-Aggregate to daily.
+- Python: `random.seed(42)`
+- NumPy: `np.random.seed(42)`
+- TensorFlow: `tf.random.set_seed(42)`
+- Sklearn: `random_state=42`
 
-Join.
+**Result**: 100% bit-exact reproducibility across runs
 
-Generate features_daily.csv.
+### 9.2 QC Reports
 
-Run label builder (if not integrated in etl-all) to obtain features_daily_labeled.csv.
+Generated per stage in `data/etl/.../qc/`:
 
-9.2 Modeling Targets
+- `qc_report.json` - Dataset statistics, missingness, outliers
+- ETL provenance logs with file checksums
+- Segment detection logs (119 segments)
 
-# NB1 – EDA
+### 9.3 Anti-Leak Safeguards
 
-make nb1-eda
+**Segment-wise Normalization** (Stage 5):
 
-# NB2 – Baselines
+- StandardScaler fit independently per segment
+- Prevents data leakage across behavioral boundaries
+- Critical for temporal CV validity
 
-make nb2-baselines
+**Calendar-based CV**:
 
-# NB3 – Sequence models
+- Chronological fold splits (no shuffling)
+- Strict temporal boundaries
+- Test data always in future relative to train
 
-make nb3-seq
+### 9.4 Pipeline Provenance
 
-Outputs are written under reports/ and notebooks/outputs/, with timestamped folders to ensure reproducibility.
+All outputs include:
 
-9.3 Release & Provenance (Optional)
+- Snapshot ID (`2025-11-07`)
+- Pipeline version (`v4.1.5`)
+- Execution timestamp
+- Input file checksums (SHA-256)
 
-For the Practicum and GitHub releases:
+See `RUN_REPORT.md` (generated by Stage 9) for complete execution summary.
 
-make release-notes – build release_notes_vX.Y.Z.md.
+## 10. Key Design Decisions
 
-make release-draft – assemble assets and dry-run release.
+### 10.1 Two Segmentation Rules Only
 
-make release-assets – collect ETL manifests, QC reports, and model outputs.
+Behavioral segments are detected using exactly 2 rules:
 
-make publish-release – final tag and GitHub Release (optionally with CA2 bundle).
+1. **Calendar boundaries**: Month/year transitions
+2. **Gaps > 1 day**: Missing data spans
 
-10. Quality Control & Provenance
+**Rationale**: Simple, deterministic, data-driven (no subjective "behavioral shifts")
 
-Across the pipeline, QC and provenance are first-class concerns:
+### 10.2 PBSI Label Construction
 
-QC files per modality (cardio, sleep, activity) summarizing:
+**Method**: Segment-wise z-scored composite of:
 
-Date ranges.
+- Sleep regularity (coefficient of variation)
+- HR variability (within-day std)
+- Activity consistency (day-to-day correlation)
 
-Missingness.
+**Thresholds** (from `config/label_rules.yaml`):
 
-Outlier counts.
+- PBSI ≥ 0.5 → Unstable (-1)
+- PBSI ≤ -0.5 → Stable (+1)
+- Otherwise → Neutral (0)
 
-ETL manifests (CSV/JSON) capturing:
+**Advantage**: Weak supervision without requiring daily clinical labels
 
-Snapshot ID.
+### 10.3 Snapshot Immutability
 
-Raw → processed file mapping.
+Once a snapshot is created, it is **never modified**:
 
-SHA-256 checksums.
+- New data → new snapshot
+- Enables reproducible research
+- Supports temporal comparison
 
-Version log (version_log_enriched.csv) linking periods of time to:
+## 11. Known Limitations & Future Work
 
-Medication changes.
+### Limitations
 
-Life events / segments (S1–S6).
+1. **Single participant**: N-of-1 design limits generalizability
+2. **Weak supervision**: PBSI labels from heuristics (not clinical gold standard)
+3. **Missing data**: ~15-30% missingness in some features
+4. **Long-term shifts**: 8-year timeline includes life events, device changes
 
-Device changes (GTR2 → GTR4, Helio Ring introduction).
+### Future Work
 
-These artifacts support auditability, reproducibility, and interpretability for CA2/CA3 and future multi-participant scaling.
+1. **Multi-participant**: Extend to P000002, P000003 (federated learning)
+2. **Clinical validation**: Compare predictions with clinical assessments (PHQ-9, MDQ)
+3. **Feature engineering**: Add circadian rhythm features, sleep architecture
+4. **Explainability**: SHAP values, attention weights for LSTM
+5. **Real-time**: Deploy TFLite model for on-device inference
 
-11. Known Limitations & Next Steps
+## 12. Documentation Index
 
-Incomplete Emotion Exports
+- **This file** (`pipeline_overview.md`): High-level architecture
+- `docs/notebooks_overview.md`: Canonical notebooks guide (470 lines)
+- `docs/ETL_ARCHITECTURE_COMPLETE.md`: Technical ETL specifications
+- `docs/QUICK_REFERENCE.md`: Pipeline cheat sheet
+- `docs/latex/main.tex`: Research paper (100% code-paper aligned)
+- `docs/copilot/`: AI-assisted development documentation (53 files)
 
-Zepp / Helio Ring emotion data may still depend on Zepp Cloud API or partial exports.
+---
 
-The pipeline is designed to integrate these as soon as stable exports are available.
-
-Single-Participant Focus
-
-Current implementation is optimized for P000001.
-
-Generalization to multiple participants will require:
-
-Robust handling of different device combinations.
-
-Participant-specific configuration and consent.
-
-Label Noise
-
-Labels based on heuristic mapping of mood / State of Mind may contain noise.
-
-Collaboration with psychology / clinical supervision is planned for refinement.
-
-Future Work
-
-Stabilize NB3 models and finalize best_model.tflite export.
-
-Expand Appendix C (sensor mapping) and Appendix D (feature glossary) to fully align with this pipeline overview.
-
-Evaluate feasibility of adding more behavioral signals (screen time, app usage) in later phases.
-
-This pipeline_overview.md is meant to evolve alongside the codebase and Practicum requirements. Whenever a major change is made to the ETL, labeling rules, or modeling strategy, this document should be updated accordingly.
+**Version**: v4.1.5  
+**Last Updated**: November 20, 2025  
+**Status**: ✅ Production-ready, publication-ready

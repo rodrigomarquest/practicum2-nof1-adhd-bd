@@ -15,31 +15,65 @@ It integrates data pre-processing (ETL), feature engineering, time-series modeli
 
 The project extends the previous Practicum (Part 1) phase and focuses on reprocessing and modelling data from an N-of-1 longitudinal study on comorbidity ADHD + Bipolar Disorder, collected from wearable sensors (Apple Health, Amazfit GTR 4, Helio Ring) and self-reports (EMA / State of Mind).
 
-📊 Repository Structure (Canonical)
+� Notebooks (v4.1.5)
+
+**NEW**: Canonical Jupyter notebooks for reproducible analysis!
+
+| Notebook                                                   | Purpose                     | Runtime | Figures        |
+| ---------------------------------------------------------- | --------------------------- | ------- | -------------- |
+| [NB0_DataRead.ipynb](notebooks/NB0_DataRead.ipynb)         | Pipeline readiness check    | <5s     | -              |
+| [NB1_EDA.ipynb](notebooks/NB1_EDA.ipynb)                   | 8-year exploratory analysis | 30-60s  | Fig 3, 4       |
+| [NB2_Baseline.ipynb](notebooks/NB2_Baseline.ipynb)         | Logistic regression results | 10-20s  | Fig 5, Table 3 |
+| [NB3_DeepLearning.ipynb](notebooks/NB3_DeepLearning.ipynb) | LSTM evaluation             | 15-30s  | Fig 6, Table 3 |
+
+See [📖 Notebooks Overview](docs/notebooks_overview.md) for detailed documentation.
+
+**Quick Start**:
+
+```bash
+# Install dependencies
+pip install -r requirements/base.txt
+
+# Run full pipeline
+python -m scripts.run_full_pipeline --participant P000001 --snapshot 2025-11-07
+
+# Open notebooks
+jupyter notebook notebooks/
+```
+
+�📊 Repository Structure (Canonical)
 
 ```
+notebooks/
+  NB0_DataRead.ipynb           # Stage detection & readiness
+  NB1_EDA.ipynb                # Comprehensive 8-year EDA
+  NB2_Baseline.ipynb           # Logistic regression results
+  NB3_DeepLearning.ipynb       # LSTM evaluation
+  archive/                     # Deprecated notebooks (pre-v4.1.5)
 data/
-  raw/                    # única fonte persistente (Apple Health exports, Zepp data)
-  etl/                    # gerado; outputs canônicos (joined/qc/segment_autolog)
-  ai/                     # gerado; artefatos NB2/NB3 por snapshot
+  raw/                         # única fonte persistente (Apple Health exports, Zepp data)
+  etl/                         # gerado; outputs canônicos (joined/qc/segment_autolog)
+  ai/                          # gerado; artefatos NB2/NB3 por snapshot
 src/
-  etl/                    # ETL pipeline stages (aggregation, unify, labels)
-  modeling/               # NB2, NB3, LSTM training modules
-  utils/                  # zip extraction, IO guards, paths, logger
+  etl/                         # ETL pipeline stages (aggregation, unify, labels)
+  modeling/                    # NB2, NB3, LSTM training modules
+  utils/                       # zip extraction, IO guards, paths, logger
 scripts/
-  run_full_pipeline.py    # orquestrador determinístico 9 stages (0-9)
+  run_full_pipeline.py         # orquestrador determinístico 10 stages (0-9)
 docs/
-  README.md               # documentação principal
-  PERIOD_EXPANSION_*.md   # relatórios de implementação
-  RUN_REPORT_TEMPLATE.md  # template para relatórios
+  notebooks_overview.md        # 📖 Canonical notebooks guide (NEW)
+  latex/                       # Research paper LaTeX sources
+  copilot/                     # AI-assisted development documentation
+  QUICK_REFERENCE.md           # Pipeline usage cheat sheet
+  ETL_ARCHITECTURE_COMPLETE.md # Technical architecture
 tests/
   test_etl_consistency.py
   test_anti_leak.py
   test_pipeline_reproducibility.py
 config/
-  participants.yaml       # configuração de participantes
-  label_rules.yaml        # regras de rotulação
-archive/                  # versões antigas preservadas (sem deleção)
+  participants.yaml            # configuração de participantes
+  label_rules.yaml             # regras de rotulação
+archive/                       # versões antigas preservadas (sem deleção)
 ```
 
 ⚙️ Reproducibility and Environment

@@ -21,6 +21,7 @@ pbsi_score = 0.40 * sleep_sub + 0.35 * cardio_sub + 0.25 * activity_sub
 ```
 
 **Interpretação implícita**:
+
 - "Stable" = Muito sono + HRV alta + Muita atividade
 - "Unstable" = Pouco sono + HRV baixa + Pouca atividade
 
@@ -28,19 +29,20 @@ pbsi_score = 0.40 * sleep_sub + 0.35 * cardio_sub + 0.25 * activity_sub
 
 ADHD e Transtorno Bipolar **não são um espectro de "estabilidade"** - são **estados clínicos qualitativamente diferentes**:
 
-| Estado Clínico | Características Clínicas | Biomarcadores Esperados |
-|----------------|-------------------------|-------------------------|
-| **Eutimia (baseline)** | Humor estável, funcionalidade preservada | Sono regular, HRV normal, atividade moderada |
-| **Mania/Hipomania (BD)** | ↑ Energia, ↓ Necessidade de sono, hiperatividade | **Sono reduzido (~4-6h)**, atividade noturna ↑, HR ↑ |
-| **Depressão (BD/MDD)** | ↓ Energia, ↓ Motivação, fadiga | **Sono excessivo ou insônia**, HRV ↓, sedentarismo ↑ |
-| **ADHD desregulado** | Hiperatividade, desatenção, impulsividade | **Variabilidade alta** em sono/atividade, fragmentação ↑ |
-| **ADHD compensado** | Sintomas controlados (medicação/estratégias) | Padrões mais regulares |
+| Estado Clínico           | Características Clínicas                         | Biomarcadores Esperados                                  |
+| ------------------------ | ------------------------------------------------ | -------------------------------------------------------- |
+| **Eutimia (baseline)**   | Humor estável, funcionalidade preservada         | Sono regular, HRV normal, atividade moderada             |
+| **Mania/Hipomania (BD)** | ↑ Energia, ↓ Necessidade de sono, hiperatividade | **Sono reduzido (~4-6h)**, atividade noturna ↑, HR ↑     |
+| **Depressão (BD/MDD)**   | ↓ Energia, ↓ Motivação, fadiga                   | **Sono excessivo ou insônia**, HRV ↓, sedentarismo ↑     |
+| **ADHD desregulado**     | Hiperatividade, desatenção, impulsividade        | **Variabilidade alta** em sono/atividade, fragmentação ↑ |
+| **ADHD compensado**      | Sintomas controlados (medicação/estratégias)     | Padrões mais regulares                                   |
 
 ### 3. Por Que PBSI "Stable/Unstable" Falha Clinicamente?
 
 #### Problema 1: "Estabilidade" ≠ Saúde Mental
 
 **Exemplo contraditório**:
+
 - **Mania aguda**: Pessoa dorme 4h, está hiperativa, FC alta → PBSI marca como "unstable" ✓
 - **Depressão severa**: Pessoa dorme 12h, sedentária, FC baixa → PBSI marca como "stable" ❌
 
@@ -59,7 +61,7 @@ O PBSI **homogeneíza estados qualitativamente diferentes**:
 
 ```
 Mania (sono ↓, atividade ↑) → pbsi = +0.6 → "unstable"
-Depressão (sono ↑, atividade ↓) → pbsi = +0.4 → "neutral"  
+Depressão (sono ↑, atividade ↓) → pbsi = +0.4 → "neutral"
 ADHD (variabilidade ↑) → pbsi = ??? → ???
 ```
 
@@ -87,12 +89,14 @@ labels = {
 ```
 
 **Vantagens**:
+
 - ✅ Alinhado com diagnósticos psiquiátricos (DSM-5/ICD-11)
 - ✅ Interpretação clínica clara
 - ✅ Permite validação com mood diaries / registros clínicos
 - ✅ Generalizável para outros participantes
 
 **Desafios**:
+
 - ❌ Requer **ground truth** (mood diaries, registros médicos)
 - ❌ Mais complexo (5 classes vs 3)
 - ❌ Pode ter classe "UNKNOWN" para períodos sem documentação
@@ -108,6 +112,7 @@ labels = {
 ```
 
 **Vantagens**:
+
 - ✅ Mais simples de validar (pergunta: "estava bem ou mal?")
 - ✅ Balanceamento mais fácil
 - ✅ Ainda tem utilidade clínica (detecção de piora)
@@ -126,11 +131,13 @@ predictions = {
 ```
 
 **Vantagens**:
+
 - ✅ Não assume relação linear entre condições
 - ✅ Captura nuances (ex: ADHD + depressão comórbida)
 - ✅ Interpretação granular
 
 **Desafios**:
+
 - ❌ Requer múltiplos modelos
 - ❌ Mais complexo de integrar
 
@@ -147,11 +154,13 @@ targets = {
 ```
 
 **Vantagens**:
+
 - ✅ Alinhado com instrumentos clínicos validados
 - ✅ Permite análise dimensional (não categórica)
 - ✅ Útil para monitoramento longitudinal
 
 **Desafios**:
+
 - ❌ Requer coleta prospectiva de escalas
 - ❌ Mais trabalhoso (múltiplas escalas)
 
@@ -162,6 +171,7 @@ targets = {
 ### Retrospectivo (Viável Agora)
 
 1. **Mood Diaries Retrospectivos**:
+
    ```
    Data: 2024-03-15
    Humor: 3/10 (muito deprimido)
@@ -171,6 +181,7 @@ targets = {
    ```
 
 2. **Registros Médicos**:
+
    - Consultas psiquiátricas com documentação de estado
    - Prescrições (ajustes de medicação = mudança de estado?)
    - Internações (episódios agudos documentados)
@@ -183,10 +194,12 @@ targets = {
 ### Prospectivo (Para Estudos Futuros)
 
 1. **Daily Mood Tracking**:
+
    - App com questionário diário (2-3 min)
    - Escalas validadas (PHQ-2 para depressão, MDQ para mania, ASRS-6 para ADHD)
 
 2. **Ecological Momentary Assessment (EMA)**:
+
    - 3-5 prompts/dia perguntando humor/energia/concentração
    - Captura variabilidade intra-dia
 
@@ -198,14 +211,14 @@ targets = {
 
 ## 📊 Comparação: PBSI Atual vs Alternativas Clínicas
 
-| Aspecto | PBSI "Stable/Unstable" | Estados Psiquiátricos | Biomarcadores Específicos |
-|---------|------------------------|----------------------|---------------------------|
-| **Validade clínica** | ❌ Baixa (conceito vago) | ✅ Alta (DSM-5 aligned) | ✅ Média-alta |
-| **Interpretabilidade** | ⚠️ Ambígua | ✅ Clara | ✅ Granular |
-| **Requer ground truth** | ❌ Não | ✅ Sim | ✅ Sim |
-| **Balanceamento de classes** | ❌ Extremo (93% neutral) | ⚠️ Depende de dados | ⚠️ Variável |
-| **Generalizável para outros N=1** | ⚠️ Limitado | ✅ Sim | ✅ Sim |
-| **Publicável cientificamente** | ❌ Difícil de defender | ✅ Robusto | ✅ Robusto |
+| Aspecto                           | PBSI "Stable/Unstable"   | Estados Psiquiátricos   | Biomarcadores Específicos |
+| --------------------------------- | ------------------------ | ----------------------- | ------------------------- |
+| **Validade clínica**              | ❌ Baixa (conceito vago) | ✅ Alta (DSM-5 aligned) | ✅ Média-alta             |
+| **Interpretabilidade**            | ⚠️ Ambígua               | ✅ Clara                | ✅ Granular               |
+| **Requer ground truth**           | ❌ Não                   | ✅ Sim                  | ✅ Sim                    |
+| **Balanceamento de classes**      | ❌ Extremo (93% neutral) | ⚠️ Depende de dados     | ⚠️ Variável               |
+| **Generalizável para outros N=1** | ⚠️ Limitado              | ✅ Sim                  | ✅ Sim                    |
+| **Publicável cientificamente**    | ❌ Difícil de defender   | ✅ Robusto              | ✅ Robusto                |
 
 ---
 
@@ -216,13 +229,16 @@ targets = {
 **OPÇÃO 1: Manter PBSI mas renomear para refletir significado real**
 
 Trocar:
+
 - ~~"Stable/Neutral/Unstable"~~ (termos vagos)
 - **"Low PBSI / Medium PBSI / High PBSI"** (descritivo, neutro)
 
 Ou melhor ainda:
+
 - **"Physiologically Regulated / Typical / Dysregulated"** (mais preciso)
 
 Justificativa no paper:
+
 > "We computed a composite Physio-Behavioral Stability Index (PBSI) as an exploratory proxy for physiological regulation. **We acknowledge this index does not map directly to psychiatric diagnostic categories** (mania, depression, ADHD states), but rather captures variance in sleep, cardiovascular, and activity patterns. Future work should validate these patterns against clinical ground truth (mood diaries, clinician ratings)."
 
 **+ Análise de Balanceamento com Thresholds Percentis (P25/P75)**
@@ -234,11 +250,13 @@ Como já analisado, ajustar thresholds para permitir modelagem.
 **OPÇÃO 2: Coletar Ground Truth e Re-rotular Dados**
 
 1. Criar mood diary retrospectivo guiado:
+
    - "Em quais meses de 2024 você estava deprimido?"
    - "Houve períodos de hipomania? Quando?"
    - "ADHD estava mais difícil de controlar em algum período?"
 
 2. Mapear para períodos:
+
    ```python
    labels = {
        "2024-01-01:2024-02-28": "DEPRESSIVE",
@@ -259,7 +277,7 @@ Como já analisado, ajustar thresholds para permitir modelagem.
 1. Recrutar N=10-20 participantes com ADHD/BD
 2. Wearables + EMA diário + avaliações clínicas mensais
 3. Validar biomarcadores específicos (HRV, sleep variability, circadian misalignment)
-4. Publicar em *JMIR Mental Health* ou *Translational Psychiatry*
+4. Publicar em _JMIR Mental Health_ ou _Translational Psychiatry_
 
 ---
 
@@ -307,6 +325,7 @@ Ou ainda melhor:
 ### Opção B: Coletar Ground Truth Retrospectivo (1 Semana Extra)
 
 1. Criar spreadsheet com períodos conhecidos:
+
    ```
    Data Início | Data Fim | Estado
    2024-01-01  | 2024-02-15 | Depressão moderada
@@ -350,7 +369,7 @@ PBSI Labels (Exploratory - Not Clinically Validated):
     0 (mid_pbsi):   Typical physiological patterns
     -1 (high_pbsi): Physiologically dysregulated (poor sleep, low HRV, sedentary)
 
-⚠️ IMPORTANT: 
+⚠️ IMPORTANT:
 These labels do NOT map directly to psychiatric states (mania, depression, ADHD).
 They are composite physiological indices requiring clinical validation.
 
@@ -378,6 +397,7 @@ df.loc[df['clinical_state'].notna(), 'has_clinical_ground_truth'] = True
 ### Seção de Limitations (Adicionar)
 
 > **Clinical Validation**: The PBSI labels used in this study are composite physiological indices and have not been validated against psychiatric ground truth (clinician ratings, mood diaries, or diagnostic interviews). While they capture variance in sleep, cardiovascular, and activity patterns, **they should not be interpreted as direct proxies for psychiatric states** (e.g., mania, depression, or ADHD symptom severity). Future research should:
+>
 > 1. Collect prospective mood diaries and clinical assessments
 > 2. Validate physiological patterns against DSM-5 diagnostic criteria
 > 3. Explore state-specific biomarkers (e.g., nocturnal activity in mania, sleep irregularity in ADHD)
@@ -385,6 +405,7 @@ df.loc[df['clinical_state'].notna(), 'has_clinical_ground_truth'] = True
 ### Seção de Future Work
 
 > **Ground-Truth Validation**: A critical next step is collecting ecological momentary assessments (EMA) and clinician ratings to map wearable-derived patterns to psychiatric states. This would enable:
+>
 > - Early warning systems for mood episodes
 > - Personalized symptom tracking
 > - Medication response monitoring
@@ -393,14 +414,14 @@ df.loc[df['clinical_state'].notna(), 'has_clinical_ground_truth'] = True
 
 ## ✅ Resumo Executivo
 
-| Questão | Resposta |
-|---------|----------|
-| **PBSI "stable/unstable" faz sentido para ADHD/BD?** | ❌ **NÃO**. São conceitos vagos que não mapeiam para estados psiquiátricos. |
-| **O que deveria ser modelado?** | ✅ Estados clínicos (eutimia, mania, depressão) ou biomarcadores específicos. |
-| **Precisa descartar todo o trabalho?** | ❌ Não! Pode renomear labels e deixar claro que é exploratório. |
-| **Como melhorar cientificamente?** | ✅ Coletar ground truth (mood diaries retrospectivos) e re-rotular. |
-| **O que fazer AGORA para CA2?** | ✅ **Opção A**: Rename + P25/P75 + disclaimers no paper. |
-| **Isso é um problema grave?** | ⚠️ Médio. Não invalida o trabalho técnico, mas **limita interpretação clínica**. |
+| Questão                                              | Resposta                                                                         |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **PBSI "stable/unstable" faz sentido para ADHD/BD?** | ❌ **NÃO**. São conceitos vagos que não mapeiam para estados psiquiátricos.      |
+| **O que deveria ser modelado?**                      | ✅ Estados clínicos (eutimia, mania, depressão) ou biomarcadores específicos.    |
+| **Precisa descartar todo o trabalho?**               | ❌ Não! Pode renomear labels e deixar claro que é exploratório.                  |
+| **Como melhorar cientificamente?**                   | ✅ Coletar ground truth (mood diaries retrospectivos) e re-rotular.              |
+| **O que fazer AGORA para CA2?**                      | ✅ **Opção A**: Rename + P25/P75 + disclaimers no paper.                         |
+| **Isso é um problema grave?**                        | ⚠️ Médio. Não invalida o trabalho técnico, mas **limita interpretação clínica**. |
 
 ---
 

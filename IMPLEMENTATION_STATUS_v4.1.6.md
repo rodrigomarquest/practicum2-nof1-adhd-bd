@@ -25,7 +25,8 @@ LABEL DISTRIBUTION (v4.1.6):
 ✓ No degenerate labels
 ```
 
-**Result**: 
+**Result**:
+
 - ✅ Perfect 25/50/25 distribution
 - ✅ No class imbalance
 - ✅ All 2,828 days labeled successfully
@@ -47,6 +48,7 @@ LogisticRegression does not accept missing values encoded as NaN
 **Pre-existing**: This existed in v4.1.5 too (Stage 6 was skipped due to class imbalance, so we didn't see this error before)
 
 **Evidence**:
+
 - Stage 3 (Labels) completed successfully ✅
 - Stage 4 (Segments) completed successfully ✅
 - Stage 5 (Prep NB2) completed successfully ✅
@@ -89,16 +91,19 @@ LogisticRegression does not accept missing values encoded as NaN
 ### For CA2 Paper - READY ✅
 
 **What You Have Now**:
+
 1. ✅ **Balanced labels**: 25/50/25 distribution (no more 93% neutral)
 2. ✅ **Scientifically defensible**: Percentile-based thresholds (P25/P75)
 3. ✅ **Clinically honest**: Disclaimers about validation
 4. ✅ **Documented**: Full technical and scientific documentation
 
 **What You Can Write in Paper**:
+
 ```markdown
 ## Methods
 
 ### PBSI Threshold Selection
+
 To ensure balanced class distribution for machine learning training,
 we used percentile-based thresholds (P25/P75) rather than fixed values,
 resulting in a 25/50/25 class split. This approach adapts to each
@@ -107,6 +112,7 @@ participant's physiological range.
 ## Limitations
 
 ### Clinical Validation
+
 PBSI labels represent composite physiological indices derived from
 wearable sensors. **These have not been validated against psychiatric
 ground truth** (mood diaries, clinician ratings, DSM-5 criteria) and
@@ -125,6 +131,7 @@ Stages 6 & 7 fail because some days have missing features (NaNs in sleep/HRV/act
 ### Quick Fix Options
 
 **Option A: Drop rows with NaNs** (simplest)
+
 ```python
 # In run_full_pipeline.py, before model training
 X_train = X_train.dropna()
@@ -132,6 +139,7 @@ y_train = y_train[X_train.index]
 ```
 
 **Option B: Impute NaNs** (better)
+
 ```python
 from sklearn.impute import SimpleImputer
 imputer = SimpleImputer(strategy='median')
@@ -140,6 +148,7 @@ X_val = imputer.transform(X_val)
 ```
 
 **Option C: Use models that handle NaNs** (best)
+
 ```python
 # Replace LogisticRegression with HistGradientBoostingClassifier
 from sklearn.ensemble import HistGradientBoostingClassifier
@@ -149,12 +158,14 @@ model = HistGradientBoostingClassifier(random_state=42)
 ### Should You Fix This Now?
 
 **NO** - Not critical for v4.1.6 release because:
+
 1. ✅ **Main goal achieved**: PBSI labels balanced and documented
 2. ⚠️ **NaN issue is pre-existing**: Not introduced by v4.1.6
 3. 📅 **CA2 deadline**: Focus on paper, not pipeline debugging
 4. 🔧 **Easy fix later**: Can be patched in v4.1.7
 
 **What you CAN do for CA2**:
+
 - Use the labeled data (`features_daily_labeled.csv`) ✅
 - Run EDA in NB1 (doesn't need trained models) ✅
 - Show label distribution plots ✅
@@ -162,6 +173,7 @@ model = HistGradientBoostingClassifier(random_state=42)
 - Add clinical disclaimer ✅
 
 **What to skip for now**:
+
 - NB2 baseline model training ⚠️ (NaN issue)
 - NB3 LSTM training ⚠️ (NaN issue)
 - Model performance metrics ⚠️ (no trained models)
@@ -173,6 +185,7 @@ model = HistGradientBoostingClassifier(random_state=42)
 ### Scope Down (Pragmatic)
 
 **Include in Paper**:
+
 1. ✅ **Data processing pipeline** (Stages 0-5)
 2. ✅ **PBSI label methodology** (Stage 3)
 3. ✅ **EDA and exploratory analysis** (NB1)
@@ -180,12 +193,14 @@ model = HistGradientBoostingClassifier(random_state=42)
 5. ✅ **Clinical disclaimers and limitations**
 
 **Exclude from Paper** (mention as "Future Work"):
+
 1. ⚠️ Baseline model comparisons (NB2)
 2. ⚠️ LSTM temporal models (NB3)
 3. ⚠️ Model performance metrics
 4. ⚠️ SHAP explanations
 
 **Justification**:
+
 > "Model training and evaluation are planned for a follow-up study after
 > addressing data imputation strategies and collecting clinical ground
 > truth for validation."
@@ -193,9 +208,11 @@ model = HistGradientBoostingClassifier(random_state=42)
 ### Alternative Framing
 
 Instead of:
+
 > ❌ "We trained models but they failed"
 
 Write:
+
 > ✅ "We developed a complete ETL pipeline and labeling methodology (v4.1.6)
 > with percentile-based thresholds, achieving balanced class distribution
 > (25/50/25). Model training and clinical validation are planned for
@@ -208,6 +225,7 @@ Write:
 ### v4.1.6 Implementation: ✅ SUCCESS
 
 **What was promised**:
+
 - [x] Fix class imbalance (93% → 25/50/25)
 - [x] Rename labels (stable/unstable → low/mid/high_pbsi)
 - [x] Add clinical disclaimers
@@ -219,6 +237,7 @@ Write:
 ### NaN Handling Issue: ⚠️ SEPARATE CONCERN
 
 **Not part of v4.1.6 scope**. This is a data quality issue that:
+
 - Existed in v4.1.5 (masked by class imbalance skipping Stage 6)
 - Should be fixed in v4.1.7 (post-CA2)
 - Does NOT invalidate v4.1.6 improvements

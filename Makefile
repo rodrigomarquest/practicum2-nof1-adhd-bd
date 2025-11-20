@@ -45,6 +45,7 @@ AI_DIR  := data/ai/$(PID)/$(SNAPSHOT_RESOLVED)
 .PHONY: help env check-dirs \
         ingest aggregate unify segment label prep-nb2 nb2 nb3 report \
         pipeline quick nb2-only nb3-only \
+        qc-hr qc-steps qc-sleep qc-all qc-etl \
         clean-outputs clean-all verify \
         help-release release-notes version-guard changelog release-assets provenance release-draft publish-release print-version
 
@@ -53,6 +54,7 @@ help:
 > echo "Usage:"
 > echo "  make pipeline PID=$(PID) SNAPSHOT=$(SNAPSHOT) [ZPWD=***]"
 > echo "  make nb2-only | nb3-only | quick"
+> echo "  make qc-hr | qc-steps | qc-sleep | qc-all"
 > echo "  make verify | clean-outputs | help-release"
 > echo "Vars: PID=$(PID) SNAPSHOT=$(SNAPSHOT) -> $(SNAPSHOT_RESOLVED)"
 
@@ -99,6 +101,25 @@ nb3: env
 report: env
 > $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 9 --end-stage 9 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 > echo "RUN_REPORT -> ./RUN_REPORT.md"
+
+# -------- QC / Audits --------
+qc-hr:
+> @echo "Running HR feature integrity audit..."
+> $(PYTHON) -m src.etl.etl_audit --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --domain hr
+
+qc-steps:
+> @echo "Running Steps feature integrity audit..."
+> $(PYTHON) -m src.etl.etl_audit --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --domain steps
+
+qc-sleep:
+> @echo "Running Sleep feature integrity audit..."
+> $(PYTHON) -m src.etl.etl_audit --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --domain sleep
+
+qc-all: qc-hr qc-steps qc-sleep
+> @echo "All domain audits complete"
+
+# Alias for backward compatibility
+qc-etl: qc-hr
 
 # -------- One-shot flows --------
 pipeline: env

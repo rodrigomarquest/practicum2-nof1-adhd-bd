@@ -11,6 +11,7 @@
 The **Physio-Behavioral Stability Index (PBSI)** is a composite score derived from wearable sensor data that quantifies physiological regulation patterns. It combines sleep, cardiovascular, and activity metrics into a single daily index.
 
 **Key Changes in v4.1.6**:
+
 - ✅ Percentile-based thresholds (P25/P75) for balanced class distribution
 - ✅ Renamed labels to descriptive terms (low_pbsi/mid_pbsi/high_pbsi)
 - ✅ Added clinical validity disclaimers
@@ -22,17 +23,17 @@ The **Physio-Behavioral Stability Index (PBSI)** is a composite score derived fr
 
 ### 3-Class Labels (`label_3cls`)
 
-| Value | Name | Interpretation | PBSI Range |
-|-------|------|---------------|------------|
-| **+1** | `low_pbsi` (regulated) | Physiologically regulated patterns: good sleep, high HRV, active | pbsi ≤ P25 (~-0.12) |
-| **0** | `mid_pbsi` (typical) | Typical physiological patterns within participant's normal range | P25 < pbsi < P75 |
+| Value  | Name                       | Interpretation                                                        | PBSI Range          |
+| ------ | -------------------------- | --------------------------------------------------------------------- | ------------------- |
+| **+1** | `low_pbsi` (regulated)     | Physiologically regulated patterns: good sleep, high HRV, active      | pbsi ≤ P25 (~-0.12) |
+| **0**  | `mid_pbsi` (typical)       | Typical physiological patterns within participant's normal range      | P25 < pbsi < P75    |
 | **-1** | `high_pbsi` (dysregulated) | Physiologically dysregulated patterns: poor sleep, low HRV, sedentary | pbsi ≥ P75 (~+0.17) |
 
 ### 2-Class Labels (`label_2cls`)
 
-| Value | Name | Interpretation |
-|-------|------|---------------|
-| **1** | Regulated | Physiologically regulated (corresponds to label_3cls = +1) |
+| Value | Name          | Interpretation                                                |
+| ----- | ------------- | ------------------------------------------------------------- |
+| **1** | Regulated     | Physiologically regulated (corresponds to label_3cls = +1)    |
 | **0** | Not regulated | Typical or dysregulated (corresponds to label_3cls = 0 or -1) |
 
 ---
@@ -48,23 +49,29 @@ pbsi_score = 0.40 * sleep_sub + 0.35 * cardio_sub + 0.25 * activity_sub
 ### Subscores
 
 #### Sleep Subscore
+
 ```python
 sleep_sub = -0.6 * z_sleep_duration + 0.4 * z_sleep_efficiency
 ```
+
 - More sleep + better efficiency → lower subscore (regulated)
 - Less sleep + poor efficiency → higher subscore (dysregulated)
 
 #### Cardio Subscore
+
 ```python
 cardio_sub = 0.5 * z_hr_mean - 0.6 * z_hrv + 0.2 * z_hr_max
 ```
+
 - Lower HR + higher HRV → lower subscore (regulated)
 - Higher HR + lower HRV → higher subscore (dysregulated)
 
 #### Activity Subscore
+
 ```python
 activity_sub = -0.7 * z_steps - 0.3 * z_exercise_minutes
 ```
+
 - More steps + more exercise → lower subscore (regulated)
 - Less steps + less exercise → higher subscore (dysregulated)
 
@@ -92,10 +99,12 @@ threshold_high = pbsi_scores.quantile(0.75)  # P75
 ```
 
 **For P000001 (2025-11-07)**:
+
 - P25 = -0.117
 - P75 = +0.172
 
 **Resulting Distribution**:
+
 - Low PBSI (regulated): 25% of days (n=707)
 - Mid PBSI (typical): 50% of days (n=1,414)
 - High PBSI (dysregulated): 25% of days (n=707)
@@ -120,11 +129,13 @@ threshold_high = +0.5
 **PBSI labels are NOT clinically validated**:
 
 1. **No Ground Truth**: Labels not validated against:
+
    - Mood diaries / self-reports
    - Clinician ratings (YMRS, MADRS, ASRS)
    - Diagnostic interviews (DSM-5/ICD-11)
 
 2. **Not Psychiatric States**: PBSI does NOT map to:
+
    - Mania/hypomania (BD)
    - Depression (BD/MDD)
    - ADHD symptom severity
@@ -138,12 +149,14 @@ threshold_high = +0.5
 ### Appropriate Uses
 
 ✅ **Valid for**:
+
 - Exploratory analysis of physiological variance
 - Feature engineering for ML models
 - Identifying periods of physiological deviation
 - Hypothesis generation for future validation
 
 ❌ **Invalid for**:
+
 - Clinical diagnosis or treatment decisions
 - Direct interpretation as psychiatric states
 - Substitute for clinical assessment
@@ -155,11 +168,13 @@ threshold_high = +0.5
 ### Planned Enhancements
 
 1. **Ground Truth Collection**:
+
    - Daily mood tracking (EMA)
    - Retrospective clinical timeline
    - Medication/life event annotations
 
 2. **Clinical Mapping**:
+
    - Validate patterns against psychiatric states
    - Identify state-specific biomarkers
    - Develop early warning algorithms
@@ -218,11 +233,13 @@ python src/etl_pipeline.py label \
 ### When Analyzing Results
 
 1. **Report as Physiological Patterns**:
+
    - ✅ "Periods of physiological dysregulation (high PBSI)"
    - ❌ "Periods of instability" (vague)
    - ❌ "Manic episodes" (unvalidated)
 
 2. **Cross-Reference with Context**:
+
    - Medication changes
    - Life events (travel, stress)
    - Device changes (firmware updates)
@@ -238,11 +255,13 @@ python src/etl_pipeline.py label \
 ## References
 
 ### Internal Docs
+
 - `docs/CLINICAL_COHERENCE_ANALYSIS.md` - Full clinical validity analysis
 - `docs/PBSI_THRESHOLD_ANALYSIS.md` - Threshold selection rationale
 - `docs/ETL_ARCHITECTURE_COMPLETE.md` - Pipeline integration
 
 ### Code
+
 - `src/labels/build_pbsi.py` - Implementation (v4.1.6)
 - `src/etl_pipeline.py` - Stage 3 integration
 - `config/label_rules.yaml` - Configuration (deprecated for PBSI)
@@ -251,11 +270,11 @@ python src/etl_pipeline.py label \
 
 ## Version History
 
-| Version | Date | Changes |
-|---------|------|---------|
-| v4.1.6 | 2025-11-20 | Percentile thresholds (P25/P75), renamed labels, clinical disclaimers |
-| v4.1.5 | 2025-11-07 | Fixed thresholds (±0.5), original "stable/unstable" labels |
-| v4.1.0 | 2025-10-15 | Segment-wise z-scores, PBSI formula finalized |
+| Version | Date       | Changes                                                               |
+| ------- | ---------- | --------------------------------------------------------------------- |
+| v4.1.6  | 2025-11-20 | Percentile thresholds (P25/P75), renamed labels, clinical disclaimers |
+| v4.1.5  | 2025-11-07 | Fixed thresholds (±0.5), original "stable/unstable" labels            |
+| v4.1.0  | 2025-10-15 | Segment-wise z-scores, PBSI formula finalized                         |
 
 ---
 
