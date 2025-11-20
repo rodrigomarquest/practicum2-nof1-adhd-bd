@@ -106,18 +106,18 @@ This supports:
 
 The pipeline consists of **10 deterministic stages** orchestrated by `scripts/run_full_pipeline.py`:
 
-| Stage | Name          | Input            | Output                       | Description                               |
-| ----- | ------------- | ---------------- | ---------------------------- | ----------------------------------------- |
-| 0     | **Ingest**    | `data/raw/`      | `extracted/`                 | Extract from Apple Health XML + Zepp ZIPs |
-| 1     | **Aggregate** | Raw CSVs         | `daily_*.csv`                | Aggregate to daily per-metric files       |
-| 2     | **Unify**     | Per-metric CSVs  | `features_daily_unified.csv` | Merge all metrics by date                 |
-| 3     | **Label**     | Unified features | `features_daily_labeled.csv` | Apply PBSI v4.1.7 labels (3-class)        |
-| 4     | **Segment**   | Labeled features | `segment_autolog.csv`        | Detect behavioral segments (2 rules)      |
+| Stage | Name          | Input            | Output                          | Description                                                              |
+| ----- | ------------- | ---------------- | ------------------------------- | ------------------------------------------------------------------------ |
+| 0     | **Ingest**    | `data/raw/`      | `extracted/`                    | Extract from Apple Health XML + Zepp ZIPs                                |
+| 1     | **Aggregate** | Raw CSVs         | `daily_*.csv`                   | Aggregate to daily per-metric files                                      |
+| 2     | **Unify**     | Per-metric CSVs  | `features_daily_unified.csv`    | Merge all metrics by date                                                |
+| 3     | **Label**     | Unified features | `features_daily_labeled.csv`    | Apply PBSI v4.1.7 labels (3-class)                                       |
+| 4     | **Segment**   | Labeled features | `segment_autolog.csv`           | Detect behavioral segments (2 rules)                                     |
 | 5     | **Prep-NB2**  | Segments         | `ai/nb2/features_daily_nb2.csv` | **v4.1.7**: Temporal filter (>=2021-05-11) + MICE imputation + anti-leak |
-| 6     | **NB2**       | MICE data        | `data/ai/.../nb2/`           | Train logistic regression (6-fold CV)     |
-| 7     | **NB3**       | MICE data        | `data/ai/.../nb3/`           | Train LSTM + SHAP + drift detection       |
-| 8     | **TFLite**    | NB3 model        | `model.tflite`               | Export to mobile format                   |
-| 9     | **Report**    | All outputs      | `RUN_REPORT.md`              | Generate execution summary                |
+| 6     | **NB2**       | MICE data        | `data/ai/.../nb2/`              | Train logistic regression (6-fold CV)                                    |
+| 7     | **NB3**       | MICE data        | `data/ai/.../nb3/`              | Train LSTM + SHAP + drift detection                                      |
+| 8     | **TFLite**    | NB3 model        | `model.tflite`                  | Export to mobile format                                                  |
+| 9     | **Report**    | All outputs      | `RUN_REPORT.md`                 | Generate execution summary                                               |
 
 **Segmentation Rules** (Stage 4):
 
@@ -170,11 +170,13 @@ See `docs/ETL_ARCHITECTURE_COMPLETE.md` for detailed stage specifications.
 **Construction**: Segment-wise z-scored composite of sleep duration, sleep efficiency, HR mean, HRV (RMSSD proxy), HR max, steps, and exercise minutes.
 
 **v4.1.7 Sign Convention** (INTUITIVE): **Higher PBSI = Better regulation**
+
 - More sleep → higher score ✓
 - Higher HRV → higher score ✓
 - More activity → higher score ✓
 
 **Thresholds**: Percentile-based (P25/P75) on ML-filtered dataset (2021-2025):
+
 - P25 = -0.370 (low threshold) → label = -1 (dysregulated)
 - P75 = +0.321 (high threshold) → label = +1 (regulated)
 
@@ -481,6 +483,7 @@ Behavioral segments are detected using exactly 2 rules:
 **Solution**: Two-stage approach
 
 1. **Temporal Filter**: ML stages (5-9) use only data from **2021-05-11 onwards** (Amazfit GTR 2 era)
+
    - Excludes 1,203 pre-Amazfit days (2017-2020, iPhone-only)
    - Retains 1,625 days (2021-2025) with 80.9% cardio coverage
    - Rationale: MAR (Missing At Random) assumption valid for 2021+, violated for 2017-2020
@@ -492,6 +495,7 @@ Behavioral segments are detected using exactly 2 rules:
    - Anti-leak verified: PBSI-derived features excluded
 
 **EDA vs ML datasets**:
+
 - **EDA** (Stages 1-4): Full timeline 2017-2025 (2,828 days)
 - **ML** (Stages 5-9): Filtered timeline 2021-2025 (1,625 days, MICE-imputed)
 
