@@ -1,6 +1,6 @@
 N-of-1 ADHD + Bipolar – Wearable-Based Digital Phenotyping
 
-**Pipeline Version**: v4.1.5  
+**Pipeline Version**: v4.1.7  
 **Last Updated**: November 20, 2025
 
 ## 1. Purpose & Scope
@@ -94,7 +94,7 @@ All ETL operations are run per **snapshot** (a consistent view of data at a give
 - **Path structure**: `data/etl/P000001/2025-11-07/...`
 - **Immutability**: All downstream files are frozen for that snapshot
 - **New data = new snapshot**: Never overwriting previous snapshots
-- **Canonical snapshot**: `2025-11-07` is the reference for v4.1.5 release
+- **Canonical snapshot**: `2025-11-07` is the reference for **v4.1.7 release** (Nov 20, 2025)
 
 This supports:
 
@@ -111,11 +111,11 @@ The pipeline consists of **10 deterministic stages** orchestrated by `scripts/ru
 | 0     | **Ingest**    | `data/raw/`      | `extracted/`                 | Extract from Apple Health XML + Zepp ZIPs |
 | 1     | **Aggregate** | Raw CSVs         | `daily_*.csv`                | Aggregate to daily per-metric files       |
 | 2     | **Unify**     | Per-metric CSVs  | `features_daily_unified.csv` | Merge all metrics by date                 |
-| 3     | **Label**     | Unified features | `features_daily_labeled.csv` | Apply PBSI labels (3-class)               |
+| 3     | **Label**     | Unified features | `features_daily_labeled.csv` | Apply PBSI v4.1.7 labels (3-class)        |
 | 4     | **Segment**   | Labeled features | `segment_autolog.csv`        | Detect behavioral segments (2 rules)      |
-| 5     | **Prep-NB2**  | Segments         | Training arrays              | Prepare data with anti-leak safeguards    |
-| 6     | **NB2**       | Arrays           | `data/ai/.../nb2/`           | Train logistic regression (6-fold CV)     |
-| 7     | **NB3**       | Sequences        | `data/ai/.../nb3/`           | Train LSTM models (sequence)              |
+| 5     | **Prep-NB2**  | Segments         | `ai/nb2/features_daily_nb2.csv` | **v4.1.7**: Temporal filter (>=2021-05-11) + MICE imputation + anti-leak |
+| 6     | **NB2**       | MICE data        | `data/ai/.../nb2/`           | Train logistic regression (6-fold CV)     |
+| 7     | **NB3**       | MICE data        | `data/ai/.../nb3/`           | Train LSTM + SHAP + drift detection       |
 | 8     | **TFLite**    | NB3 model        | `model.tflite`               | Export to mobile format                   |
 | 9     | **Report**    | All outputs      | `RUN_REPORT.md`              | Generate execution summary                |
 
@@ -162,12 +162,23 @@ See `docs/ETL_ARCHITECTURE_COMPLETE.md` for detailed stage specifications.
 
 **Sources**: Apple Screen Time (iOS)
 
-### 6.5 Behavioral Stability Index (PBSI)
+### 6.5 Behavioral Stability Index (PBSI) - v4.1.7
 
-- `pbsi_score` - Composite stability score (-1 to +1)
-- `pbsi_label` - 3-class label (stable=+1, neutral=0, unstable=-1)
+- `pbsi_score` - Composite stability score (range varies, typically -1.5 to +1.5)
+- `label_3cls` - 3-class label (**v4.1.7: +1=regulated/high_pbsi, 0=typical, -1=dysregulated/low_pbsi**)
 
-**Construction**: Segment-wise z-scored composite of sleep regularity, HR variability, activity consistency. See `config/label_rules.yaml` for threshold definitions.
+**Construction**: Segment-wise z-scored composite of sleep duration, sleep efficiency, HR mean, HRV (RMSSD proxy), HR max, steps, and exercise minutes.
+
+**v4.1.7 Sign Convention** (INTUITIVE): **Higher PBSI = Better regulation**
+- More sleep → higher score ✓
+- Higher HRV → higher score ✓
+- More activity → higher score ✓
+
+**Thresholds**: Percentile-based (P25/P75) on ML-filtered dataset (2021-2025):
+- P25 = -0.370 (low threshold) → label = -1 (dysregulated)
+- P75 = +0.321 (high threshold) → label = +1 (regulated)
+
+See `docs/PBSI_LABELS_v4.1.7.md` for technical details and `docs/release_notes/RELEASE_NOTES_v4.1.7.md` for changelog.
 
 7. Label Construction
 
@@ -443,23 +454,50 @@ Behavioral segments are detected using exactly 2 rules:
 
 **Rationale**: Simple, deterministic, data-driven (no subjective "behavioral shifts")
 
-### 10.2 PBSI Label Construction
+### 10.2 PBSI Label Construction (v4.1.7)
 
 **Method**: Segment-wise z-scored composite of:
 
-- Sleep regularity (coefficient of variation)
-- HR variability (within-day std)
-- Activity consistency (day-to-day correlation)
+- **Sleep**: duration (60%) + efficiency (40%)
+- **Cardio**: -0.5×HR_mean + 0.6×HRV - 0.2×HR_max (higher HRV = better)
+- **Activity**: steps (70%) + exercise (30%)
 
-**Thresholds** (from `config/label_rules.yaml`):
+**Composite**: `0.40×sleep_sub + 0.35×cardio_sub + 0.25×activity_sub`
 
-- PBSI ≥ 0.5 → Unstable (-1)
-- PBSI ≤ -0.5 → Stable (+1)
-- Otherwise → Neutral (0)
+**Thresholds** (percentile-based on 2021-2025 ML dataset):
 
-**Advantage**: Weak supervision without requiring daily clinical labels
+- PBSI ≤ -0.370 (P25) → **Dysregulated** (label = -1)
+- -0.370 < PBSI < 0.321 → **Typical** (label = 0)
+- PBSI ≥ 0.321 (P75) → **Regulated** (label = +1)
 
-### 10.3 Snapshot Immutability
+**v4.1.7 Sign Convention**: **Higher PBSI = Better regulation** (intuitive!)
+
+**Advantage**: Weak supervision without requiring daily clinical labels. See `docs/PBSI_LABELS_v4.1.7.md` for full technical specification.
+
+### 10.3 Missing Data Handling (v4.1.7)
+
+**Problem**: 56.6% of days (2017-2025) have missing HR/HRV due to hardware limitations (iPhone Motion API lacks cardio sensors).
+
+**Solution**: Two-stage approach
+
+1. **Temporal Filter**: ML stages (5-9) use only data from **2021-05-11 onwards** (Amazfit GTR 2 era)
+   - Excludes 1,203 pre-Amazfit days (2017-2020, iPhone-only)
+   - Retains 1,625 days (2021-2025) with 80.9% cardio coverage
+   - Rationale: MAR (Missing At Random) assumption valid for 2021+, violated for 2017-2020
+
+2. **MICE Imputation** (Stage 5): Segment-aware multiple imputation
+   - Method: `sklearn.IterativeImputer` (max_iter=10, random_state=42)
+   - Imputes within temporal segments (respects non-stationarity)
+   - Results: 1,938 values imputed → **0 NaN remaining** ✓
+   - Anti-leak verified: PBSI-derived features excluded
+
+**EDA vs ML datasets**:
+- **EDA** (Stages 1-4): Full timeline 2017-2025 (2,828 days)
+- **ML** (Stages 5-9): Filtered timeline 2021-2025 (1,625 days, MICE-imputed)
+
+See `docs/release_notes/RELEASE_NOTES_v4.1.7.md` section "Missing Data Handling" for details.
+
+### 10.4 Snapshot Immutability
 
 Once a snapshot is created, it is **never modified**:
 
