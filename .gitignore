@@ -38,12 +38,29 @@ notebook.log
 pipeline_run.log
 
 # --- Data layout (canonical)
+# Keep raw data private (never commit)
+data/raw/
+data/raw/**
+
+# Block all data directories by default
 data/
 !data/sample_input/**
 !data/sample_output/**
+
+# Block all ETL snapshots by default
 data/etl/
+data/etl/**
 !data/etl/.keep
+
+# EXCEPTION: Expose single public ETL snapshot for reproducibility
+# This allows external researchers to reproduce the pipeline without raw data
+!data/etl/P000001/
+!data/etl/P000001/2025-11-07/
+!data/etl/P000001/2025-11-07/**
+
+# Block all AI outputs by default
 data/ai/
+data/ai/**
 !data/ai/.keep
 
 # --- Outputs / artifacts

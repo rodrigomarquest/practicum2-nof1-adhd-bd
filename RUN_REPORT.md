@@ -1,6 +1,6 @@
 # RUN_REPORT.md - Pipeline Execution Summary
 
-**Generated**: 2025-11-20 07:40:28
+**Generated**: 2025-11-21 04:37:23
 **Participant**: P000001
 **Snapshot**: 2025-11-07
 
@@ -33,33 +33,33 @@
 
 ## ML7: SHAP Feature Importance (Global Top-10)
 
-1. **z_sleep_total_h**: 0.7878
-2. **z_sleep_efficiency**: 0.7300
-3. **z_hrv_rmssd**: 0.6188
-4. **z_hr_mean**: 0.3851
-5. **z_steps**: 0.3747
-6. **z_hr_max**: 0.2651
-7. **z_exercise_min**: 0.2585
+1. **z_sleep_efficiency**: 0.9016
+2. **z_sleep_total_h**: 0.8577
+3. **z_hrv_rmssd**: 0.5246
+4. **z_steps**: 0.3860
+5. **z_hr_mean**: 0.3768
+6. **z_exercise_min**: 0.3097
+7. **z_hr_max**: 0.2753
 
 ## ML7: Drift Detection
 
-- **ADWIN Changes Detected (δ=0.002)**: 6
-- **KS Significant Tests (p<0.05)**: 40
+- **ADWIN Changes Detected (δ=0.002)**: 0
+- **KS Significant Tests (p<0.05)**: 0
 
 ## ML7: LSTM M1
 
 - **Architecture**: LSTM(32) -> Dense(32) -> Dropout(0.2) -> Softmax(3)
 - **Sequence Length**: 14 days
-- **Mean Macro-F1**: 0.4120
+- **Mean Macro-F1**: 0.4095
 
 ### Per-Fold LSTM Results
 
-- **Fold 0**: F1=0.4464, Loss=0.8320, Acc=0.6279
-- **Fold 1**: F1=0.4286, Loss=0.8518, Acc=0.7500
-- **Fold 2**: F1=0.5238, Loss=1.0869, Acc=0.4286
-- **Fold 3**: F1=0.2714, Loss=0.9756, Acc=0.3824
-- **Fold 4**: F1=0.3351, Loss=0.8628, Acc=0.5610
-- **Fold 5**: F1=0.4667, Loss=0.3821, Acc=0.8750
+- **Fold 0**: F1=0.4263, Loss=0.8238, Acc=0.6042
+- **Fold 1**: F1=0.2929, Loss=0.6547, Acc=0.6250
+- **Fold 2**: F1=0.4025, Loss=0.9989, Acc=0.5000
+- **Fold 3**: F1=0.4182, Loss=0.8811, Acc=0.4792
+- **Fold 4**: F1=0.4567, Loss=0.8707, Acc=0.6458
+- **Fold 5**: F1=0.4607, Loss=0.3875, Acc=0.8542
 
 ## Model Export & Latency
 

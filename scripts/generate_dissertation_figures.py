@@ -5,6 +5,10 @@ Purpose: Generate publication-quality figures for LaTeX dissertation
 Output: docs/latex/figures/
 Snapshot: P000001/2025-11-07
 Style: PhD-level academic (grayscale-friendly, high DPI)
+
+Dataset: Uses full timeline (features_daily_labeled.csv) for visualization
+ML6/ML7 Stats: Displays statistics for ML-filtered dataset (>= 2021-05-11)
+Note: ML6 and ML7 use temporal filter >= 2021-05-11 (1,625 days, 1,612 sequences)
 """
 
 import pandas as pd
@@ -34,9 +38,26 @@ print(f"Figure settings: 300 DPI, grayscale-friendly\n")
 
 # Load data
 df = pd.read_csv(DATA_DIR / 'features_daily_labeled.csv', parse_dates=['date'])
-print(f"Total days: {len(df)}")
-print(f"Date range: {df['date'].min()} to {df['date'].max()}")
-print(f"\nLabel distribution:")
+print(f"Total days (full dataset): {len(df)}")
+print(f"Date range (full): {df['date'].min()} to {df['date'].max()}")
+
+# Also load ML6 filtered dataset for accurate statistics
+ML6_PATH = Path('data/ai/P000001/2025-11-07/ml6/features_daily_ml6.csv')
+if ML6_PATH.exists():
+    df_ml6 = pd.read_csv(ML6_PATH, parse_dates=['date'])
+    print(f"\nML-filtered dataset (>= 2021-05-11):")
+    print(f"  Total days: {len(df_ml6)}")
+    print(f"  Date range: {df_ml6['date'].min()} to {df_ml6['date'].max()}")
+    print(f"  Label distribution (post-MICE):")
+    for label, count in df_ml6['label_3cls'].value_counts().sort_index().items():
+        pct = (count / len(df_ml6)) * 100
+        print(f"    {label:+.1f}: {count:4d} ({pct:4.1f}%)")
+    print(f"  Missing values: {df_ml6.isna().sum().sum()}")
+    print(f"  ML7 sequences (14-day windows): {len(df_ml6) - 14 + 1}")
+else:
+    print(f"\n[WARN] ML6 dataset not found at {ML6_PATH}")
+
+print(f"\nFull dataset label distribution:")
 print(df['label_3cls'].value_counts().sort_index())
 
 # Color mapping (grayscale-friendly)
@@ -153,25 +174,27 @@ demo_data = demo_data.sort_values('date')
 
 fig, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
 
-# Top: Raw
+# Top: Raw (BLUE)
 ax1 = axes[0]
 for seg in demo_data['segment_id'].unique()[:10]:
     seg_data = demo_data[demo_data['segment_id'] == seg]
     ax1.plot(seg_data['date'], seg_data[feature_raw], 
+             color='steelblue',  # Blue for "before"
              marker='o', markersize=2, linewidth=0.8, alpha=0.7)
 
 ax1.set_ylabel('Raw HR Mean (bpm)', fontsize=10)
 ax1.set_title('Before Segment-wise Normalization', fontsize=11, fontweight='bold')
 ax1.grid(True, alpha=0.3)
 
-# Bottom: Z-scored
+# Bottom: Z-scored (ORANGE)
 ax2 = axes[1]
 for seg in demo_data['segment_id'].unique()[:10]:
     seg_data = demo_data[demo_data['segment_id'] == seg]
     ax2.plot(seg_data['date'], seg_data[feature_zscore], 
+             color='darkorange',  # Orange for "after"
              marker='o', markersize=2, linewidth=0.8, alpha=0.7)
 
-ax2.axhline(y=0, color='black', linestyle='--', linewidth=0.8, alpha=0.5)
+ax2.axhline(y=0, color='red', linestyle='--', linewidth=1.2, alpha=0.8)  # Red reference line
 ax2.set_xlabel('Date', fontsize=10)
 ax2.set_ylabel('Z-score (segment-wise)', fontsize=10)
 ax2.set_title('After Segment-wise Normalization', fontsize=11, fontweight='bold')

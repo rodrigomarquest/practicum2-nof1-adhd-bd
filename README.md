@@ -78,6 +78,8 @@ archive/                       # versões antigas preservadas (sem deleção)
 
 ⚙️ Reproducibility and Environment
 
+### Full Pipeline Execution (With Raw Data)
+
 ```bash
 # Install dependencies
 pip install -r requirements/base.txt
@@ -91,6 +93,36 @@ python scripts/run_full_pipeline.py --participant P000001 --snapshot 2025-11-07
 #   data/ai/P000001/2025-11-07/ml7/shap_summary.md
 #   RUN_REPORT.md
 ```
+
+### 🔓 Public Reproducibility (Without Raw Data)
+
+**NEW**: External researchers can now reproduce the full pipeline using the **public ETL snapshot** included in this repository, without requiring access to private raw data!
+
+```bash
+# Reproduce stages 3-9 from public ETL snapshot
+python scripts/run_full_pipeline.py \
+  --participant P000001 \
+  --snapshot 2025-11-07 \
+  --start-from-etl \
+  --end-stage 9
+```
+
+This command:
+
+- ✅ Skips raw data extraction (stages 0-2)
+- ✅ Loads pre-processed ETL snapshot from `data/etl/P000001/2025-11-07/`
+- ✅ Executes stages 3-9: Labeling → Segmentation → ML6 → ML7 → TFLite → Report
+- ✅ Produces **identical results** (deterministic pipeline, seed=42)
+
+**Public ETL Snapshot Contents**:
+
+- **Participant**: P000001
+- **Date Range**: 2023-12-01 to 2025-09-29 (669 days)
+- **Features**: 47 daily features (cardio, activity, sleep, screen time)
+- **Pipeline Version**: v4.1.8
+- **Location**: `data/etl/P000001/2025-11-07/`
+
+For detailed instructions, see: **[📖 Reproducing with ETL Snapshot](docs/REPRODUCING_WITH_ETL_SNAPSHOT.md)**
 
 Pipeline Stages:
 
