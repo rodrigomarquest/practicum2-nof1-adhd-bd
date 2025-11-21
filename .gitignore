@@ -58,10 +58,27 @@ data/etl/**
 !data/etl/P000001/2025-11-07/
 !data/etl/P000001/2025-11-07/**
 
+# Block extracted raw data (private)
+data/etl/P000001/2025-11-07/extracted/
+data/etl/P000001/2025-11-07/extracted/**
+
+# Allow joined features and segment_autolog.csv (needed for ML6/ML7)
+!data/etl/P000001/2025-11-07/joined/
+!data/etl/P000001/2025-11-07/joined/**
+!data/etl/P000001/2025-11-07/segment_autolog.csv
+
 # Block all AI outputs by default
 data/ai/
 data/ai/**
 !data/ai/.keep
+
+# EXCEPTION: Expose ML6 and ML7 outputs for reproducibility
+!data/ai/P000001/
+!data/ai/P000001/2025-11-07/
+!data/ai/P000001/2025-11-07/ml6/
+!data/ai/P000001/2025-11-07/ml6/**
+!data/ai/P000001/2025-11-07/ml7/
+!data/ai/P000001/2025-11-07/ml7/**
 
 # --- Outputs / artifacts
 notebooks/outputs/

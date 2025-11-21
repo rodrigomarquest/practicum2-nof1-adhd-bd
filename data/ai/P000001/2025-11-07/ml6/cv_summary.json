@@ -1,0 +1,76 @@
+{
+  "model": "LogisticRegression",
+  "cv_type": "temporal_calendar_6fold",
+  "train_months": 4,
+  "val_months": 2,
+  "mean_f1_macro": 0.7099176035415459,
+  "std_f1_macro": 0.0906476515079332,
+  "folds": [
+    {
+      "fold": 0,
+      "train_start": "2021-05-11",
+      "train_end": "2021-09-11",
+      "val_start": "2021-09-11",
+      "val_end": "2021-11-11",
+      "n_train": 123,
+      "n_val": 61,
+      "f1_macro": 0.8156288156288157,
+      "balanced_accuracy": 0.8258636788048553
+    },
+    {
+      "fold": 1,
+      "train_start": "2021-11-11",
+      "train_end": "2022-03-11",
+      "val_start": "2022-03-11",
+      "val_end": "2022-05-11",
+      "n_train": 120,
+      "n_val": 61,
+      "f1_macro": 0.6440626883664858,
+      "balanced_accuracy": 0.7911547911547911
+    },
+    {
+      "fold": 2,
+      "train_start": "2022-05-11",
+      "train_end": "2022-09-11",
+      "val_start": "2022-09-11",
+      "val_end": "2022-11-11",
+      "n_train": 123,
+      "n_val": 61,
+      "f1_macro": 0.8538849712104547,
+      "balanced_accuracy": 0.8601410934744269
+    },
+    {
+      "fold": 3,
+      "train_start": "2022-11-11",
+      "train_end": "2023-03-11",
+      "val_start": "2023-03-11",
+      "val_end": "2023-05-11",
+      "n_train": 120,
+      "n_val": 61,
+      "f1_macro": 0.679388881828836,
+      "balanced_accuracy": 0.7518796992481204
+    },
+    {
+      "fold": 4,
+      "train_start": "2023-05-11",
+      "train_end": "2023-09-11",
+      "val_start": "2023-09-11",
+      "val_end": "2023-11-11",
+      "n_train": 123,
+      "n_val": 61,
+      "f1_macro": 0.647089947089947,
+      "balanced_accuracy": 0.6835288367546433
+    },
+    {
+      "fold": 5,
+      "train_start": "2023-11-11",
+      "train_end": "2024-03-11",
+      "val_start": "2024-03-11",
+      "val_end": "2024-05-11",
+      "n_train": 121,
+      "n_val": 61,
+      "f1_macro": 0.6194503171247357,
+      "balanced_accuracy": 0.8742138364779874
+    }
+  ]
+}
