@@ -21,7 +21,7 @@ REPO_ROOT ?= .
 ETL_TQDM ?= 1
 export ETL_TQDM
 
-# Zepp ZIP password (fail-fast if ZIP exists but no password)
+# Zepp ZIP password (optional; if missing, Zepp extraction skipped)
 ZPWD ?= $(ZEP_ZIP_PASSWORD)
 
 # Portable PYTHONPATH (":" on POSIX, ";" on Windows)
@@ -43,8 +43,9 @@ AI_DIR  := data/ai/$(PID)/$(SNAPSHOT_RESOLVED)
 
 # -------- Phony --------
 .PHONY: help env check-dirs \
-        ingest aggregate unify segment label prep-ml6 nb2 nb3 report \
+        ingest aggregate unify segment label prep-ml6 nb2 nb3 report report-extended \
         pipeline quick ml6-only ml7-only \
+        ml6-rf ml6-xgb ml6-lgbm ml6-svm ml7-gru ml7-tcn ml7-mlp ml-extended-all \
         qc-hr qc-steps qc-sleep qc-all qc-etl \
         clean-outputs clean-all verify \
         help-release release-notes version-guard changelog release-assets provenance release-draft publish-release
@@ -54,6 +55,8 @@ help:
 > echo "Usage:"
 > echo "  make pipeline PID=$(PID) SNAPSHOT=$(SNAPSHOT) [ZPWD=***]"
 > echo "  make ml6-only | ml7-only | quick"
+> echo "  make ml6-rf | ml6-xgb | ml6-lgbm | ml6-svm"
+> echo "  make ml7-gru | ml7-tcn | ml7-mlp | ml-extended-all"
 > echo "  make qc-hr | qc-steps | qc-sleep | qc-all"
 > echo "  make verify | clean-outputs | help-release"
 > echo "Vars: PID=$(PID) SNAPSHOT=$(SNAPSHOT) -> $(SNAPSHOT_RESOLVED)"
@@ -62,11 +65,10 @@ help:
 env:
 > $(PYTHON) -V
 > [ -d data/raw/$(PID) ] || (echo "ERR: data/raw/$(PID) not found"; exit 1)
-> @# Fail-fast if Zepp ZIP exists but no password provided
+> @# Warn if Zepp ZIP exists but no password provided (non-fatal)
 > @if ls data/raw/$(PID)/zepp/*.zip >/dev/null 2>&1; then \
 >   if [ -z "$(ZPWD)" ]; then \
->     echo "ERR: Zepp ZIP detected but no password provided (set ZEP_ZIP_PASSWORD or pass ZPWD=...)"; \
->     exit 2; \
+>     echo "[WARN] Zepp ZIP detected but password not provided. Skipping Zepp extraction."; \
 >   fi; \
 > fi
 
@@ -102,6 +104,11 @@ report: env
 > $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 9 --end-stage 9 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
 > echo "RUN_REPORT -> ./RUN_REPORT.md"
 
+report-extended:
+> @echo "Generating extended model report..."
+> $(PYTHON) scripts/generate_extended_report.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED)
+> echo "[OK] RUN_REPORT_EXTENDED.md -> ./RUN_REPORT_EXTENDED.md"
+
 # -------- QC / Audits --------
 qc-hr:
 > @echo "Running HR feature integrity audit..."
@@ -133,6 +140,40 @@ ml6-only: env
 
 ml7-only: env
 > $(PYTHON) scripts/run_full_pipeline.py --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --start-stage 7 --end-stage 8 $(if $(ZPWD),--zepp-password "$(ZPWD)") $(DRY_FLAG)
+
+# -------- ML6/ML7 Extended Models --------
+# NOTE: Extended models use preprocessed Stage 5 outputs (no data/raw or Zepp password needed)
+ml6-rf:
+> @echo "Running ML6 Random Forest with instability regularization..."
+> $(PYTHON) scripts/run_extended_models.py --which ml6 --models rf --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED)
+
+ml6-xgb:
+> @echo "Running ML6 XGBoost with instability regularization..."
+> $(PYTHON) scripts/run_extended_models.py --which ml6 --models xgb --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED)
+
+ml6-lgbm:
+> @echo "Running ML6 LightGBM with instability regularization..."
+> $(PYTHON) scripts/run_extended_models.py --which ml6 --models lgbm --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED)
+
+ml6-svm:
+> @echo "Running ML6 SVM (no instability penalty)..."
+> $(PYTHON) scripts/run_extended_models.py --which ml6 --models svm --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED)
+
+ml7-gru:
+> @echo "Running ML7 GRU..."
+> $(PYTHON) scripts/run_extended_models.py --which ml7 --models gru --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED)
+
+ml7-tcn:
+> @echo "Running ML7 TCN (Temporal Convolutional Network)..."
+> $(PYTHON) scripts/run_extended_models.py --which ml7 --models tcn --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED)
+
+ml7-mlp:
+> @echo "Running ML7 Temporal MLP..."
+> $(PYTHON) scripts/run_extended_models.py --which ml7 --models mlp --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED)
+
+ml-extended-all:
+> @echo "Running ALL extended ML6/ML7 models..."
+> $(PYTHON) scripts/run_extended_models.py --which all --models all --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED)
 
 # -------- Cleaning --------
 clean-outputs:

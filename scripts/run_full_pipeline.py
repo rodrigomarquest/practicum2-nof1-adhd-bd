@@ -98,6 +98,10 @@ def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) ->
     """
     Stage 0: Ingest
     Extract ZIPs from data/raw/P000001/{apple,zepp}/ to data/etl/.../extracted/
+    
+    Zepp extraction is OPTIONAL:
+    - If Zepp ZIP exists but no password provided: Skip with warning (non-fatal).
+    - ML6/ML7 pipelines can run without Zepp data.
     """
     banner("STAGE 0: INGEST (extract from data/raw)")
     stage_start = time.time()
@@ -108,13 +112,15 @@ def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) ->
         # Get Zepp password from env or parameter
         zpwd = zepp_password or os.getenv("ZEP_ZIP_PASSWORD") or os.getenv("ZEPP_ZIP_PASSWORD")
         
-        # FAIL-FAST: Check if Zepp ZIPs exist but no password provided
+        # NON-FATAL: Warn if Zepp ZIPs exist but no password provided
         zepp_raw_dir = raw_participant_dir / "zepp"
+        zepp_skip_warned = False
         if zepp_raw_dir.exists():
             zepp_zips = list(zepp_raw_dir.glob("*.zip"))
             if zepp_zips and not zpwd:
-                logger.error("[FATAL] Zepp ZIP found but no password provided. Use --zepp-password or set ZEP_ZIP_PASSWORD.")
-                sys.exit(2)
+                logger.warning("[WARN] Zepp ZIP detected but no password provided. Skipping Zepp extraction.")
+                logger.warning("[WARN] Pipeline will run in Apple-only mode. ML6/ML7 models remain reproducible.")
+                zepp_skip_warned = True
         
         # Extract Apple ZIPs
         apple_raw_dir = raw_participant_dir / "apple" / "export"
@@ -133,8 +139,8 @@ def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) ->
         else:
             logger.warning(f"[SKIP] Apple export dir not found: {apple_raw_dir}")
         
-        # Extract Zepp ZIPs
-        if zepp_raw_dir.exists():
+        # Extract Zepp ZIPs (skip if no password)
+        if zepp_raw_dir.exists() and not zepp_skip_warned:
             zepp_zips = list(zepp_raw_dir.glob("*.zip"))
             for zip_file in zepp_zips:
                 logger.info(f"[Zepp] Extracting: {zip_file.name}")
@@ -174,11 +180,13 @@ def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) ->
                 except Exception as e:
                     logger.warning(f"[SKIP] {zip_file.name}: {e}")
             logger.info(f"[OK] Zepp extracted to {ctx.extracted_dir / 'zepp'}")
+        elif zepp_raw_dir.exists() and zepp_skip_warned:
+            logger.info(f"[SKIP] Zepp extraction skipped (no password)")
         else:
             logger.warning(f"[SKIP] Zepp dir not found: {zepp_raw_dir}")
         
         elapsed = time.time() - stage_start
-        logger.info(f"✓ Stage 0 complete ({elapsed:.1f}s)")
+        logger.info(f"[OK] Stage 0 complete ({elapsed:.1f}s)")
         ctx.log_stage_result(0, "success", duration_sec=elapsed)
         return True
     
@@ -209,7 +217,7 @@ def stage_1_aggregate(ctx: PipelineContext) -> bool:
         apple_total = sum(len(df) for df in results.get("apple", {}).values())
         zepp_total = sum(len(df) for df in results.get("zepp", {}).values())
         
-        logger.info(f"✓ Stage 1 complete: {apple_total} Apple + {zepp_total} Zepp days")
+        logger.info(f"[OK] Stage 1 complete: {apple_total} Apple + {zepp_total} Zepp days")
         elapsed = time.time() - stage_start
         ctx.log_stage_result(1, "success", duration_sec=elapsed, 
                             apple_days=apple_total, zepp_days=zepp_total)
@@ -238,7 +246,7 @@ def stage_2_unify(ctx: PipelineContext) -> Optional[pd.DataFrame]:
             output_dir=str(ctx.snapshot_dir)  # Will save to snapshot_dir/joined/
         )
         
-        logger.info(f"✓ Stage 2 complete: {len(df)} days, "
+        logger.info(f"[OK] Stage 2 complete: {len(df)} days, "
                    f"{df['date'].min()} to {df['date'].max()}")
         elapsed = time.time() - stage_start
         ctx.log_stage_result(2, "success", duration_sec=elapsed, rows=len(df))
@@ -266,7 +274,7 @@ def stage_3_label(ctx: PipelineContext) -> Optional[pd.DataFrame]:
         )
         
         dist = df['label_3cls'].value_counts()
-        logger.info(f"✓ Stage 3 complete: {len(df)} days labeled")
+        logger.info(f"[OK] Stage 3 complete: {len(df)} days labeled")
         for label in [-1, 0, 1]:
             if label in dist.index:
                 count = dist[label]
@@ -342,7 +350,7 @@ def stage_4_segment(ctx: PipelineContext, df: pd.DataFrame) -> bool:
         segment_path = ctx.snapshot_dir / "segment_autolog.csv"
         df_segments.to_csv(segment_path, index=False)
         
-        logger.info(f"✓ Stage 4 complete: {len(df_segments)} segments")
+        logger.info(f"[OK] Stage 4 complete: {len(df_segments)} segments")
         logger.info(f"  Reasons: {df_segments['reason'].value_counts().to_dict()}")
         
         elapsed = time.time() - stage_start
@@ -461,7 +469,7 @@ def stage_5_prep_ml6(ctx: PipelineContext, df: pd.DataFrame) -> Optional[pd.Data
         ml6_path.parent.mkdir(parents=True, exist_ok=True)
         df_clean.to_csv(ml6_path, index=False)
         
-        logger.info(f"✓ Stage 5 complete: {df_clean.shape}")
+        logger.info(f"[OK] Stage 5 complete: {df_clean.shape}")
         logger.info(f"  ML period: >= {ml_cutoff.strftime('%Y-%m-%d')} ({n_after} days)")
         logger.info(f"  MICE imputation: SUCCESS (0 NaN)")
         logger.info(f"  Anti-leak verified: YES")
@@ -563,7 +571,7 @@ def stage_6_ml6(ctx: PipelineContext, df: pd.DataFrame) -> bool:
         with open(cv_path, 'w') as f:
             json.dump(cv_summary, f, indent=2)
         
-        logger.info(f"✓ Stage 6 complete: F1={mean_f1:.4f}±{std_f1:.4f}")
+        logger.info(f"[OK] Stage 6 complete: F1={mean_f1:.4f}±{std_f1:.4f}")
         
         elapsed = time.time() - stage_start
         ctx.log_stage_result(6, "success", duration_sec=elapsed, 
@@ -872,7 +880,7 @@ def stage_7_ml7(ctx: PipelineContext) -> bool:
         ctx.results['adwin_changes'] = adwin_result.get('n_changes', 0)
         ctx.results['ks_significant'] = ks_result.get('n_significant', 0)
         
-        logger.info(f"✓ Stage 7 complete: SHAP ✓ Drift ✓ LSTM ✓")
+        logger.info(f"[OK] Stage 7 complete: SHAP [OK] Drift [OK] LSTM [OK]")
         elapsed = time.time() - stage_start
         ctx.log_stage_result(7, "success", duration_sec=elapsed)
         return True
@@ -916,7 +924,7 @@ def stage_8_tflite(ctx: PipelineContext) -> bool:
         
         if not ml6_path.exists():
             logger.warning(f"[TFLite] ML6 data not found: {ml6_path}, skipping latency test")
-            logger.info(f"✓ Stage 8 complete: TFLite exported (latency test skipped)")
+            logger.info(f"[OK] Stage 8 complete: TFLite exported (latency test skipped)")
             ctx.log_stage_result(8, "success", duration_sec=time.time() - stage_start)
             return True
         
@@ -936,9 +944,9 @@ def stage_8_tflite(ctx: PipelineContext) -> bool:
         
         p95 = latency_stats.get('p95_ms', 0)
         if isinstance(p95, (int, float)):
-            logger.info(f"✓ Stage 8 complete: TFLite exported, latency p95={p95:.2f}ms")
+            logger.info(f"[OK] Stage 8 complete: TFLite exported, latency p95={p95:.2f}ms")
         else:
-            logger.info(f"✓ Stage 8 complete: TFLite exported, latency p95={p95}")
+            logger.info(f"[OK] Stage 8 complete: TFLite exported, latency p95={p95}")
         
         ctx.results['latency_p95'] = latency_stats.get('p95_ms', 0)
         ctx.results['tflite_path'] = str(tflite_path)
@@ -1100,7 +1108,7 @@ def stage_9_report(ctx: PipelineContext) -> bool:
         with open(report_path, 'w', encoding='utf-8') as f:
             f.write(report_text)
         
-        logger.info(f"✓ Stage 9 complete: {report_path}")
+        logger.info(f"[OK] Stage 9 complete: {report_path}")
         elapsed = time.time() - stage_start
         ctx.log_stage_result(9, "success", duration_sec=elapsed)
         return True
@@ -1242,9 +1250,9 @@ def main():
     # Summary
     banner("PIPELINE COMPLETE")
     if success:
-        logger.info("✓ All stages successful")
-        logger.info(f"✓ Output: {ctx.snapshot_dir}")
-        logger.info(f"✓ Report: RUN_REPORT.md")
+        logger.info("[OK] All stages successful")
+        logger.info(f"[OK] Output: {ctx.snapshot_dir}")
+        logger.info(f"[OK] Report: RUN_REPORT.md")
         sys.exit(0)
     else:
         logger.error("✗ Some stages failed")

@@ -9,6 +9,32 @@ Style: PhD-level academic (grayscale-friendly, high DPI)
 Dataset: Uses full timeline (features_daily_labeled.csv) for visualization
 ML6/ML7 Stats: Displays statistics for ML-filtered dataset (>= 2021-05-11)
 Note: ML6 and ML7 use temporal filter >= 2021-05-11 (1,625 days, 1,612 sequences)
+
+Generated Figures:
+==================
+Core Pipeline (1-9):
+  - fig01_pbsi_timeline: PBSI behavioral labels over time
+  - fig02_cardio_distributions: HR/HRV distributions by label
+  - fig03_sleep_activity_boxplots: Sleep and activity patterns
+  - fig04_segmentwise_normalization: Z-score normalization demo
+  - fig05_missing_data_pattern: Cardiovascular data availability
+  - fig06_label_distribution_timeline: Label counts over time
+  - fig07_correlation_heatmap: Feature correlation matrix
+  - fig08_adwin_drift: ADWIN drift detection events
+  - fig09_shap_importance: SHAP feature importance
+
+Extended Models (10-13):
+  - fig10_extended_ml6_models: ML6 extended models comparison (RF, XGB, LGBM, SVM)
+  - fig11_extended_ml7_models: ML7 extended sequence models (GRU, TCN, MLP)
+  - fig12_instability_scores: Top-15 temporally unstable features
+  - fig13_extended_models_combined: Side-by-side ML6 + ML7 comparison
+
+Usage:
+======
+  python scripts/generate_dissertation_figures.py
+
+All figures are saved as both PDF (vector) and PNG (raster) at 300 DPI.
+Figures automatically overwrite existing files for reproducibility.
 """
 
 import pandas as pd
@@ -29,10 +55,17 @@ plt.rcParams['axes.linewidth'] = 0.8
 plt.rcParams['grid.linewidth'] = 0.5
 
 # Paths
-DATA_DIR = Path('data/etl/P000001/2025-11-07/joined')
+PID = 'P000001'
+SNAPSHOT = '2025-11-07'
+DATA_DIR = Path(f'data/etl/{PID}/{SNAPSHOT}/joined')
+AI_DIR = Path(f'data/ai/{PID}/{SNAPSHOT}')
+ML6_EXT_DIR = AI_DIR / 'ml6_ext'
+ML7_EXT_DIR = AI_DIR / 'ml7_ext'
 FIG_DIR = Path('docs/latex/figures')
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
+print(f"Participant: {PID}")
+print(f"Snapshot: {SNAPSHOT}")
 print(f"Output directory: {FIG_DIR}")
 print(f"Figure settings: 300 DPI, grayscale-friendly\n")
 
@@ -397,16 +430,269 @@ except Exception as e:
     print(f"  [WARN] Error generating SHAP figure: {e}")
 
 # =============================================================================
+# FIGURE 10: Extended ML6 Models Comparison
+# =============================================================================
+print("[10/13] Generating extended ML6 models comparison...")
+
+try:
+    ml6_ext_summary = pd.read_csv(ML6_EXT_DIR / 'ml6_extended_summary.csv')
+    
+    if len(ml6_ext_summary) > 0:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Sort by f1_macro_mean descending
+        ml6_ext_summary = ml6_ext_summary.sort_values('f1_macro_mean', ascending=False)
+        
+        # Create barplot with error bars
+        x_pos = np.arange(len(ml6_ext_summary))
+        bars = ax.bar(x_pos, ml6_ext_summary['f1_macro_mean'], 
+                     yerr=ml6_ext_summary['f1_macro_std'],
+                     color='steelblue', alpha=0.8, edgecolor='black', linewidth=0.8,
+                     capsize=5, error_kw={'linewidth': 1.5})
+        
+        # Add value labels on bars
+        for i, (idx, row) in enumerate(ml6_ext_summary.iterrows()):
+            ax.text(i, row['f1_macro_mean'] + row['f1_macro_std'] + 0.02,
+                   f"{row['f1_macro_mean']:.3f}",
+                   ha='center', va='bottom', fontsize=9, fontweight='bold')
+        
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(ml6_ext_summary['model'].str.upper(), fontsize=10)
+        ax.set_ylabel('Macro-F1 Score', fontsize=11)
+        ax.set_xlabel('Model', fontsize=11)
+        ax.set_title('Extended ML6 Models Performance (6-fold Temporal CV)', 
+                    fontsize=12, fontweight='bold')
+        ax.set_ylim(0, 1.0)
+        ax.axhline(y=0.5, color='red', linestyle='--', linewidth=0.8, alpha=0.4, label='Baseline (0.5)')
+        ax.legend(loc='lower right', frameon=True, edgecolor='black')
+        ax.grid(True, alpha=0.3, axis='y')
+        
+        plt.tight_layout()
+        plt.savefig(FIG_DIR / 'fig10_extended_ml6_models.pdf', bbox_inches='tight')
+        plt.savefig(FIG_DIR / 'fig10_extended_ml6_models.png', bbox_inches='tight')
+        plt.close()
+        print("  [OK] fig10_extended_ml6_models.{pdf,png}")
+    else:
+        print("  [WARN] No extended ML6 data found")
+except FileNotFoundError:
+    print("  [WARN] Extended ML6 summary not found, skipping fig10")
+except Exception as e:
+    print(f"  [WARN] Error generating extended ML6 figure: {e}")
+
+# =============================================================================
+# FIGURE 11: Extended ML7 Models Comparison
+# =============================================================================
+print("[11/13] Generating extended ML7 models comparison...")
+
+try:
+    ml7_ext_summary = pd.read_csv(ML7_EXT_DIR / 'ml7_extended_summary.csv')
+    
+    if len(ml7_ext_summary) > 0:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Sort by f1_macro_mean descending
+        ml7_ext_summary = ml7_ext_summary.sort_values('f1_macro_mean', ascending=False)
+        
+        # Create barplot with error bars
+        x_pos = np.arange(len(ml7_ext_summary))
+        bars = ax.bar(x_pos, ml7_ext_summary['f1_macro_mean'], 
+                     yerr=ml7_ext_summary['f1_macro_std'],
+                     color='darkorange', alpha=0.8, edgecolor='black', linewidth=0.8,
+                     capsize=5, error_kw={'linewidth': 1.5})
+        
+        # Add value labels on bars
+        for i, (idx, row) in enumerate(ml7_ext_summary.iterrows()):
+            ax.text(i, row['f1_macro_mean'] + row['f1_macro_std'] + 0.02,
+                   f"{row['f1_macro_mean']:.3f}",
+                   ha='center', va='bottom', fontsize=9, fontweight='bold')
+        
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(ml7_ext_summary['model'].str.upper(), fontsize=10)
+        ax.set_ylabel('Macro-F1 Score', fontsize=11)
+        ax.set_xlabel('Model', fontsize=11)
+        ax.set_title('Extended ML7 Sequence Models Performance (6-fold Temporal CV)', 
+                    fontsize=12, fontweight='bold')
+        ax.set_ylim(0, 1.0)
+        ax.axhline(y=0.5, color='red', linestyle='--', linewidth=0.8, alpha=0.4, label='Baseline (0.5)')
+        ax.legend(loc='lower right', frameon=True, edgecolor='black')
+        ax.grid(True, alpha=0.3, axis='y')
+        
+        plt.tight_layout()
+        plt.savefig(FIG_DIR / 'fig11_extended_ml7_models.pdf', bbox_inches='tight')
+        plt.savefig(FIG_DIR / 'fig11_extended_ml7_models.png', bbox_inches='tight')
+        plt.close()
+        print("  [OK] fig11_extended_ml7_models.{pdf,png}")
+    else:
+        print("  [WARN] No extended ML7 data found")
+except FileNotFoundError:
+    print("  [WARN] Extended ML7 summary not found, skipping fig11")
+except Exception as e:
+    print(f"  [WARN] Error generating extended ML7 figure: {e}")
+
+# =============================================================================
+# FIGURE 12: Temporal Instability Scores (Top-15 Features)
+# =============================================================================
+print("[12/13] Generating temporal instability scores...")
+
+try:
+    instability_df = pd.read_csv(ML6_EXT_DIR / 'instability_scores.csv')
+    
+    if len(instability_df) > 0:
+        # Take top 15 most unstable features
+        top_n = 15
+        instability_top = instability_df.nlargest(top_n, 'instability_score')
+        
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Horizontal barplot (features on y-axis)
+        y_pos = np.arange(len(instability_top))
+        bars = ax.barh(y_pos, instability_top['instability_score'],
+                      color='crimson', alpha=0.7, edgecolor='black', linewidth=0.8)
+        
+        # Add value labels
+        for i, (idx, row) in enumerate(instability_top.iterrows()):
+            ax.text(row['instability_score'] + 0.02, i,
+                   f"{row['instability_score']:.4f}",
+                   va='center', fontsize=8)
+        
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(instability_top['feature'], fontsize=9)
+        ax.set_xlabel('Instability Score (Normalized)', fontsize=11)
+        ax.set_ylabel('Feature', fontsize=11)
+        ax.set_title(f'Top-{top_n} Most Temporally Unstable Features\n(Variance of segment-wise means)', 
+                    fontsize=12, fontweight='bold')
+        ax.grid(True, alpha=0.3, axis='x')
+        
+        plt.tight_layout()
+        plt.savefig(FIG_DIR / 'fig12_instability_scores.pdf', bbox_inches='tight')
+        plt.savefig(FIG_DIR / 'fig12_instability_scores.png', bbox_inches='tight')
+        plt.close()
+        print("  [OK] fig12_instability_scores.{pdf,png}")
+        print(f"       Top-3 unstable: {', '.join(instability_top['feature'].head(3).tolist())}")
+    else:
+        print("  [WARN] No instability scores found")
+except FileNotFoundError:
+    print("  [WARN] Instability scores not found, skipping fig12")
+except Exception as e:
+    print(f"  [WARN] Error generating instability figure: {e}")
+
+# =============================================================================
+# FIGURE 13: Extended Models Combined Comparison (ML6 + ML7)
+# =============================================================================
+print("[13/13] Generating combined extended models comparison...")
+
+try:
+    ml6_ext_summary = pd.read_csv(ML6_EXT_DIR / 'ml6_extended_summary.csv')
+    ml7_ext_summary = pd.read_csv(ML7_EXT_DIR / 'ml7_extended_summary.csv')
+    
+    if len(ml6_ext_summary) > 0 and len(ml7_ext_summary) > 0:
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Left: ML6 Extended
+        ax1 = axes[0]
+        ml6_sorted = ml6_ext_summary.sort_values('f1_macro_mean', ascending=True)
+        y_pos_ml6 = np.arange(len(ml6_sorted))
+        bars1 = ax1.barh(y_pos_ml6, ml6_sorted['f1_macro_mean'],
+                        xerr=ml6_sorted['f1_macro_std'],
+                        color='steelblue', alpha=0.8, edgecolor='black', linewidth=0.8,
+                        capsize=4, error_kw={'linewidth': 1.2})
+        
+        for i, (idx, row) in enumerate(ml6_sorted.iterrows()):
+            ax1.text(row['f1_macro_mean'] + row['f1_macro_std'] + 0.02, i,
+                    f"{row['f1_macro_mean']:.3f}",
+                    va='center', fontsize=9, fontweight='bold')
+        
+        ax1.set_yticks(y_pos_ml6)
+        ax1.set_yticklabels(ml6_sorted['model'].str.upper(), fontsize=10)
+        ax1.set_xlabel('Macro-F1 Score', fontsize=11)
+        ax1.set_title('ML6 Extended Models\n(Tabular, 6-fold CV)', fontsize=11, fontweight='bold')
+        ax1.set_xlim(0, 1.0)
+        ax1.axvline(x=0.5, color='red', linestyle='--', linewidth=0.8, alpha=0.4)
+        ax1.grid(True, alpha=0.3, axis='x')
+        
+        # Right: ML7 Extended
+        ax2 = axes[1]
+        ml7_sorted = ml7_ext_summary.sort_values('f1_macro_mean', ascending=True)
+        y_pos_ml7 = np.arange(len(ml7_sorted))
+        bars2 = ax2.barh(y_pos_ml7, ml7_sorted['f1_macro_mean'],
+                        xerr=ml7_sorted['f1_macro_std'],
+                        color='darkorange', alpha=0.8, edgecolor='black', linewidth=0.8,
+                        capsize=4, error_kw={'linewidth': 1.2})
+        
+        for i, (idx, row) in enumerate(ml7_sorted.iterrows()):
+            ax2.text(row['f1_macro_mean'] + row['f1_macro_std'] + 0.02, i,
+                    f"{row['f1_macro_mean']:.3f}",
+                    va='center', fontsize=9, fontweight='bold')
+        
+        ax2.set_yticks(y_pos_ml7)
+        ax2.set_yticklabels(ml7_sorted['model'].str.upper(), fontsize=10)
+        ax2.set_xlabel('Macro-F1 Score', fontsize=11)
+        ax2.set_title('ML7 Extended Models\n(Sequence, 6-fold CV)', fontsize=11, fontweight='bold')
+        ax2.set_xlim(0, 1.0)
+        ax2.axvline(x=0.5, color='red', linestyle='--', linewidth=0.8, alpha=0.4)
+        ax2.grid(True, alpha=0.3, axis='x')
+        
+        plt.suptitle('Extended Models Performance Comparison', fontsize=13, fontweight='bold', y=0.98)
+        plt.tight_layout()
+        plt.savefig(FIG_DIR / 'fig13_extended_models_combined.pdf', bbox_inches='tight')
+        plt.savefig(FIG_DIR / 'fig13_extended_models_combined.png', bbox_inches='tight')
+        plt.close()
+        print("  [OK] fig13_extended_models_combined.{pdf,png}")
+    else:
+        print("  [WARN] Extended model data incomplete, skipping combined figure")
+except FileNotFoundError:
+    print("  [WARN] Extended model summaries not found, skipping fig13")
+except Exception as e:
+    print(f"  [WARN] Error generating combined extended figure: {e}")
+
+# =============================================================================
 # SUMMARY
 # =============================================================================
 print("\n" + "="*70)
 print("PhD DISSERTATION FIGURES GENERATION COMPLETE")
 print("="*70)
-print(f"\nOutput directory: {FIG_DIR.absolute()}")
-print(f"\nGenerated figures:")
-for fig_file in sorted(FIG_DIR.glob('fig*.pdf')):
-    print(f"  [OK] {fig_file.name}")
-print(f"\nTotal figures: {len(list(FIG_DIR.glob('fig*.pdf')))} (PDF + PNG for each)")
+print(f"\nParticipant: {PID}")
+print(f"Snapshot: {SNAPSHOT}")
+print(f"Output directory: {FIG_DIR.absolute()}")
+print(f"\n--- Core Pipeline Figures (1-9) ---")
+core_figs = [
+    'fig01_pbsi_timeline',
+    'fig02_cardio_distributions',
+    'fig03_sleep_activity_boxplots',
+    'fig04_segmentwise_normalization',
+    'fig05_missing_data_pattern',
+    'fig06_label_distribution_timeline',
+    'fig07_correlation_heatmap',
+    'fig08_adwin_drift',
+    'fig09_shap_importance'
+]
+for fig_name in core_figs:
+    pdf_path = FIG_DIR / f'{fig_name}.pdf'
+    if pdf_path.exists():
+        print(f"  [OK] {fig_name}.{{pdf,png}}")
+    else:
+        print(f"  [SKIP] {fig_name}.{{pdf,png}}")
+
+print(f"\n--- Extended Models Figures (10-13) ---")
+extended_figs = [
+    'fig10_extended_ml6_models',
+    'fig11_extended_ml7_models',
+    'fig12_instability_scores',
+    'fig13_extended_models_combined'
+]
+for fig_name in extended_figs:
+    pdf_path = FIG_DIR / f'{fig_name}.pdf'
+    if pdf_path.exists():
+        print(f"  [OK] {fig_name}.{{pdf,png}}")
+    else:
+        print(f"  [SKIP] {fig_name}.{{pdf,png}}")
+
+total_figs = len(list(FIG_DIR.glob('fig*.pdf')))
+print(f"\n--- Summary ---")
+print(f"Total figures: {total_figs} (PDF + PNG for each)")
 print(f"Resolution: 300 DPI")
 print(f"Style: Publication-ready, grayscale-friendly")
 print(f"\n[OK] Ready for LaTeX inclusion with \\includegraphics{{}}")
+print(f"\nTo regenerate all figures:")
+print(f"  python scripts/generate_dissertation_figures.py")
+print("="*70)

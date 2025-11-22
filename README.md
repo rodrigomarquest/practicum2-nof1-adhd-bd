@@ -1,8 +1,8 @@
 # N-of-1 Study – ADHD + Bipolar Disorder (Practicum Part 2)
 
-![Version](https://img.shields.io/badge/Version-v4.1.8-blue.svg)
+![Version](https://img.shields.io/badge/Version-v4.2.1-blue.svg)
 ![Last Updated](https://img.shields.io/badge/Last%20Updated-November%202025-brightgreen.svg)
-![Pipeline](https://img.shields.io/badge/Pipeline-v4.1.7-orange.svg)
+![Pipeline](https://img.shields.io/badge/Pipeline-v4.2.1-orange.svg)
 
 **Author:** Rodrigo Marques Teixeira  
 **Supervisor:** Dr. Agatha Mattos  
@@ -34,7 +34,7 @@ The pipeline integrates **8 years** of longitudinal data (2017-2025) from wearab
 - **Segments:** 119 (full timeline), 48 (ML-filtered)
 - **Missing data:** 0 (post-MICE imputation)
 
-## 📊 Performance Results (v4.1.7)
+## 📊 Performance Results (v4.2.1)
 
 | Model   | Macro-F1 | Std Dev | Best Fold | Worst Fold | Algorithm             |
 | ------- | -------- | ------- | --------- | ---------- | --------------------- |
@@ -49,7 +49,7 @@ The pipeline integrates **8 years** of longitudinal data (2017-2025) from wearab
 2. HRV RMSSD (autonomic variability)
 3. Normalized heart rate mean
 
-## 📓 Notebooks (v4.1.8)
+## 📓 Notebooks (v4.2.1)
 
 **Canonical Jupyter notebooks for reproducible analysis:**
 
@@ -153,13 +153,13 @@ This command:
 - **Participant**: P000001
 - **Date Range**: 2023-12-01 to 2025-09-29 (669 days)
 - **Features**: 47 daily features (cardio, activity, sleep, screen time)
-- **Pipeline Version**: v4.1.8 (scientific: v4.1.7)
+- **Pipeline Version**: v4.2.1
 - **Location**: `data/etl/P000001/2025-11-07/`
 - **Access**: OneDrive for NCI evaluators (medical privacy constraints)
 
 For detailed instructions, see: **[📖 Reproducing with ETL Snapshot](docs/REPRODUCING_WITH_ETL_SNAPSHOT.md)**
 
-**Pipeline Stages (v4.1.7)**:
+**Pipeline Stages (v4.2.1)**:
 
 - **Stage 0**: Ingest (Apple Health + Zepp extraction)
 - **Stage 1**: CSV Aggregation (daily metrics)
@@ -172,7 +172,7 @@ For detailed instructions, see: **[📖 Reproducing with ETL Snapshot](docs/REPR
 - **Stage 8**: TFLite Export (model conversion + latency)
 - **Stage 9**: Generate Report (RUN_REPORT.md)
 
-**Pipeline Outputs (v4.1.7)**:
+**Pipeline Outputs (v4.2.1)**:
 
 - `features_daily_unified.csv` – 2,828 rows (2017-12-04 to 2025-10-21)
 - `cv_summary.json` – 6 temporal folds with dates, F1 scores
@@ -225,7 +225,7 @@ Subsequent Runs (<1 second):
 The event-level Parquet enables rigorous academic verification:
 
 ```bash
-# Run QC verification (v4.1.7+)
+# Run QC verification (v4.2.1)
 python etl_tools/hr_daily_aggregation_consistency_check.py \
     --participant P000001 --snapshot 2025-11-07 \
     --start-date 2024-01-01 --end-date 2024-03-01
@@ -309,12 +309,13 @@ Future opt-in collection from family/friends with consent.
 
 | Tag               | Description                                                | Date     |
 | ----------------- | ---------------------------------------------------------- | -------- |
-| **v4.1.8**        | **ML6/ML7 pipeline finalization & public reproducibility** | Nov 2025 |
+| **v4.2.1**        | **Extended ML6/ML7 models with SHAP + dissertation final** | Nov 2025 |
+| v4.1.8            | ML6/ML7 pipeline finalization & public reproducibility     | Nov 2025 |
 | v4.1.7            | ML7 temporal filter + MICE imputation                      | Nov 2025 |
 | v4.1.5            | Canonical notebooks restructure                            | Nov 2025 |
 | v2.3-final-report | CA3 / dissertation submission                              | Jan 2026 |
 
-**Latest Release:** [v4.1.8](https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/releases/tag/v4.1.8)
+**Latest Release:** [v4.2.1](https://github.com/rodrigomarquest/practicum2-nof1-adhd-bd/releases/tag/v4.2.1)
 
 ## 🧭 Project Timeline
 
@@ -356,4 +357,4 @@ Reuse allowed for academic purposes with proper credit.
 
 ---
 
-**Version:** v4.1.8 | **Last updated:** November 2025 | **Pipeline:** v4.1.7
+**Version:** v4.2.1 | **Last updated:** November 2025 | **Pipeline:** v4.2.1

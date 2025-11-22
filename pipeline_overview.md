@@ -1,7 +1,7 @@
 N-of-1 ADHD + Bipolar – Wearable-Based Digital Phenotyping
 
-**Pipeline Version**: v4.1.7  
-**Last Updated**: November 20, 2025
+**Pipeline Version**: v4.2.1  
+**Last Updated**: November 22, 2025
 
 ## 1. Purpose & Scope
 
@@ -112,14 +112,14 @@ The pipeline consists of **10 deterministic stages** orchestrated by `scripts/ru
 
 | Stage | Name          | Input            | Output                          | Description                                                              | Progress Bars (v4.1.8)       |
 | ----- | ------------- | ---------------- | ------------------------------- | ------------------------------------------------------------------------ | ---------------------------- |
-| 0     | **Ingest**    | `data/raw/`      | `extracted/`                    | Extract from Apple Health XML + Zepp ZIPs                                | ✅ ZIP extraction            |
+| 0     | **Ingest**    | `data/raw/`      | `extracted/`                    | Extract from Apple Health XML + Zepp ZIPs (Zepp password optional)       | ✅ ZIP extraction            |
 | 1     | **Aggregate** | Raw CSVs         | `daily_*.csv`                   | Aggregate to daily per-metric files                                      | ✅ XML parsing, HR, Activity |
 | 2     | **Unify**     | Per-metric CSVs  | `features_daily_unified.csv`    | Merge all metrics by date                                                | -                            |
 | 3     | **Label**     | Unified features | `features_daily_labeled.csv`    | Apply PBSI v4.1.7 labels (3-class)                                       | -                            |
 | 4     | **Segment**   | Labeled features | `segment_autolog.csv`           | Detect behavioral segments (2 rules)                                     | -                            |
 | 5     | **Prep-ML6**  | Segments         | `ai/ml6/features_daily_ml6.csv` | **v4.1.7**: Temporal filter (>=2021-05-11) + MICE imputation + anti-leak | -                            |
-| 6     | **ML6**       | MICE data        | `data/ai/.../ml6/`              | Train logistic regression (6-fold CV)                                    | -                            |
-| 7     | **ML7**       | MICE data        | `data/ai/.../ml7/`              | Train LSTM + SHAP + drift detection                                      | -                            |
+| 6     | **ML6**       | MICE data        | `data/ai/.../ml6/`              | Train logistic regression (6-fold CV) - NO Zepp password required        | -                            |
+| 7     | **ML7**       | MICE data        | `data/ai/.../ml7/`              | Train LSTM + SHAP + drift detection - NO Zepp password required          | -                            |
 | 8     | **TFLite**    | ML7 model        | `model.tflite`                  | Export to mobile format                                                  | -                            |
 | 9     | **Report**    | All outputs      | `RUN_REPORT.md`                 | Generate execution summary                                               | -                            |
 
@@ -428,6 +428,12 @@ make notebooks      # Open Jupyter notebooks
 ```
 
 **Note**: Makefile targets updated in v4.1.8 to use `ml6`/`ml7` instead of `nb2`/`nb3`.
+
+**Important**: Zepp password is **optional**. Stages 2-9 (including all ML6/ML7 baseline and extended models) do NOT require a Zepp password:
+
+- If Zepp ZIP exists but no password provided: Pipeline runs in Apple-only mode (Stage 0 skips Zepp extraction with warning).
+- ML6/ML7 models use preprocessed Stage 5 outputs (`features_daily_ml6.csv`, `cv_summary.json`, etc.) which are reproducible without raw Zepp data.
+- Commands like `make ml6-only`, `make ml7-only`, `make ml-extended-all` work without Zepp password.
 
 ## 9. Quality Control & Reproducibility
 

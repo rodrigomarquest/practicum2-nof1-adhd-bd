@@ -9,6 +9,66 @@ KnowledgeC integration (device-specific schema) and parse_knowledgec_usage.py.
 
 Notebook 02 re-run with rule-based baseline, SHAP top-5, drift metrics.
 
+## [v4.2.1] – 2025-11-22
+
+### Extended ML6/ML7 Models & Dissertation Finalization
+
+**Summary:**  
+Final pipeline release with complete extended ML6/ML7 models, SHAP explainability, temporal instability regularization, and finalized dissertation with all 13 figures (including extended models figures 10-13).
+
+**Major Features:**
+
+- ✅ **ML6 Extended Models**: Random Forest, XGBoost, LightGBM, SVM with temporal instability regularization
+- ✅ **ML7 Extended Models**: GRU, TCN, Temporal MLP with sequence-based classification
+- ✅ **SHAP Explainability**: Complete SHAP analysis for ML6 models (RF, XGB, LGBM, LogReg baseline)
+- ✅ **Dissertation Completion**: Extended Modelling Experiments section with 4 new figures and 2 tables
+- ✅ **LaTeX Corrections**: Ten-stage pipeline documentation, Top-10 instability features, GRU bridging narrative
+
+**Extended Models Performance:**
+
+**ML6 (Tabular):**
+
+- Random Forest: F1 = 0.79 ± 0.16 (best extended model)
+- XGBoost: F1 = 0.76 ± 0.15
+- LightGBM: F1 = 0.73 ± 0.13
+- SVM: F1 = 0.80 ± 0.14 (top performer)
+
+**ML7 (Sequence):**
+
+- GRU: F1 = 0.80 ± 0.11, AUROC = 0.96 ± 0.03 (best extended model, recovery from LSTM baseline)
+- TCN: F1 = 0.64 ± 0.17, AUROC = 0.90 ± 0.07
+- Temporal MLP: F1 = 0.61 ± 0.13, AUROC = 0.89 ± 0.06
+
+**SHAP Analysis:**
+
+- 28 CSV files with top-10 features per fold per model
+- 24 PNG visualizations (bar plots)
+- Consolidated summary across 6 folds
+- Top features: sleep_hours (RF), hr_min (LogReg, LGBM), feature_24 (XGBoost)
+
+**Documentation Updates:**
+
+- Added Extended Modelling Experiments section to dissertation (85 lines)
+- Integrated figures 10-13 (ML6 models, ML7 models, instability scores, combined view)
+- Added tables for extended ML6 and ML7 metrics
+- Corrected pipeline stage numbering to "ten stages (0-9)" throughout
+- Fixed instability feature count to "Top-10" matching actual data
+- Added GRU bridging paragraph connecting baseline LSTM to extended results
+
+**Version References Updated:**
+
+- README.md: v4.2.1 badges and all version mentions
+- RUN_REPORT_EXTENDED.md: v4.2.1
+- pipeline_overview.md: v4.2.1
+- ML6_ML7_EXTENDED_IMPLEMENTATION.md: v4.2.1
+
+**Artifacts:**
+
+- `data/ai/P000001/2025-11-07/ml6_ext/` - Extended ML6 models and SHAP outputs
+- `data/ai/P000001/2025-11-07/ml7_ext/` - Extended ML7 models
+- `docs/latex/figures/fig{10,11,12,13}_*` - Extended model figures
+- `docs/latex/main.tex` - Final dissertation with extended models section
+
 ## [v4.1.4] – 2025-11-18
 
 ### Major: Canonical PBSI Integration (PhD-Level Methodology Alignment)
@@ -1075,16 +1135,19 @@ This project adheres to **Semantic Versioning (SemVer)** and each entry correspo
 [2.1.7]: https://github.com/<owner>/<repo>/compare/v2.1.4...2.1.7
 [3.0.1]: https://github.com/<owner>/<repo>/compare/v2.1.7...3.0.1
 [3.0.2]: https://github.com/<owner>/<repo>/compare/v3.0.1-26-ge94eb8d3c1a2db11c2afa68167c920be0ce80753...3.0.2
+
 # Practicum N-of-1 Pipeline v4.1.8
 
-Generated on 
+Generated on
 
 Key Results (snapshot 2025-11-20):
+
 - Expanded pipeline (â‰ˆ2,828 days, 119 segments)
 - NB2 macro-F1 â‰ˆ 0.81; LSTM macro-F1 â‰ˆ 0.25
 - Drift: ADWIN=11; KSâ‰ˆ102 significant
 
 Artifacts:
+
 - data/etl/P000001/2025-11-20/joined/features_daily_labeled.csv
 - data/ai/P000001/2025-11-20/ml7/models/best_model.tflite
 - RUN_REPORT.md

@@ -1,6 +1,6 @@
 """Models module: temporal CV and baseline evaluation."""
 
-from .run_nb2 import (
+from .run_ml6 import (
     calendar_cv_folds,
     prepare_features,
     compute_metrics_3cls,
