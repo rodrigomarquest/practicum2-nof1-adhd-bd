@@ -440,12 +440,56 @@ class AppleHealthAggregator:
         logger.info(f"[Apple] Aggregated {len(df_activity)} activity days")
         return df_activity
     
+    def aggregate_meds(self) -> pd.DataFrame:
+        """
+        Aggregate medication records from Apple Health.
+        
+        Delegates to the meds domain module for actual parsing.
+        Returns empty well-formed DataFrame if no medication data exists.
+        
+        Daily columns:
+        - date (YYYY-MM-DD)
+        - med_any (0/1)
+        - med_event_count (int)
+        - med_names (comma-separated)
+        - med_sources (comma-separated)
+        """
+        logger.info("[Apple] Aggregating medication data...")
+        
+        try:
+            # Import meds domain module
+            from src.domains.meds.meds_from_extracted import MedsAggregator, _empty_meds_daily
+        except ImportError:
+            try:
+                from domains.meds.meds_from_extracted import MedsAggregator, _empty_meds_daily
+            except ImportError:
+                logger.warning("[Apple] Meds domain module not found - skipping medication aggregation")
+                # Return empty well-formed DataFrame
+                return pd.DataFrame({
+                    "date": pd.Series(dtype="str"),
+                    "med_any": pd.Series(dtype="int"),
+                    "med_event_count": pd.Series(dtype="int"),
+                    "med_names": pd.Series(dtype="str"),
+                    "med_sources": pd.Series(dtype="str"),
+                })
+        
+        try:
+            # Use the same XML path as this aggregator
+            meds_aggregator = MedsAggregator(self.xml_path)
+            df_meds = meds_aggregator.aggregate_medications_binary_regex()
+            logger.info(f"[Apple] Aggregated {len(df_meds)} medication days")
+            return df_meds
+        except Exception as e:
+            logger.warning(f"[Apple] Medication aggregation failed: {e}")
+            return _empty_meds_daily()
+    
     def aggregate_all(self) -> Dict[str, pd.DataFrame]:
         """Aggregate all metrics and return dict with daily CSVs ready to save."""
         return {
             "daily_sleep": self.aggregate_sleep(),
             "daily_cardio": self.aggregate_heartrate(),
-            "daily_activity": self.aggregate_activity()
+            "daily_activity": self.aggregate_activity(),
+            "daily_meds": self.aggregate_meds()
         }
 
 

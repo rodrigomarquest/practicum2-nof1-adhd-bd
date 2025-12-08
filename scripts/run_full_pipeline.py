@@ -94,6 +94,103 @@ class PipelineContext:
         }
 
 
+def _parse_autoexport_zip_date(zip_path: Path) -> Optional[datetime]:
+    """Extract date from AutoExport ZIP filename.
+    
+    Filename patterns:
+    - HealthAutoExport_YYYYMMDDHHMMSS.zip (e.g., HealthAutoExport_20251208005855.zip)
+    - HealthAutoExport-YYYY-MM-DD.zip
+    
+    Returns:
+        datetime object or None if not parseable
+    """
+    import re
+    name = zip_path.stem
+    
+    # Pattern 1: HealthAutoExport_YYYYMMDDHHMMSS
+    match = re.search(r'(\d{14})$', name)
+    if match:
+        try:
+            return datetime.strptime(match.group(1), "%Y%m%d%H%M%S")
+        except ValueError:
+            pass
+    
+    # Pattern 2: HealthAutoExport_YYYYMMDD (just date)
+    match = re.search(r'(\d{8})$', name)
+    if match:
+        try:
+            return datetime.strptime(match.group(1), "%Y%m%d")
+        except ValueError:
+            pass
+    
+    # Pattern 3: YYYY-MM-DD in filename
+    match = re.search(r'(\d{4}-\d{2}-\d{2})', name)
+    if match:
+        try:
+            return datetime.strptime(match.group(1), "%Y-%m-%d")
+        except ValueError:
+            pass
+    
+    return None
+
+
+def _select_autoexport_zip_for_snapshot(
+    zip_files: list, 
+    snapshot: str
+) -> Optional[Path]:
+    """Select AutoExport ZIP deterministically based on snapshot date.
+    
+    RULE: Select the ZIP with filename date <= snapshot date.
+          If multiple match, choose the one with the most recent date.
+          
+    This ensures reproducible, deterministic ETL runs.
+    
+    Args:
+        zip_files: List of Path objects to ZIP files
+        snapshot: Snapshot date as YYYY-MM-DD string
+        
+    Returns:
+        Path to selected ZIP, or None if no valid ZIP found
+    """
+    try:
+        snapshot_dt = datetime.strptime(snapshot, "%Y-%m-%d")
+        # Set to end of day for inclusive comparison
+        snapshot_dt = snapshot_dt.replace(hour=23, minute=59, second=59)
+    except ValueError:
+        logger.error(f"[AutoExport] Invalid snapshot format: {snapshot}")
+        return None
+    
+    # Parse dates from all ZIPs and log for traceability
+    candidates = []
+    logger.info(f"[AutoExport] Snapshot date: {snapshot}")
+    logger.info(f"[AutoExport] Available ZIP files:")
+    
+    for zp in sorted(zip_files, key=lambda p: p.name):
+        zip_date = _parse_autoexport_zip_date(zp)
+        if zip_date:
+            date_str = zip_date.strftime("%Y-%m-%d %H:%M:%S")
+            is_valid = zip_date <= snapshot_dt
+            status = "✓ VALID" if is_valid else "✗ FUTURE"
+            logger.info(f"  - {zp.name} → date={date_str} [{status}]")
+            
+            if is_valid:
+                candidates.append((zp, zip_date))
+        else:
+            logger.warning(f"  - {zp.name} → date=UNPARSEABLE [✗ SKIPPED]")
+    
+    if not candidates:
+        logger.warning(f"[AutoExport] No ZIP with date <= {snapshot} found.")
+        return None
+    
+    # Select the most recent valid ZIP
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    selected = candidates[0][0]
+    selected_date = candidates[0][1].strftime("%Y-%m-%d %H:%M:%S")
+    
+    logger.info(f"[AutoExport] Selected: {selected.name} (date={selected_date})")
+    return selected
+
+
 def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) -> bool:
     """
     Stage 0: Ingest
@@ -138,6 +235,32 @@ def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) ->
             logger.info(f"[OK] Apple extracted to {ctx.extracted_dir / 'apple'}")
         else:
             logger.warning(f"[SKIP] Apple export dir not found: {apple_raw_dir}")
+        
+        # Extract Apple Auto Export ZIPs (deterministic: select ZIP with date <= snapshot)
+        autoexport_raw_dir = raw_participant_dir / "apple" / "autoexport"
+        if autoexport_raw_dir.exists():
+            autoexport_zips = list(autoexport_raw_dir.glob("*.zip"))
+            if autoexport_zips:
+                # Deterministic selection: find ZIP with filename date <= snapshot
+                selected_zip = _select_autoexport_zip_for_snapshot(autoexport_zips, ctx.snapshot)
+                if selected_zip:
+                    logger.info(f"[AutoExport] Extracting: {selected_zip.name}")
+                    autoexport_target = ctx.extracted_dir / "apple" / "autoexport"
+                    autoexport_target.mkdir(parents=True, exist_ok=True)
+                    with zipfile.ZipFile(selected_zip, 'r') as z:
+                        members = z.namelist()
+                        with tqdm(total=len(members), desc=f"[AutoExport] {selected_zip.name}", 
+                                 unit="files", ncols=100, leave=False) as pbar:
+                            for member in members:
+                                z.extract(member, autoexport_target)
+                                pbar.update(1)
+                    logger.info(f"[OK] AutoExport extracted to {autoexport_target}")
+                else:
+                    logger.warning(f"[SKIP] No AutoExport ZIP found with date <= {ctx.snapshot}")
+            else:
+                logger.info(f"[SKIP] No AutoExport ZIPs found in {autoexport_raw_dir}")
+        else:
+            logger.info(f"[SKIP] AutoExport dir not found: {autoexport_raw_dir}")
         
         # Extract Zepp ZIPs (skip if no password)
         if zepp_raw_dir.exists() and not zepp_skip_warned:

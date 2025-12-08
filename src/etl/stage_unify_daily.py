@@ -156,6 +156,95 @@ class DailyUnifier:
         
         return df_unified.sort_values("date").reset_index(drop=True)
     
+    def unify_meds(self) -> pd.DataFrame:
+        """Unify medication data from Apple Health with vendor tracking.
+        
+        Medication data comes from Apple Health exports:
+        - apple_export: Official export.xml (ClinicalRecords)
+        - apple_autoexport: Auto Export app (Medications-*.csv)
+        
+        The meds domain uses source prioritization to select the best available
+        vendor. The selected vendor is recorded in the `med_vendor` column.
+        
+        Output columns:
+        - date: YYYY-MM-DD
+        - med_any: 0/1 (any medication event on that day)
+        - med_event_count: integer count of medication events
+        - med_dose_total: sum of dosages (float, may be NaN)
+        - med_names: comma-separated unique medication names (optional)
+        - med_sources: comma-separated unique source apps (optional)
+        - med_vendor: vendor selected by prioritizer (e.g., "apple_autoexport")
+        """
+        logger.info("\n[Unify] === MEDS DATA ===")
+        
+        df_meds = self._load_metric("apple", "meds")
+        
+        if len(df_meds) > 0:
+            # Keep essential columns only
+            output_cols = ["date", "med_any", "med_event_count"]
+            # Add optional columns if present
+            for opt_col in ["med_dose_total", "med_names", "med_sources", "med_vendor"]:
+                if opt_col in df_meds.columns:
+                    output_cols.append(opt_col)
+            
+            df_meds = df_meds[output_cols].drop_duplicates(subset=["date"])
+            
+            # Log vendor info if available
+            if "med_vendor" in df_meds.columns:
+                vendor = df_meds["med_vendor"].iloc[0] if len(df_meds) > 0 else "unknown"
+                logger.info(f"[Unify] Using meds: {len(df_meds)} days (vendor: {vendor})")
+            else:
+                logger.info(f"[Unify] Using meds: {len(df_meds)} days")
+            
+            return df_meds.sort_values("date").reset_index(drop=True)
+        else:
+            logger.info("[Unify] No meds data found (this is normal if no medication records)")
+            return pd.DataFrame()
+    
+    def unify_som(self) -> pd.DataFrame:
+        """Unify State of Mind (mood) data with vendor tracking.
+        
+        SoM data currently comes only from Apple Auto Export app 
+        (apple/autoexport/StateOfMind-*.csv). The vendor is tracked
+        for consistency with other domains that use source prioritization.
+        
+        Output columns:
+        - date: YYYY-MM-DD
+        - som_mean_score: mean valence [-1, +1] for the day
+        - som_last_score: last recorded valence for the day
+        - som_n_entries: count of mood entries
+        - som_category_3class: discrete -1/0/+1 based on mean thresholds
+        - som_kind_dominant: most frequent Kind (Daily Mood / Momentary Emotion)
+        - som_labels: comma-separated emotion labels (optional)
+        - som_associations: comma-separated context associations (optional)
+        - som_vendor: data source vendor (currently always "apple_autoexport")
+        """
+        logger.info("\n[Unify] === SOM (STATE OF MIND) DATA ===")
+        
+        df_som = self._load_metric("apple", "som")
+        
+        if len(df_som) > 0:
+            # Keep essential columns only
+            output_cols = ["date", "som_mean_score", "som_last_score", "som_n_entries", "som_category_3class"]
+            # Add optional columns if present
+            for opt_col in ["som_kind_dominant", "som_labels", "som_associations"]:
+                if opt_col in df_som.columns:
+                    output_cols.append(opt_col)
+            
+            # Filter to existing columns only
+            output_cols = [c for c in output_cols if c in df_som.columns]
+            
+            df_som = df_som[output_cols].drop_duplicates(subset=["date"])
+            
+            # Add vendor tracking - currently only apple_autoexport provides SoM
+            df_som["som_vendor"] = "apple_autoexport"
+            
+            logger.info(f"[Unify] Using SoM: {len(df_som)} days (vendor: apple_autoexport)")
+            return df_som.sort_values("date").reset_index(drop=True)
+        else:
+            logger.info("[Unify] No SoM data found (this is normal if no State of Mind records)")
+            return pd.DataFrame()
+    
     def unify_all(self) -> pd.DataFrame:
         """
         Unify all metrics into a single daily dataframe.
@@ -165,6 +254,8 @@ class DailyUnifier:
         - sleep_hours, sleep_quality_score
         - hr_mean, hr_min, hr_max, hr_std, hr_samples
         - total_steps, total_distance, total_active_energy
+        - med_any, med_event_count (if medication data available)
+        - som_mean_score, som_last_score, som_n_entries, som_category_3class (if SoM data available)
         """
         logger.info(f"\n{'='*80}")
         logger.info(f"Stage 2: Unify Daily - {self.participant}")
@@ -173,12 +264,14 @@ class DailyUnifier:
         df_sleep = self.unify_sleep()
         df_cardio = self.unify_cardio()
         df_activity = self.unify_activity()
+        df_meds = self.unify_meds()
+        df_som = self.unify_som()
         
         # Merge all on date (outer join to preserve all dates)
         df_unified = pd.DataFrame(columns=["date"])
         
         all_dates = set()
-        for df in [df_sleep, df_cardio, df_activity]:
+        for df in [df_sleep, df_cardio, df_activity, df_meds, df_som]:
             if len(df) > 0:
                 all_dates.update(df["date"].unique())
         
@@ -191,6 +284,10 @@ class DailyUnifier:
             df_unified = df_unified.merge(df_cardio, on="date", how="left")
         if len(df_activity) > 0:
             df_unified = df_unified.merge(df_activity, on="date", how="left")
+        if len(df_meds) > 0:
+            df_unified = df_unified.merge(df_meds, on="date", how="left")
+        if len(df_som) > 0:
+            df_unified = df_unified.merge(df_som, on="date", how="left")
         
         # NOTE (v4.1.5): Forward-fill removed for scientific integrity.
         # Missing values are kept as NaN to avoid inventing sleep/cardio/activity data.
