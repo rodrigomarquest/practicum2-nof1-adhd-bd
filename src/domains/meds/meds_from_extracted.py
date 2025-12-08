@@ -35,6 +35,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import sys
 
 # Optional tqdm for progress bars with safe fallback
 try:
@@ -42,6 +43,26 @@ try:
 except ImportError:
     def tqdm(it, *a, **k):
         return it
+
+
+def _should_show_meds_progress() -> bool:
+    """Determine if progress bars should be shown (Git Bash compatible)."""
+    if os.getenv("ETL_TQDM") == "1":
+        return True
+    if os.getenv("ETL_TQDM") == "0":
+        return False
+    if os.getenv("CI"):
+        return False
+    try:
+        if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
+            return True
+    except Exception:
+        pass
+    # Git Bash / MSYS2 detection
+    if os.getenv("MSYSTEM") or os.getenv("TERM"):
+        return True
+    return False
+
 
 # Import IO guards (consistent with other domains)
 try:
@@ -80,6 +101,52 @@ except Exception:
         etl = None
 
 logger = logging.getLogger("etl.meds")
+
+
+# ============================================================================
+# Progress Bar Helpers (consistent with stage_csv_aggregation.py)
+# ============================================================================
+
+def _make_pbar(total: int, desc: str):
+    """Create a tqdm progress bar (Git Bash compatible).
+    
+    Args:
+        total: Total number of items to iterate
+        desc: Description for the progress bar
+        
+    Returns:
+        tqdm progress bar or passthrough if disabled
+    """
+    return tqdm(
+        total=total,
+        desc=desc,
+        unit="rec",
+        leave=True,
+        dynamic_ncols=True,
+        disable=not _should_show_meds_progress(),
+    )
+
+
+def _make_bytes_pbar(total_bytes: int, desc: str):
+    """Create a byte-based tqdm progress bar.
+    
+    Args:
+        total_bytes: Total bytes to track
+        desc: Description for the progress bar
+        
+    Returns:
+        tqdm progress bar with byte formatting
+    """
+    return tqdm(
+        total=total_bytes,
+        desc=desc,
+        unit="B",
+        unit_scale=True,
+        unit_divisor=1024,
+        leave=True,
+        dynamic_ncols=True,
+        disable=not _should_show_meds_progress(),
+    )
 
 
 # ============================================================================
@@ -205,44 +272,50 @@ def load_autoexport_meds_daily(
     csv_path = Path(csv_path)
     
     if not csv_path.exists():
-        logger.warning(f"[Meds/AutoExport] CSV not found: {csv_path}")
+        logger.warning(f"[APPLE/AUTOEXPORT/MEDS] CSV not found: {csv_path}")
         return _empty_meds_daily()
     
     try:
         df = pd.read_csv(csv_path)
-        logger.info(f"[Meds/AutoExport] Loaded {len(df)} records from {csv_path.name}")
+        logger.info(f"[APPLE/AUTOEXPORT/MEDS] Loaded {len(df)} records from {csv_path.name}")
     except Exception as e:
-        logger.error(f"[Meds/AutoExport] Failed to read CSV: {e}")
+        logger.error(f"[APPLE/AUTOEXPORT/MEDS] Failed to read CSV: {e}")
         return _empty_meds_daily()
     
     if df.empty:
-        logger.info(f"[Meds/AutoExport] CSV is empty")
+        logger.info(f"[APPLE/AUTOEXPORT/MEDS] CSV is empty")
         return _empty_meds_daily()
     
     # Verify required columns exist
     required_cols = {"Date", "Medication", "Status"}
     if not required_cols.issubset(df.columns):
         missing = required_cols - set(df.columns)
-        logger.warning(f"[Meds/AutoExport] Missing required columns: {missing}")
+        logger.warning(f"[APPLE/AUTOEXPORT/MEDS] Missing required columns: {missing}")
         return _empty_meds_daily()
     
     # Parse dates and extract date-only string
-    df["parsed_date"] = pd.to_datetime(df["Date"], errors="coerce")
-    df["date"] = df["parsed_date"].dt.strftime("%Y-%m-%d")
+    # Use utc=True to handle mixed timezone offsets, then convert to date string
+    try:
+        df["parsed_date"] = pd.to_datetime(df["Date"], errors="coerce", utc=True)
+        df["date"] = df["parsed_date"].dt.strftime("%Y-%m-%d")
+    except Exception:
+        # Fallback: extract date portion directly from string
+        logger.warning("[APPLE/AUTOEXPORT/MEDS] UTC parsing failed, using string extraction")
+        df["date"] = df["Date"].astype(str).str[:10]
     
     # Filter by snapshot date (deterministic: date <= snapshot)
     # Use string comparison for robustness against timezone-aware/naive mixing
     df = df[df["date"] <= snapshot_date]
     
     if df.empty:
-        logger.info(f"[Meds/AutoExport] No records with date <= {snapshot_date}")
+        logger.info(f"[APPLE/AUTOEXPORT/MEDS] No records with date <= {snapshot_date}")
         return _empty_meds_daily()
     
     # Filter to "Taken" status only
     df_taken = df[df["Status"] == "Taken"].copy()
     
     if df_taken.empty:
-        logger.info(f"[Meds/AutoExport] No 'Taken' medication records")
+        logger.info(f"[APPLE/AUTOEXPORT/MEDS] No 'Taken' medication records")
         return _empty_meds_daily()
     
     # Parse Dosage as numeric (may be NaN)
@@ -264,7 +337,7 @@ def load_autoexport_meds_daily(
     # Reorder columns to canonical order
     daily = daily[["date", "med_any", "med_event_count", "med_dose_total", "med_names", "med_sources"]]
     
-    logger.info(f"[Meds/AutoExport] Aggregated {len(daily)} medication days")
+    logger.info(f"[APPLE/AUTOEXPORT/MEDS] Aggregated {len(daily)} medication days")
     
     return daily.sort_values("date").reset_index(drop=True)
 
@@ -278,13 +351,19 @@ class MedsAggregator:
     
     This class mirrors the pattern used by AppleHealthAggregator in
     stage_csv_aggregation.py for consistency across domains.
+    
+    Parquet Caching Strategy (same as HR/CARDIO domain):
+    1. Check for daily cache (.cache/export_apple_meds_daily.parquet) - fastest
+    2. If not found, check events cache and re-aggregate
+    3. If neither exists, parse XML with binary regex and save both caches
     """
     
-    def __init__(self, xml_path: str | Path):
+    def __init__(self, xml_path: str | Path, use_cache: bool = True):
         """Initialize with path to export.xml.
         
         Args:
             xml_path: Path to Apple Health export.xml file
+            use_cache: Whether to use Parquet caching (default: True)
             
         Raises:
             FileNotFoundError: If export.xml does not exist
@@ -293,9 +372,17 @@ class MedsAggregator:
         if not self.xml_path.exists():
             raise FileNotFoundError(f"export.xml not found: {xml_path}")
         
-        self.file_size_mb = self.xml_path.stat().st_size / (1024 * 1024)
-        logger.info(f"[Meds] Loading export.xml: {xml_path}")
-        logger.info(f"[Meds] File size: {self.file_size_mb:.1f} MB")
+        self.file_size_bytes = self.xml_path.stat().st_size
+        self.file_size_mb = self.file_size_bytes / (1024 * 1024)
+        self.use_cache = use_cache
+        
+        # Setup cache paths (same pattern as HR domain)
+        self.cache_dir = self.xml_path.parent / ".cache"
+        self.cache_file_daily = self.cache_dir / f"{self.xml_path.stem}_apple_meds_daily.parquet"
+        self.cache_file_events = self.cache_dir / f"{self.xml_path.stem}_apple_meds_events.parquet"
+        
+        logger.info(f"[APPLE/EXPORT/MEDS] Loading export.xml: {xml_path}")
+        logger.info(f"[APPLE/EXPORT/MEDS] File size: {self.file_size_mb:.1f} MB")
         
         # Lazy load XML tree (only if needed for fallback parsing)
         self._tree = None
@@ -305,7 +392,7 @@ class MedsAggregator:
     def root(self):
         """Lazy load XML ElementTree root (only if binary regex fails)."""
         if self._root is None:
-            logger.info(f"[Meds] Parsing XML tree (fallback mode)...")
+            logger.info(f"[APPLE/EXPORT/MEDS] Parsing XML tree (fallback mode)...")
             self._tree = ET.parse(self.xml_path)
             self._root = self._tree.getroot()
         return self._root
@@ -324,7 +411,7 @@ class MedsAggregator:
             try:
                 return pd.to_datetime(dt_str).to_pydatetime()
             except Exception:
-                logger.debug(f"[Meds] Could not parse datetime: {dt_str}")
+                logger.debug(f"[APPLE/EXPORT/MEDS] Could not parse datetime: {dt_str}")
                 return None
     
     def _get_date_str(self, dt: datetime) -> Optional[str]:
@@ -333,17 +420,123 @@ class MedsAggregator:
             return None
         return dt.strftime("%Y-%m-%d")
     
-    def aggregate_medications_binary_regex(self) -> pd.DataFrame:
-        """Parse medication records using ultra-fast binary regex.
+    def _load_from_cache(self) -> Optional[pd.DataFrame]:
+        """Try to load daily MEDS data from Parquet cache.
         
-        This is the primary parsing method, ~100x faster than ET.findall()
-        for large export.xml files (1GB+).
+        Caching strategy (same as HR/CARDIO domain):
+        1. Try daily cache first (fastest: already aggregated)
+        2. Else try events cache and re-aggregate
+        3. Return None if no cache available
+        
+        Returns:
+            DataFrame with daily medication data, or None if no cache
+        """
+        if not self.use_cache:
+            return None
+        
+        # Strategy 1: Daily cache (fastest)
+        if self.cache_file_daily.exists():
+            try:
+                df = pd.read_parquet(self.cache_file_daily)
+                logger.info(f"[APPLE/EXPORT/MEDS] ✓ Loaded daily cache: {self.cache_file_daily.name} ({len(df)} rows)")
+                return df
+            except Exception as e:
+                logger.warning(f"[APPLE/EXPORT/MEDS] Failed to load daily cache: {e}")
+        
+        # Strategy 2: Events cache -> re-aggregate
+        if self.cache_file_events.exists():
+            try:
+                df_events = pd.read_parquet(self.cache_file_events)
+                logger.info(f"[APPLE/EXPORT/MEDS] Loaded events cache: {self.cache_file_events.name} ({len(df_events)} rows)")
+                df_daily = self._aggregate_events_to_daily(df_events)
+                # Save daily cache for next time
+                self._save_daily_cache(df_daily)
+                return df_daily
+            except Exception as e:
+                logger.warning(f"[APPLE/EXPORT/MEDS] Failed to load events cache: {e}")
+        
+        return None
+    
+    def _aggregate_events_to_daily(self, df_events: pd.DataFrame) -> pd.DataFrame:
+        """Aggregate medication events DataFrame to daily stats.
+        
+        Args:
+            df_events: DataFrame with columns [date, type, name, source]
+            
+        Returns:
+            DataFrame with daily medication aggregations
+        """
+        if df_events.empty:
+            return _empty_meds_daily()
+        
+        daily = df_events.groupby("date").agg(
+            med_event_count=("type", "count"),
+            med_names=("name", lambda x: ", ".join(sorted(set(x)))),
+            med_sources=("source", lambda x: ", ".join(sorted(set(x)))),
+        ).reset_index()
+        
+        daily["med_any"] = (daily["med_event_count"] > 0).astype(int)
+        daily["med_dose_total"] = float("nan")  # Not available from export.xml
+        
+        # Reorder to canonical schema
+        daily = daily[["date", "med_any", "med_event_count", "med_dose_total", "med_names", "med_sources"]]
+        
+        return daily.sort_values("date").reset_index(drop=True)
+    
+    def _save_events_cache(self, events: List[Dict]) -> None:
+        """Save medication events to Parquet cache.
+        
+        Args:
+            events: List of event dicts with keys [date, type, name, source]
+        """
+        if not self.use_cache or not events:
+            return
+        
+        try:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            df = pd.DataFrame(events)
+            df.to_parquet(self.cache_file_events, index=False)
+            logger.info(f"[APPLE/EXPORT/MEDS] ✓ Saved events cache: {self.cache_file_events.name} ({len(df)} rows)")
+        except Exception as e:
+            logger.warning(f"[APPLE/EXPORT/MEDS] Failed to save events cache: {e}")
+    
+    def _save_daily_cache(self, df_daily: pd.DataFrame) -> None:
+        """Save daily medication stats to Parquet cache.
+        
+        Args:
+            df_daily: DataFrame with daily medication aggregations
+        """
+        if not self.use_cache or df_daily.empty:
+            return
+        
+        try:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            df_daily.to_parquet(self.cache_file_daily, index=False)
+            logger.info(f"[APPLE/EXPORT/MEDS] ✓ Saved daily cache: {self.cache_file_daily.name} ({len(df_daily)} rows)")
+        except Exception as e:
+            logger.warning(f"[APPLE/EXPORT/MEDS] Failed to save daily cache: {e}")
+    
+    def aggregate_medications_binary_regex(self) -> pd.DataFrame:
+        """Parse medication records using ultra-fast binary regex with Parquet caching.
+        
+        Caching strategy (same as HR/CARDIO domain):
+        1. Try daily cache first (fastest)
+        2. Else try events cache and re-aggregate
+        3. Else parse XML with binary regex and save both caches
+        
+        Uses byte-based progress bar for accurate tracking during XML read.
         
         Returns:
             DataFrame with daily medication aggregations
         """
-        logger.info(f"[Meds] Parsing with binary regex (fast mode)...")
+        # Try cache first
+        cached_df = self._load_from_cache()
+        if cached_df is not None:
+            return cached_df
         
+        logger.info(f"[APPLE/EXPORT/MEDS] Parsing with binary regex (fast mode)...")
+        
+        all_events: List[Dict] = []  # Store flat events for caching
         meds_data: Dict[str, Dict] = defaultdict(lambda: {
             "events": [],
             "names": set(),
@@ -351,14 +544,28 @@ class MedsAggregator:
         })
         
         try:
-            # Read entire file (fast for binary regex)
-            logger.info(f"[Meds]   Reading {self.file_size_mb:.1f} MB...")
-            with open(self.xml_path, 'rb') as f:
-                content = f.read()
+            # Read file with byte-based progress bar (accurate tracking)
+            logger.info(f"[APPLE/EXPORT/MEDS]   Reading {self.file_size_mb:.1f} MB...")
+            
+            chunk_size = 64 * 1024 * 1024  # 64MB chunks
+            content_chunks = []
+            
+            with _make_bytes_pbar(self.file_size_bytes, "[APPLE/EXPORT/MEDS] Reading XML") as pbar:
+                with open(self.xml_path, 'rb') as f:
+                    while True:
+                        chunk = f.read(chunk_size)
+                        if not chunk:
+                            break
+                        content_chunks.append(chunk)
+                        pbar.update(len(chunk))
+            
+            content = b''.join(content_chunks)
+            del content_chunks  # Free memory
             
             records_found = 0
             
             # 1. Search for ClinicalRecord tags (most likely to contain meds)
+            logger.info(f"[APPLE/EXPORT/MEDS]   Scanning for medication records...")
             clinical_matches = list(re.finditer(
                 rb'<ClinicalRecord[^>]*?>.*?</ClinicalRecord>',
                 content,
@@ -366,52 +573,60 @@ class MedsAggregator:
             ))
             
             if clinical_matches:
-                logger.info(f"[Meds]   Found {len(clinical_matches)} ClinicalRecord tags...")
-                disable_progress = os.getenv("ETL_TQDM") != "1" or os.getenv("CI")
+                logger.info(f"[APPLE/EXPORT/MEDS]   Found {len(clinical_matches)} ClinicalRecord tags...")
                 
-                for match in tqdm(clinical_matches, desc="[Meds] Parsing ClinicalRecords",
-                                  disable=disable_progress, leave=False):
-                    record_xml = match.group(0)
-                    
-                    # Check if this is a medication-related record
-                    type_match = re.search(rb'type="([^"]*)"', record_xml)
-                    if not type_match:
-                        continue
-                    
-                    rec_type = type_match.group(1).decode('utf-8', errors='ignore')
-                    
-                    # Filter to medication-related types
-                    is_med_type = any(
-                        med_type.lower() in rec_type.lower() 
-                        for med_type in ["medication", "immunization", "vaccine", "drug"]
-                    )
-                    if not is_med_type:
-                        continue
-                    
-                    # Extract date
-                    date_match = re.search(DATE_PATTERN, record_xml)
-                    if not date_match:
-                        continue
-                    
-                    date_str = date_match.group(1).decode('utf-8', errors='ignore')[:10]
-                    
-                    # Extract source
-                    source_match = re.search(SOURCE_PATTERN, record_xml)
-                    source = source_match.group(1).decode('utf-8', errors='ignore') if source_match else "Unknown"
-                    
-                    # Extract medication name (often in displayText or identifier)
-                    name_match = re.search(rb'(?:displayText|identifier|name)="([^"]*)"', record_xml)
-                    name = name_match.group(1).decode('utf-8', errors='ignore') if name_match else "Unknown"
-                    
-                    # Store
-                    meds_data[date_str]["events"].append({
-                        "type": rec_type,
-                        "name": name,
-                        "source": source,
-                    })
-                    meds_data[date_str]["names"].add(name)
-                    meds_data[date_str]["sources"].add(source)
-                    records_found += 1
+                with _make_pbar(len(clinical_matches), "[APPLE/EXPORT/MEDS] Parsing ClinicalRecords") as pbar:
+                    for match in clinical_matches:
+                        pbar.update(1)
+                        record_xml = match.group(0)
+                        
+                        # Check if this is a medication-related record
+                        type_match = re.search(rb'type="([^"]*)"', record_xml)
+                        if not type_match:
+                            continue
+                        
+                        rec_type = type_match.group(1).decode('utf-8', errors='ignore')
+                        
+                        # Filter to medication-related types
+                        is_med_type = any(
+                            med_type.lower() in rec_type.lower() 
+                            for med_type in ["medication", "immunization", "vaccine", "drug"]
+                        )
+                        if not is_med_type:
+                            continue
+                        
+                        # Extract date
+                        date_match = re.search(DATE_PATTERN, record_xml)
+                        if not date_match:
+                            continue
+                        
+                        date_str = date_match.group(1).decode('utf-8', errors='ignore')[:10]
+                        
+                        # Extract source
+                        source_match = re.search(SOURCE_PATTERN, record_xml)
+                        source = source_match.group(1).decode('utf-8', errors='ignore') if source_match else "Unknown"
+                        
+                        # Extract medication name (often in displayText or identifier)
+                        name_match = re.search(rb'(?:displayText|identifier|name)="([^"]*)"', record_xml)
+                        name = name_match.group(1).decode('utf-8', errors='ignore') if name_match else "Unknown"
+                        
+                        # Store for aggregation
+                        meds_data[date_str]["events"].append({
+                            "type": rec_type,
+                            "name": name,
+                            "source": source,
+                        })
+                        meds_data[date_str]["names"].add(name)
+                        meds_data[date_str]["sources"].add(source)
+                        
+                        # Store flat event for caching
+                        all_events.append({
+                            "date": date_str,
+                            "type": rec_type,
+                            "name": name,
+                            "source": source,
+                        })
+                        records_found += 1
             
             # 2. Search for Record tags with medication-related types
             for med_type in MEDICATION_RECORD_TYPES:
@@ -419,7 +634,7 @@ class MedsAggregator:
                 record_matches = list(re.finditer(type_pattern, content))
                 
                 if record_matches:
-                    logger.info(f"[Meds]   Found {len(record_matches)} {med_type.split('Identifier')[-1]} records...")
+                    logger.info(f"[APPLE/EXPORT/MEDS]   Found {len(record_matches)} {med_type.split('Identifier')[-1]} records...")
                     
                     for match in record_matches:
                         record_tag = match.group(0)
@@ -435,7 +650,7 @@ class MedsAggregator:
                         source_match = re.search(SOURCE_PATTERN, record_tag)
                         source = source_match.group(1).decode('utf-8', errors='ignore') if source_match else "Unknown"
                         
-                        # Store
+                        # Store for aggregation
                         short_type = med_type.split("Identifier")[-1]
                         meds_data[date_str]["events"].append({
                             "type": short_type,
@@ -444,16 +659,31 @@ class MedsAggregator:
                         })
                         meds_data[date_str]["names"].add(short_type)
                         meds_data[date_str]["sources"].add(source)
+                        
+                        # Store flat event for caching
+                        all_events.append({
+                            "date": date_str,
+                            "type": short_type,
+                            "name": short_type,
+                            "source": source,
+                        })
                         records_found += 1
             
-            logger.info(f"[Meds] ✓ Found {records_found} medication-related records across {len(meds_data)} days")
+            logger.info(f"[APPLE/EXPORT/MEDS] ✓ Found {records_found} medication-related records across {len(meds_data)} days")
+            
+            # Save events cache
+            self._save_events_cache(all_events)
             
         except Exception as e:
-            logger.warning(f"[Meds] Binary regex parsing failed: {e}")
-            logger.info(f"[Meds] Falling back to ElementTree parsing...")
+            logger.warning(f"[APPLE/EXPORT/MEDS] Binary regex parsing failed: {e}")
+            logger.info(f"[APPLE/EXPORT/MEDS] Falling back to ElementTree parsing...")
             return self.aggregate_medications_elementtree()
         
-        return self._build_daily_dataframe(meds_data)
+        # Build daily DataFrame and save cache
+        df_daily = self._build_daily_dataframe(meds_data)
+        self._save_daily_cache(df_daily)
+        
+        return df_daily
     
     def aggregate_medications_elementtree(self) -> pd.DataFrame:
         """Fallback: Parse medication records using ElementTree.
@@ -463,7 +693,7 @@ class MedsAggregator:
         Returns:
             DataFrame with daily medication aggregations
         """
-        logger.info(f"[Meds] Parsing with ElementTree (fallback mode)...")
+        logger.info(f"[APPLE/EXPORT/MEDS] Parsing with ElementTree (fallback mode)...")
         
         meds_data: Dict[str, Dict] = defaultdict(lambda: {
             "events": [],
@@ -535,7 +765,7 @@ class MedsAggregator:
             meds_data[date_key]["sources"].add(source)
             records_found += 1
         
-        logger.info(f"[Meds] ✓ Found {records_found} medication records across {len(meds_data)} days")
+        logger.info(f"[APPLE/EXPORT/MEDS] ✓ Found {records_found} medication records across {len(meds_data)} days")
         
         return self._build_daily_dataframe(meds_data)
     
@@ -549,7 +779,7 @@ class MedsAggregator:
             DataFrame with canonical medication columns
         """
         if not meds_data:
-            logger.info(f"[Meds] No medication data found - returning empty DataFrame")
+            logger.info(f"[APPLE/EXPORT/MEDS] No medication data found - returning empty DataFrame")
             return _empty_meds_daily()
         
         rows = []
@@ -565,7 +795,7 @@ class MedsAggregator:
             })
         
         df = pd.DataFrame(rows)
-        logger.info(f"[Meds] Aggregated {len(df)} medication days")
+        logger.info(f"[APPLE/EXPORT/MEDS] Aggregated {len(df)} medication days")
         
         return df
     
@@ -587,17 +817,19 @@ class MedsAggregator:
 def load_apple_meds_daily(
     export_xml_path: Path | str,
     home_tz: str = "UTC",
-    max_records: int | None = None
+    max_records: int | None = None,
+    use_cache: bool = True,
 ) -> pd.DataFrame:
     """Load and aggregate Apple Health medication records.
     
     This is the primary entry point for loading medication data from an
-    Apple Health export.xml file.
+    Apple Health export.xml file. Uses Parquet caching for fast subsequent loads.
     
     Args:
         export_xml_path: Path to export.xml file
         home_tz: User's home timezone (for date localization)
         max_records: Maximum records to process (for testing; None = all)
+        use_cache: Whether to use Parquet caching (default: True)
         
     Returns:
         DataFrame with daily medication aggregations.
@@ -606,22 +838,22 @@ def load_apple_meds_daily(
     xml_path = Path(export_xml_path)
     
     if not xml_path.exists():
-        logger.warning(f"[Meds] export.xml not found: {xml_path}")
+        logger.warning(f"[APPLE/EXPORT/MEDS] export.xml not found: {xml_path}")
         return _empty_meds_daily()
     
     try:
-        aggregator = MedsAggregator(xml_path)
+        aggregator = MedsAggregator(xml_path, use_cache=use_cache)
         df = aggregator.aggregate_medications_binary_regex()
         
         if df.empty:
-            logger.info(f"[Meds] No medication records found in {xml_path.name}")
+            logger.info(f"[APPLE/EXPORT/MEDS] No medication records found in {xml_path.name}")
             return _empty_meds_daily()
         
         return df
     
     except Exception as e:
-        logger.error(f"[Meds] Failed to parse medication data: {e}")
-        logger.info(f"[Meds] Returning empty DataFrame to allow pipeline to continue")
+        logger.error(f"[APPLE/EXPORT/MEDS] Failed to parse medication data: {e}")
+        logger.info(f"[APPLE/EXPORT/MEDS] Returning empty DataFrame to allow pipeline to continue")
         return _empty_meds_daily()
 
 
@@ -640,7 +872,7 @@ def find_latest_apple_zip(participant: str) -> Optional[Path]:
     raw_base = Path("data") / "raw" / participant / "apple"
     
     if not raw_base.exists():
-        logger.debug(f"[Meds] Raw Apple dir not found: {raw_base}")
+        logger.debug(f"[APPLE/EXPORT/MEDS] Raw Apple dir not found: {raw_base}")
         return None
     
     # Search for ZIPs in export/ and autoexport/ subdirs
@@ -670,14 +902,14 @@ def find_latest_apple_zip(participant: str) -> Optional[Path]:
                 all_zips.append((zip_path, mtime))
     
     if not all_zips:
-        logger.debug(f"[Meds] No Apple ZIPs found in {raw_base}")
+        logger.debug(f"[APPLE/EXPORT/MEDS] No Apple ZIPs found in {raw_base}")
         return None
     
     # Sort by date descending and return the most recent
     all_zips.sort(key=lambda x: x[1], reverse=True)
     latest_zip = all_zips[0][0]
     
-    logger.info(f"[Meds] Found latest Apple ZIP: {latest_zip}")
+    logger.info(f"[APPLE/EXPORT/MEDS] Found latest Apple ZIP: {latest_zip}")
     return latest_zip
 
 
@@ -703,13 +935,13 @@ def extract_apple_zip_for_meds(
     target_dir = snapshot_dir / "extracted" / "apple"
     
     if dry_run:
-        logger.info(f"[Meds] DRY RUN: Would extract {zip_path} to {target_dir}")
+        logger.info(f"[APPLE/EXPORT/MEDS] DRY RUN: Would extract {zip_path} to {target_dir}")
         return None
     
     try:
         target_dir.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"[Meds] Extracting {zip_path.name} to {target_dir}...")
+        logger.info(f"[APPLE/EXPORT/MEDS] Extracting {zip_path.name} to {target_dir}...")
         
         with zipfile.ZipFile(zip_path, 'r') as zf:
             # Extract all contents
@@ -722,14 +954,14 @@ def extract_apple_zip_for_meds(
             break
         
         if export_xml:
-            logger.info(f"[Meds] ✓ Extracted export.xml: {export_xml}")
+            logger.info(f"[APPLE/EXPORT/MEDS] ✓ Extracted export.xml: {export_xml}")
             return export_xml
         else:
-            logger.warning(f"[Meds] Extraction succeeded but export.xml not found in {target_dir}")
+            logger.warning(f"[APPLE/EXPORT/MEDS] Extraction succeeded but export.xml not found in {target_dir}")
             return None
             
     except Exception as e:
-        logger.error(f"[Meds] Failed to extract ZIP: {e}")
+        logger.error(f"[APPLE/EXPORT/MEDS] Failed to extract ZIP: {e}")
         return None
 
 
@@ -747,7 +979,7 @@ def discover_apple_meds(snapshot_dir: Path) -> List[Tuple[Path, str, str]]:
     """
     base = snapshot_dir / "extracted" / "apple"
     if not base.exists():
-        logger.debug(f"[Meds] Apple extracted dir not found: {base}")
+        logger.debug(f"[APPLE/EXPORT/MEDS] Apple extracted dir not found: {base}")
         return []
     
     export_xmls: List[Tuple[Path, str, str]] = []
@@ -818,7 +1050,7 @@ def run_meds_aggregation(
         try:
             snapshot = etl.resolve_snapshot(snapshot, participant)
         except Exception as e:
-            logger.warning(f"[Meds] Could not resolve 'auto' snapshot: {e}")
+            logger.warning(f"[APPLE/EXPORT/MEDS] Could not resolve 'auto' snapshot: {e}")
             snapshot = dt.now().strftime("%Y-%m-%d")
     
     # Ensure snapshot is a string for type safety
@@ -843,31 +1075,31 @@ def run_meds_aggregation(
     export_xmls = discover_apple_meds(snapshot_dir)
     if export_xmls:
         xml_path = export_xmls[0][0]
-        logger.info(f"[Meds] Loading apple_export: {xml_path}")
+        logger.info(f"[APPLE/EXPORT/MEDS] Loading apple_export: {xml_path}")
         df_apple_export = load_apple_meds_daily(xml_path)
         if len(df_apple_export) > 0:
             vendor_dataframes["apple_export"] = df_apple_export
-            logger.info(f"[Meds] apple_export: {len(df_apple_export)} days")
+            logger.info(f"[APPLE/EXPORT/MEDS] apple_export: {len(df_apple_export)} days")
         else:
-            logger.info(f"[Meds] apple_export: 0 days (no medication records in export.xml)")
+            logger.info(f"[APPLE/EXPORT/MEDS] apple_export: 0 days (no medication records in export.xml)")
     else:
-        logger.info(f"[Meds] apple_export: not available (no export.xml found)")
+        logger.info(f"[APPLE/EXPORT/MEDS] apple_export: not available (no export.xml found)")
     
     # --- Source 2: apple_autoexport (Medications-*.csv) ---
     if get_autoexport_csv_path is not None:
         autoexport_csv = get_autoexport_csv_path(participant, snapshot, "Medications")
         if autoexport_csv and autoexport_csv.exists():
-            logger.info(f"[Meds] Loading apple_autoexport: {autoexport_csv}")
+            logger.info(f"[APPLE/AUTOEXPORT/MEDS] Loading apple_autoexport: {autoexport_csv}")
             df_autoexport = load_autoexport_meds_daily(autoexport_csv, snapshot)
             if len(df_autoexport) > 0:
                 vendor_dataframes["apple_autoexport"] = df_autoexport
-                logger.info(f"[Meds] apple_autoexport: {len(df_autoexport)} days")
+                logger.info(f"[APPLE/AUTOEXPORT/MEDS] apple_autoexport: {len(df_autoexport)} days")
             else:
-                logger.info(f"[Meds] apple_autoexport: 0 days")
+                logger.info(f"[APPLE/AUTOEXPORT/MEDS] apple_autoexport: 0 days")
         else:
-            logger.info(f"[Meds] apple_autoexport: not available (no Medications CSV in extracted autoexport)")
+            logger.info(f"[APPLE/AUTOEXPORT/MEDS] apple_autoexport: not available (no Medications CSV in extracted autoexport)")
     else:
-        logger.info(f"[Meds] apple_autoexport: discovery module not available")
+        logger.info(f"[APPLE/AUTOEXPORT/MEDS] apple_autoexport: discovery module not available")
     
     # ========================================================================
     # Apply source prioritization
@@ -883,7 +1115,7 @@ def run_meds_aggregation(
         )
     else:
         # Fallback if prioritizer not available
-        logger.warning(f"[Meds] Source prioritizer not available, using manual selection")
+        logger.warning(f"[APPLE/EXPORT/MEDS] Source prioritizer not available, using manual selection")
         if vendor_dataframes:
             # Manual priority: apple_export > apple_autoexport
             if "apple_export" in vendor_dataframes and len(vendor_dataframes["apple_export"]) > 0:
@@ -911,10 +1143,10 @@ def run_meds_aggregation(
     if not dry_run:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         df_meds.to_csv(out_path, index=False)
-        logger.info(f"[Meds] ✓ Saved {len(df_meds)} medication days to {out_path}")
-        logger.info(f"[Meds] ✓ Vendor: {selected_vendor}")
+        logger.info(f"[APPLE/EXPORT/MEDS] ✓ Saved {len(df_meds)} medication days to {out_path}")
+        logger.info(f"[APPLE/EXPORT/MEDS] ✓ Vendor: {selected_vendor}")
     else:
-        logger.info(f"[Meds] DRY RUN: Would save {len(df_meds)} days to {out_path}")
+        logger.info(f"[APPLE/EXPORT/MEDS] DRY RUN: Would save {len(df_meds)} days to {out_path}")
     
     return {"daily_meds": str(out_path), "vendor": selected_vendor}
 

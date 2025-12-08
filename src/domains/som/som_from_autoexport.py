@@ -89,9 +89,10 @@ logger = logging.getLogger("etl.som")
 # ============================================================================
 
 # 3-class mapping thresholds (deterministic)
-THRESHOLD_NEGATIVE = -0.33  # mean <= this → -1 (negative)
-THRESHOLD_POSITIVE = 0.33   # mean >= this → +1 (positive)
-# between -0.33 and +0.33 → 0 (neutral)
+# Based on Valence scale [-1, +1] from Apple Health State of Mind
+THRESHOLD_NEGATIVE = -0.25  # mean <= this → -1 (negative/unstable)
+THRESHOLD_POSITIVE = 0.25   # mean >= this → +1 (positive/stable)
+# between -0.25 and +0.25 → 0 (neutral)
 
 # Expected column names in Auto Export CSV
 EXPECTED_COLUMNS = {
@@ -222,20 +223,77 @@ class SoMAggregator:
         if not self.csv_path.exists():
             raise FileNotFoundError(f"SoM CSV not found: {csv_path}")
         
-        logger.info(f"[SoM] Loading: {csv_path}")
+        logger.info(f"[APPLE/AUTOEXPORT/SOM] Loading: {csv_path}")
         
-        # Load CSV
-        self.df_raw = pd.read_csv(self.csv_path)
-        logger.info(f"[SoM] Loaded {len(self.df_raw)} rows, columns: {list(self.df_raw.columns)}")
+        # Load CSV with special handling for trailing comma issue
+        # Auto Export CSVs sometimes have trailing commas that create phantom columns
+        self.df_raw = self._load_csv_with_trailing_comma_fix(self.csv_path)
+        logger.info(f"[APPLE/AUTOEXPORT/SOM] Loaded {len(self.df_raw)} rows, columns: {list(self.df_raw.columns)}")
         
         # Validate columns
         self._validate_columns()
+    
+    def _load_csv_with_trailing_comma_fix(self, csv_path: Path) -> pd.DataFrame:
+        """Load CSV and fix trailing comma issue from Auto Export.
+        
+        Auto Export CSVs often have trailing commas that cause pandas to misalign
+        columns. This method detects and fixes the issue.
+        
+        The expected format is:
+        Header: Start,End,Kind,Labels,Associations,Valence,Valence Classification
+        Data:   ...,Labels,Associations,0.5,Pleasant,
+        
+        The trailing comma creates 8 fields for 7 columns, shifting everything.
+        """
+        # First, read raw to detect the issue
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            header_line = f.readline().strip()
+            first_data_line = f.readline().strip()
+        
+        header_cols = header_line.split(',')
+        data_cols = first_data_line.split(',')
+        
+        n_header = len(header_cols)
+        n_data = len(data_cols)
+        
+        logger.info(f"[APPLE/AUTOEXPORT/SOM] CSV structure: header={n_header} cols, data={n_data} fields")
+        
+        if n_data > n_header:
+            # Trailing comma detected - need to adjust
+            # The actual Valence is at index 5, Valence Classification at index 6
+            # But pandas shifts them because of trailing comma
+            logger.warning(f"[APPLE/AUTOEXPORT/SOM] Detected trailing comma issue ({n_data} fields vs {n_header} header cols)")
+            
+            # Read with explicit column names, ignoring extra columns
+            df = pd.read_csv(
+                csv_path,
+                names=header_cols + [f"_extra_{i}" for i in range(n_data - n_header)],
+                header=0,  # Skip original header row
+                dtype=str  # Read all as string first
+            )
+            
+            # Drop extra columns
+            extra_cols = [c for c in df.columns if c.startswith("_extra_")]
+            if extra_cols:
+                df = df.drop(columns=extra_cols)
+                logger.info(f"[APPLE/AUTOEXPORT/SOM] Dropped {len(extra_cols)} phantom column(s)")
+            
+            # Now convert Valence to numeric
+            if "Valence" in df.columns:
+                df["Valence"] = pd.to_numeric(df["Valence"], errors="coerce")
+                valid_valence = df["Valence"].notna().sum()
+                logger.info(f"[APPLE/AUTOEXPORT/SOM] Valence column: {valid_valence} valid numeric values")
+            
+            return df
+        else:
+            # Normal CSV - read directly
+            return pd.read_csv(csv_path)
     
     def _validate_columns(self):
         """Validate that expected columns are present."""
         missing = EXPECTED_COLUMNS - set(self.df_raw.columns)
         if missing:
-            logger.warning(f"[SoM] Missing expected columns: {missing}")
+            logger.warning(f"[APPLE/AUTOEXPORT/SOM] Missing expected columns: {missing}")
         
         # Find valence column
         self.valence_col = None
@@ -245,7 +303,7 @@ class SoMAggregator:
                 break
         
         if self.valence_col is None:
-            logger.warning("[SoM] No valence/score column found!")
+            logger.warning("[APPLE/AUTOEXPORT/SOM] No valence/score column found!")
     
     def aggregate_daily(self, snapshot_date: Optional[str] = None) -> pd.DataFrame:
         """Aggregate SoM data to one row per calendar day.
@@ -257,7 +315,7 @@ class SoMAggregator:
             DataFrame with daily SoM aggregations
         """
         if len(self.df_raw) == 0:
-            logger.info("[SoM] No data in CSV - returning empty DataFrame")
+            logger.info("[APPLE/AUTOEXPORT/SOM] No data in CSV - returning empty DataFrame")
             return _empty_som_daily()
         
         # Parse timestamps and extract dates
@@ -267,7 +325,7 @@ class SoMAggregator:
         df = df.dropna(subset=["_parsed_dt"])
         
         if len(df) == 0:
-            logger.warning("[SoM] No valid timestamps after parsing")
+            logger.warning("[APPLE/AUTOEXPORT/SOM] No valid timestamps after parsing")
             return _empty_som_daily()
         
         df["date"] = df["_parsed_dt"].apply(lambda dt: dt.strftime("%Y-%m-%d"))
@@ -275,10 +333,10 @@ class SoMAggregator:
         # Filter by snapshot date if provided (deterministic cutoff)
         if snapshot_date:
             df = df[df["date"] <= snapshot_date]
-            logger.info(f"[SoM] Filtered to snapshot <= {snapshot_date}: {len(df)} rows")
+            logger.info(f"[APPLE/AUTOEXPORT/SOM] Filtered to snapshot <= {snapshot_date}: {len(df)} rows")
         
         if len(df) == 0:
-            logger.warning(f"[SoM] No data before snapshot {snapshot_date}")
+            logger.warning(f"[APPLE/AUTOEXPORT/SOM] No data before snapshot {snapshot_date}")
             return _empty_som_daily()
         
         # Ensure valence is numeric
@@ -327,7 +385,7 @@ class SoMAggregator:
             })
         
         df_daily = pd.DataFrame(daily_rows)
-        logger.info(f"[SoM] Aggregated to {len(df_daily)} daily rows")
+        logger.info(f"[APPLE/AUTOEXPORT/SOM] Aggregated to {len(df_daily)} daily rows")
         
         return df_daily
 
@@ -355,7 +413,7 @@ def load_autoexport_som_daily(
     csv_path = Path(csv_path)
     
     if not csv_path.exists():
-        logger.warning(f"[SoM] CSV not found: {csv_path}")
+        logger.warning(f"[APPLE/AUTOEXPORT/SOM] CSV not found: {csv_path}")
         return _empty_som_daily()
     
     try:
@@ -363,7 +421,7 @@ def load_autoexport_som_daily(
         return aggregator.aggregate_daily(snapshot_date=snapshot_date)
     
     except Exception as e:
-        logger.error(f"[SoM] Failed to parse SoM data: {e}")
+        logger.error(f"[APPLE/AUTOEXPORT/SOM] Failed to parse SoM data: {e}")
         return _empty_som_daily()
 
 
@@ -413,12 +471,12 @@ def run_som_aggregation(
             som_files = list(autoexport_dir.glob("StateOfMind*.csv"))
             if som_files:
                 som_csv_path = som_files[0]
-                logger.info(f"[SoM] Found via fallback in extracted: {som_csv_path}")
+                logger.info(f"[APPLE/AUTOEXPORT/SOM] Found via fallback in extracted: {som_csv_path}")
     
     if som_csv_path is None or not som_csv_path.exists():
-        logger.warning(f"[SoM] No State of Mind data found for {participant}/{snapshot}")
-        logger.info(f"[SoM] Expected location: {get_extracted_autoexport_dir(participant, snapshot)}")
-        logger.info("[SoM] Tip: Ensure Stage 0 extracted an AutoExport ZIP with StateOfMind CSV")
+        logger.warning(f"[APPLE/AUTOEXPORT/SOM] No State of Mind data found for {participant}/{snapshot}")
+        logger.info(f"[APPLE/AUTOEXPORT/SOM] Expected location: {get_extracted_autoexport_dir(participant, snapshot)}")
+        logger.info("[APPLE/AUTOEXPORT/SOM] Tip: Ensure Stage 0 extracted an AutoExport ZIP with StateOfMind CSV")
         
         # Write empty CSV for consistency
         out_path = Path(output_dir) / "daily_som.csv"
@@ -427,12 +485,12 @@ def run_som_aggregation(
         if not dry_run:
             out_path.parent.mkdir(parents=True, exist_ok=True)
             df_empty.to_csv(out_path, index=False)
-            logger.info(f"[SoM] Wrote empty daily_som.csv to {out_path}")
+            logger.info(f"[APPLE/AUTOEXPORT/SOM] Wrote empty daily_som.csv to {out_path}")
         
         return {"daily_som": str(out_path)}
     
     # Load and aggregate
-    logger.info(f"[SoM] Processing: {som_csv_path}")
+    logger.info(f"[APPLE/AUTOEXPORT/SOM] Processing: {som_csv_path}")
     df_som = load_autoexport_som_daily(som_csv_path, snapshot_date=snapshot)
     
     # Write output
@@ -441,9 +499,9 @@ def run_som_aggregation(
     if not dry_run:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         df_som.to_csv(out_path, index=False)
-        logger.info(f"[SoM] ✓ Saved {len(df_som)} SoM days to {out_path}")
+        logger.info(f"[APPLE/AUTOEXPORT/SOM] ✓ Saved {len(df_som)} SoM days to {out_path}")
     else:
-        logger.info(f"[SoM] DRY RUN: Would save {len(df_som)} days to {out_path}")
+        logger.info(f"[APPLE/AUTOEXPORT/SOM] DRY RUN: Would save {len(df_som)} days to {out_path}")
     
     return {"daily_som": str(out_path)}
 

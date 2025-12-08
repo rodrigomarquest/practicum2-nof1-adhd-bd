@@ -15,6 +15,43 @@ from typing import Dict, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
+# Import source prioritizer for multi-vendor selection
+try:
+    from src.domains.common.source_prioritizer import prioritize_source, log_source_summary
+except ImportError:
+    try:
+        from domains.common.source_prioritizer import prioritize_source, log_source_summary
+    except ImportError:
+        prioritize_source = None
+        log_source_summary = None
+        logger.warning("[Unify] Source prioritizer not available - will use fallback logic")
+
+
+def _empty_meds_daily() -> pd.DataFrame:
+    """Return empty DataFrame with canonical medication columns."""
+    return pd.DataFrame({
+        "date": pd.Series(dtype="str"),
+        "med_any": pd.Series(dtype="int"),
+        "med_event_count": pd.Series(dtype="int"),
+        "med_dose_total": pd.Series(dtype="float"),
+        "med_names": pd.Series(dtype="str"),
+        "med_sources": pd.Series(dtype="str"),
+    })
+
+
+def _empty_som_daily() -> pd.DataFrame:
+    """Return empty DataFrame with canonical SoM columns."""
+    return pd.DataFrame({
+        "date": pd.Series(dtype="str"),
+        "som_mean_score": pd.Series(dtype="float"),
+        "som_last_score": pd.Series(dtype="float"),
+        "som_n_entries": pd.Series(dtype="int"),
+        "som_category_3class": pd.Series(dtype="int"),
+        "som_kind_dominant": pd.Series(dtype="str"),
+        "som_labels": pd.Series(dtype="str"),
+        "som_associations": pd.Series(dtype="str"),
+    })
+
 
 class DailyUnifier:
     """Merge Apple + Zepp daily metrics into unified daily dataset."""
@@ -88,37 +125,73 @@ class DailyUnifier:
         return df_unified.sort_values("date").reset_index(drop=True)
     
     def unify_cardio(self) -> pd.DataFrame:
-        """Unify heart rate data from Apple and Zepp."""
+        """Unify heart rate data from Apple and Zepp.
+        
+        Note: HRV (SDNN) data is Apple-only and passes through directly.
+        Zepp does not have HRV measurements.
+        """
         logger.info("\n[Unify] === CARDIO DATA ===")
         
         df_apple = self._load_metric("apple", "cardio")
         df_zepp = self._load_metric("zepp", "cardio")
         
-        # For cardio, we aggregate Apple + Zepp on same day
+        # Define HR columns (shared between Apple/Zepp) and HRV columns (Apple-only)
+        hr_cols = ["hr_mean", "hr_min", "hr_max", "hr_std", "hr_samples"]
+        hrv_cols = ["hrv_sdnn_mean", "hrv_sdnn_median", "hrv_sdnn_min", "hrv_sdnn_max", "n_hrv_sdnn"]
+        
+        # For cardio, we aggregate Apple + Zepp HR on same day, but HRV is Apple-only
         if len(df_apple) > 0 and len(df_zepp) > 0:
-            # Group by date and aggregate
-            df_combined = pd.concat([df_apple, df_zepp], ignore_index=True)
+            # Extract HRV columns from Apple before merging (Apple-only)
+            apple_hrv = None
+            if any(col in df_apple.columns for col in hrv_cols):
+                hrv_present_cols = [col for col in hrv_cols if col in df_apple.columns]
+                apple_hrv = df_apple[["date"] + hrv_present_cols].copy()
+                logger.info(f"[Unify] Preserving Apple HRV data: {len(apple_hrv)} days, columns: {hrv_present_cols}")
             
-            # Average the metrics for days with both sources
+            # Merge HR only (Zepp doesn't have HRV)
+            df_combined = pd.concat([
+                df_apple[["date"] + [c for c in hr_cols if c in df_apple.columns]],
+                df_zepp[["date"] + [c for c in hr_cols if c in df_zepp.columns]]
+            ], ignore_index=True)
+            
+            # Average HR metrics for days with both sources
             agg_dict = {}
-            for col in ["hr_mean", "hr_min", "hr_max", "hr_std", "hr_samples"]:
+            for col in hr_cols:
                 if col in df_combined.columns:
                     agg_dict[col] = "mean"
             
             df_unified = df_combined.groupby("date").agg(agg_dict).reset_index()
-            logger.info(f"[Unify] Merged cardio: {len(df_apple)} Apple + {len(df_zepp)} Zepp = {len(df_unified)} unique days")
+            logger.info(f"[Unify] Merged HR: {len(df_apple)} Apple + {len(df_zepp)} Zepp = {len(df_unified)} unique days")
+            
+            # Re-join HRV data (Apple-only) - outer merge to preserve all days
+            if apple_hrv is not None:
+                df_unified = pd.merge(df_unified, apple_hrv, on="date", how="outer")
+                logger.info(f"[Unify] Re-joined Apple HRV data → {len(df_unified)} total cardio days")
         
         elif len(df_apple) > 0:
-            df_unified = df_apple[["date", "hr_mean", "hr_min", "hr_max", "hr_std", "hr_samples"]]
-            logger.info(f"[Unify] Using Apple cardio only: {len(df_unified)} days")
+            # Apple-only: include both HR and HRV columns
+            output_cols = ["date"] + [c for c in hr_cols if c in df_apple.columns] + \
+                          [c for c in hrv_cols if c in df_apple.columns]
+            df_unified = df_apple[output_cols].copy()
+            logger.info(f"[Unify] Using Apple cardio only: {len(df_unified)} days (includes HRV)")
         
         elif len(df_zepp) > 0:
-            df_unified = df_zepp[["date", "hr_mean", "hr_min", "hr_max", "hr_std", "hr_samples"]]
-            logger.info(f"[Unify] Using Zepp cardio only: {len(df_unified)} days")
+            # Zepp-only: no HRV data
+            output_cols = ["date"] + [c for c in hr_cols if c in df_zepp.columns]
+            df_unified = df_zepp[output_cols].copy()
+            # Add empty HRV columns for schema consistency
+            for col in hrv_cols:
+                df_unified[col] = np.nan
+            logger.info(f"[Unify] Using Zepp cardio only: {len(df_unified)} days (no HRV)")
         
         else:
             logger.warning("[Unify] No cardio data found!")
             return pd.DataFrame()
+        
+        # Ensure all expected columns exist (for schema consistency)
+        for col in hr_cols + hrv_cols:
+            if col not in df_unified.columns:
+                df_unified[col] = np.nan
         
         return df_unified.sort_values("date").reset_index(drop=True)
     
@@ -156,15 +229,55 @@ class DailyUnifier:
         
         return df_unified.sort_values("date").reset_index(drop=True)
     
+    def _load_meds_file(self, filename: str) -> pd.DataFrame:
+        """Load a specific medication CSV file from apple directory.
+        
+        Args:
+            filename: Filename without path (e.g., "daily_meds_apple.csv")
+            
+        Returns:
+            DataFrame with medication data, or empty DataFrame if not found
+        """
+        path = self.apple_dir / filename
+        
+        if not path.exists():
+            logger.debug(f"[Unify] Meds file not found: {path}")
+            return pd.DataFrame()
+        
+        df = pd.read_csv(path)
+        df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+        logger.info(f"[Unify] Loaded meds: {len(df)} days from {path.name}")
+        return df
+    
+    def _load_som_file(self, filename: str) -> pd.DataFrame:
+        """Load a specific SoM CSV file from apple directory.
+        
+        Args:
+            filename: Filename without path (e.g., "daily_som_autoexport.csv")
+            
+        Returns:
+            DataFrame with SoM data, or empty DataFrame if not found
+        """
+        path = self.apple_dir / filename
+        
+        if not path.exists():
+            logger.debug(f"[Unify] SoM file not found: {path}")
+            return pd.DataFrame()
+        
+        df = pd.read_csv(path)
+        df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+        logger.info(f"[Unify] Loaded SoM: {len(df)} days from {path.name}")
+        return df
+    
     def unify_meds(self) -> pd.DataFrame:
         """Unify medication data from Apple Health with vendor tracking.
         
-        Medication data comes from Apple Health exports:
-        - apple_export: Official export.xml (ClinicalRecords)
-        - apple_autoexport: Auto Export app (Medications-*.csv)
+        Medication data comes from two sources:
+        - apple_export: Official export.xml (daily_meds_apple.csv)
+        - apple_autoexport: Auto Export app (daily_meds_autoexport.csv)
         
-        The meds domain uses source prioritization to select the best available
-        vendor. The selected vendor is recorded in the `med_vendor` column.
+        Uses source prioritization to select the best available vendor.
+        The selected vendor is recorded in the `med_vendor` column.
         
         Output columns:
         - date: YYYY-MM-DD
@@ -177,36 +290,80 @@ class DailyUnifier:
         """
         logger.info("\n[Unify] === MEDS DATA ===")
         
-        df_meds = self._load_metric("apple", "meds")
+        # Load from both sources
+        df_meds_apple = self._load_meds_file("daily_meds_apple.csv")
+        df_meds_autoexport = self._load_meds_file("daily_meds_autoexport.csv")
         
-        if len(df_meds) > 0:
-            # Keep essential columns only
-            output_cols = ["date", "med_any", "med_event_count"]
-            # Add optional columns if present
-            for opt_col in ["med_dose_total", "med_names", "med_sources", "med_vendor"]:
-                if opt_col in df_meds.columns:
-                    output_cols.append(opt_col)
+        # Also try legacy filename for backward compatibility
+        if df_meds_apple.empty:
+            df_meds_apple = self._load_meds_file("daily_meds.csv")
+        
+        # Build vendor dataframes dict
+        vendor_dfs = {}
+        if not df_meds_apple.empty:
+            vendor_dfs["apple_export"] = df_meds_apple
+            logger.info(f"[Unify] apple_export meds: {len(df_meds_apple)} days")
+        if not df_meds_autoexport.empty:
+            vendor_dfs["apple_autoexport"] = df_meds_autoexport
+            logger.info(f"[Unify] apple_autoexport meds: {len(df_meds_autoexport)} days")
+        
+        # Use source prioritizer if available
+        if prioritize_source is not None and vendor_dfs:
+            if log_source_summary is not None:
+                log_source_summary(vendor_dfs, "meds")
             
-            df_meds = df_meds[output_cols].drop_duplicates(subset=["date"])
-            
-            # Log vendor info if available
-            if "med_vendor" in df_meds.columns:
-                vendor = df_meds["med_vendor"].iloc[0] if len(df_meds) > 0 else "unknown"
-                logger.info(f"[Unify] Using meds: {len(df_meds)} days (vendor: {vendor})")
+            df_meds, med_vendor = prioritize_source(
+                vendor_dataframes=vendor_dfs,
+                fallback_df=_empty_meds_daily(),
+                domain="meds"
+            )
+        elif vendor_dfs:
+            # Fallback: manual priority (apple_export > apple_autoexport)
+            logger.warning("[Unify] Source prioritizer not available - using manual fallback")
+            if "apple_export" in vendor_dfs and len(vendor_dfs["apple_export"]) > 0:
+                df_meds = vendor_dfs["apple_export"].copy()
+                med_vendor = "apple_export"
+            elif "apple_autoexport" in vendor_dfs and len(vendor_dfs["apple_autoexport"]) > 0:
+                df_meds = vendor_dfs["apple_autoexport"].copy()
+                med_vendor = "apple_autoexport"
             else:
-                logger.info(f"[Unify] Using meds: {len(df_meds)} days")
-            
-            return df_meds.sort_values("date").reset_index(drop=True)
+                df_meds = _empty_meds_daily()
+                med_vendor = "fallback"
         else:
+            logger.info("[Unify] No meds data found from any source")
+            df_meds = _empty_meds_daily()
+            med_vendor = "fallback"
+        
+        if df_meds.empty:
             logger.info("[Unify] No meds data found (this is normal if no medication records)")
             return pd.DataFrame()
+        
+        # Add vendor column
+        df_meds = df_meds.copy()
+        df_meds["med_vendor"] = med_vendor
+        
+        # Keep essential columns only
+        output_cols = ["date", "med_any", "med_event_count"]
+        # Add optional columns if present
+        for opt_col in ["med_dose_total", "med_names", "med_sources", "med_vendor"]:
+            if opt_col in df_meds.columns:
+                if opt_col not in output_cols:
+                    output_cols.append(opt_col)
+        
+        df_meds = df_meds[output_cols].drop_duplicates(subset=["date"])
+        
+        logger.info(f"[Unify] Using meds: {len(df_meds)} days (vendor: {med_vendor})")
+        return df_meds.sort_values("date").reset_index(drop=True)
     
     def unify_som(self) -> pd.DataFrame:
         """Unify State of Mind (mood) data with vendor tracking.
         
-        SoM data currently comes only from Apple Auto Export app 
-        (apple/autoexport/StateOfMind-*.csv). The vendor is tracked
-        for consistency with other domains that use source prioritization.
+        SoM data comes from Apple Auto Export app:
+        - daily_som_autoexport.csv (primary)
+        - daily_som.csv (legacy fallback)
+        
+        The vendor is tracked for consistency with other domains
+        that use source prioritization.
         
         Output columns:
         - date: YYYY-MM-DD
@@ -217,11 +374,20 @@ class DailyUnifier:
         - som_kind_dominant: most frequent Kind (Daily Mood / Momentary Emotion)
         - som_labels: comma-separated emotion labels (optional)
         - som_associations: comma-separated context associations (optional)
-        - som_vendor: data source vendor (currently always "apple_autoexport")
+        - som_vendor: data source vendor ("apple_autoexport" or "fallback")
         """
         logger.info("\n[Unify] === SOM (STATE OF MIND) DATA ===")
         
-        df_som = self._load_metric("apple", "som")
+        # Try new filename first, then legacy fallback
+        df_som = self._load_som_file("daily_som_autoexport.csv")
+        
+        if df_som.empty:
+            # Try legacy filename
+            df_som = self._load_som_file("daily_som.csv")
+        
+        if df_som.empty:
+            # Also try via _load_metric for backward compatibility
+            df_som = self._load_metric("apple", "som")
         
         if len(df_som) > 0:
             # Keep essential columns only
@@ -237,13 +403,17 @@ class DailyUnifier:
             df_som = df_som[output_cols].drop_duplicates(subset=["date"])
             
             # Add vendor tracking - currently only apple_autoexport provides SoM
+            df_som = df_som.copy()
             df_som["som_vendor"] = "apple_autoexport"
             
             logger.info(f"[Unify] Using SoM: {len(df_som)} days (vendor: apple_autoexport)")
             return df_som.sort_values("date").reset_index(drop=True)
         else:
             logger.info("[Unify] No SoM data found (this is normal if no State of Mind records)")
-            return pd.DataFrame()
+            # Return empty DataFrame with vendor column for consistency
+            df_empty = _empty_som_daily()
+            df_empty["som_vendor"] = "fallback"
+            return df_empty
     
     def unify_all(self) -> pd.DataFrame:
         """

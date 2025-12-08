@@ -46,7 +46,7 @@ AI_DIR  := data/ai/$(PID)/$(SNAPSHOT_RESOLVED)
         ingest aggregate unify segment label prep-ml6 nb2 nb3 report report-extended \
         pipeline quick ml6-only ml7-only \
         ml6-rf ml6-xgb ml6-lgbm ml6-svm ml7-gru ml7-tcn ml7-mlp ml-extended-all \
-        qc-hr qc-steps qc-sleep qc-all qc-etl \
+        qc-cardio qc-activity qc-sleep qc-meds qc-som qc-unified-ext qc-labels qc-all qc-etl \
         clean-outputs clean-all verify \
         help-release release-notes version-guard changelog release-assets provenance release-draft publish-release
 
@@ -57,7 +57,7 @@ help:
 > echo "  make ml6-only | ml7-only | quick"
 > echo "  make ml6-rf | ml6-xgb | ml6-lgbm | ml6-svm"
 > echo "  make ml7-gru | ml7-tcn | ml7-mlp | ml-extended-all"
-> echo "  make qc-hr | qc-steps | qc-sleep | qc-all"
+> echo "  make qc-cardio | qc-activity | qc-sleep | qc-meds | qc-som | qc-all"
 > echo "  make verify | clean-outputs | help-release"
 > echo "Vars: PID=$(PID) SNAPSHOT=$(SNAPSHOT) -> $(SNAPSHOT_RESOLVED)"
 
@@ -110,23 +110,39 @@ report-extended:
 > echo "[OK] RUN_REPORT_EXTENDED.md -> ./RUN_REPORT_EXTENDED.md"
 
 # -------- QC / Audits --------
-qc-hr:
-> @echo "Running HR feature integrity audit..."
-> $(PYTHON) -m src.etl.etl_audit --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --domain hr
+qc-cardio:
+> @echo "Running Cardio (HR) feature integrity audit..."
+> $(PYTHON) -m src.etl.etl_audit --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --domain cardio
 
-qc-steps:
-> @echo "Running Steps feature integrity audit..."
-> $(PYTHON) -m src.etl.etl_audit --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --domain steps
+qc-activity:
+> @echo "Running Activity (Steps) feature integrity audit..."
+> $(PYTHON) -m src.etl.etl_audit --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --domain activity
 
 qc-sleep:
 > @echo "Running Sleep feature integrity audit..."
 > $(PYTHON) -m src.etl.etl_audit --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --domain sleep
 
-qc-all: qc-hr qc-steps qc-sleep
+qc-meds:
+> @echo "Running Meds feature integrity audit..."
+> $(PYTHON) -m src.etl.etl_audit --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --domain meds
+
+qc-som:
+> @echo "Running SoM feature integrity audit..."
+> $(PYTHON) -m src.etl.etl_audit --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --domain som
+
+qc-unified-ext:
+> @echo "Running Unified extension audit..."
+> $(PYTHON) -m src.etl.etl_audit --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --domain unified_ext
+
+qc-labels:
+> @echo "Running Labels layer audit..."
+> $(PYTHON) -m src.etl.etl_audit --participant $(PID) --snapshot $(SNAPSHOT_RESOLVED) --domain labels
+
+qc-all: qc-cardio qc-activity qc-sleep qc-meds qc-som qc-unified-ext qc-labels
 > @echo "All domain audits complete"
 
 # Alias for backward compatibility
-qc-etl: qc-hr
+qc-etl: qc-cardio
 
 # -------- One-shot flows --------
 pipeline: env

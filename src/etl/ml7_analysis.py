@@ -2,8 +2,11 @@
 ML7 Analysis Module
 SHAP interpretability, Drift detection (ADWIN + KS), LSTM training
 
-ML7 uses z-scored canonical features from the PBSI pipeline (Stage 3).
-These features are segment-wise normalized to prevent data leakage.
+ML7 supports two modes:
+1. PBSI Mode (Legacy): Uses z-scored canonical features from Stage 3
+2. SoM Mode (Current): Uses FS-B feature set from ML6 ablation study
+
+Current default: SoM Mode with FS-B features (15 features)
 """
 
 import pandas as pd
@@ -19,7 +22,59 @@ warnings.filterwarnings('ignore')
 logger = logging.getLogger(__name__)
 
 
-# ML7 Feature Set: Z-scored canonical features from PBSI pipeline
+# =============================================================================
+# SoM Mode: FS-B Feature Set (from ML6 ablation study)
+# =============================================================================
+# This is the current default feature set for ML7 LSTM training.
+# Selected based on ML6 ablation results: FS-B × som_binary achieved F1=0.4623
+
+ML7_SOM_FEATURE_COLS = [
+    # Sleep (2)
+    'sleep_hours',
+    'sleep_quality_score',
+    # Cardio (5)
+    'hr_mean',
+    'hr_min',
+    'hr_max',
+    'hr_std',
+    'hr_samples',
+    # HRV (5) - Note: Sparse coverage (~1-23%), filled by MICE imputation
+    'hrv_sdnn_mean',
+    'hrv_sdnn_median',
+    'hrv_sdnn_min',
+    'hrv_sdnn_max',
+    'n_hrv_sdnn',
+    # Activity (3)
+    'total_steps',
+    'total_distance',
+    'total_active_energy',
+]
+
+# SoM Mode: Anti-leak columns
+ML7_SOM_ANTI_LEAK_COLS = [
+    # Target columns
+    'som_category_3class',
+    'som_binary',
+    # PBSI-derived (would leak if used as features)
+    'pbsi_score',
+    'pbsi_quality',
+    'sleep_sub',
+    'cardio_sub',
+    'activity_sub',
+    'label_3cls',
+    'label_2cls',
+    'label_clinical',
+    # MEDS features (excluded per ML6 findings)
+    'med_any',
+    'med_event_count',
+    'med_dose_total',
+    # Metadata
+    'segment_id',
+]
+
+# =============================================================================
+# PBSI Mode (Legacy): Z-scored canonical features
+# =============================================================================
 # These are segment-wise normalized (119 segments) to prevent leakage
 ML7_FEATURE_COLS = [
     "z_sleep_total_h",       # Sleep duration (z-scored per segment)
@@ -31,7 +86,7 @@ ML7_FEATURE_COLS = [
     "z_exercise_min",        # Exercise estimate: active_energy ÷ 5 (z-scored per segment)
 ]
 
-# Anti-leak columns: MUST NOT be used as predictors in ML7
+# Anti-leak columns for PBSI mode: MUST NOT be used as predictors in ML7
 ML7_ANTI_LEAK_COLS = [
     'pbsi_score',      # Target-derived composite score
     'pbsi_quality',    # Quality flag derived from labels

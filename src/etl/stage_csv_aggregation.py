@@ -14,10 +14,58 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta
 import logging
+import os
+import sys
 from typing import Dict, Tuple, Optional
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
+
+
+def _should_show_progress() -> bool:
+    """Determine if progress bars should be shown (Git Bash compatible)."""
+    if os.getenv("ETL_TQDM") == "1":
+        return True
+    if os.getenv("ETL_TQDM") == "0":
+        return False
+    if os.getenv("CI"):
+        return False
+    try:
+        if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
+            return True
+    except Exception:
+        pass
+    # Git Bash / MSYS2 detection
+    if os.getenv("MSYSTEM") or os.getenv("TERM"):
+        return True
+    return False
+
+
+def _make_pbar(total, desc, unit="items"):
+    """Create a tqdm progress bar with Git Bash compatible settings."""
+    return tqdm(
+        total=total,
+        desc=desc,
+        unit=unit,
+        leave=False,
+        dynamic_ncols=True,
+        disable=not _should_show_progress()
+    )
+
+
+def _make_bytes_pbar(total_bytes: int, desc: str):
+    """Create a tqdm progress bar for bytes-based progress (e.g. file reading)."""
+    return tqdm(
+        total=total_bytes,
+        desc=desc,
+        unit="B",
+        unit_scale=True,
+        unit_divisor=1024,
+        leave=False,
+        dynamic_ncols=True,
+        bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]',
+        disable=not _should_show_progress()
+    )
 
 
 class AppleHealthAggregator:
@@ -40,8 +88,8 @@ class AppleHealthAggregator:
             raise FileNotFoundError(f"export.xml not found: {xml_path}")
         
         file_size_mb = self.xml_path.stat().st_size / (1024 * 1024)
-        logger.info(f"[Apple] Loading export.xml: {xml_path}")
-        logger.info(f"[Apple] File size: {file_size_mb:.1f} MB - Parsing XML structure...")
+        logger.info(f"[APPLE/EXPORT] Loading export.xml: {xml_path}")
+        logger.info(f"[APPLE/EXPORT] File size: {file_size_mb:.1f} MB - Parsing XML structure...")
         
         import time
         import threading
@@ -49,20 +97,27 @@ class AppleHealthAggregator:
         start_time = time.time()
         
         # Create a progress bar that updates while parsing
-        # Estimate based on file size: ~1MB per second for XML parsing
-        estimated_seconds = max(int(file_size_mb / 1.0), 10)
+        # Use 100 units and update ~1 per second, completing when done
+        progress_units = 100
         
         parsing_done = threading.Event()
+        pbar_ref = [None]  # Reference to progress bar for final update
         
         def show_progress():
             """Show progress bar while XML is being parsed."""
-            with tqdm(total=estimated_seconds, desc="[Apple] Parsing XML", 
-                     unit="s", ncols=100, leave=False, 
-                     bar_format='{l_bar}{bar}| {elapsed} elapsed') as pbar:
-                while not parsing_done.is_set():
-                    time.sleep(1)
-                    if pbar.n < estimated_seconds:
-                        pbar.update(1)
+            pbar = tqdm(total=progress_units, desc="[APPLE/EXPORT] Parsing XML", 
+                       unit="%", leave=False, dynamic_ncols=True,
+                       bar_format='{l_bar}{bar}| {n:.0f}% [{elapsed}]',
+                       disable=not _should_show_progress())
+            pbar_ref[0] = pbar
+            try:
+                # Progress smoothly over ~120 seconds (typical parse time)
+                # Stop at 95% to leave room for final completion
+                while not parsing_done.is_set() and pbar.n < 95:
+                    time.sleep(1.2)  # ~120 seconds to reach 95%
+                    pbar.update(1)
+            finally:
+                pass  # Don't close here, let main thread complete to 100%
         
         # Start progress bar in background thread
         progress_thread = threading.Thread(target=show_progress, daemon=True)
@@ -73,12 +128,18 @@ class AppleHealthAggregator:
             self.tree = ET.parse(xml_path)
             self.root = self.tree.getroot()
         finally:
-            # Stop progress bar
+            # Stop progress bar and complete to 100%
             parsing_done.set()
-            progress_thread.join(timeout=1)
+            progress_thread.join(timeout=2)
+            if pbar_ref[0] is not None:
+                # Complete the bar to 100%
+                remaining = progress_units - pbar_ref[0].n
+                if remaining > 0:
+                    pbar_ref[0].update(remaining)
+                pbar_ref[0].close()
         
         elapsed = time.time() - start_time
-        logger.info(f"[Apple] Parsed export.xml successfully in {elapsed:.1f}s")
+        logger.info(f"[APPLE/EXPORT] Parsed export.xml successfully in {elapsed:.1f}s")
     
     def _parse_datetime(self, dt_str: str) -> datetime:
         """Parse Apple HealthKit datetime format (ISO 8601 with timezone)."""
@@ -105,7 +166,7 @@ class AppleHealthAggregator:
         
         Daily aggregation: total minutes in each state.
         """
-        logger.info("[Apple] Aggregating sleep data...")
+        logger.info("[APPLE/EXPORT/SLEEP] Aggregating sleep data...")
         
         sleep_data = {}
         
@@ -150,7 +211,7 @@ class AppleHealthAggregator:
                 0
             )
         
-        logger.info(f"[Apple] Aggregated {len(df_sleep)} sleep days")
+        logger.info(f"[APPLE/EXPORT/SLEEP] Aggregated {len(df_sleep)} sleep days")
         return df_sleep[["date", "sleep_hours", "sleep_quality_score", "total_sleep_minutes"]]
     
     def aggregate_heartrate(self) -> pd.DataFrame:
@@ -171,7 +232,7 @@ class AppleHealthAggregator:
         **CANONICAL COLUMNS** (stored in cache):
         - apple_hr_mean, apple_hr_min, apple_hr_max, apple_hr_std, apple_n_hr
         """
-        logger.info("[Apple] Aggregating heart rate data...")
+        logger.info("[APPLE/EXPORT/CARDIO] Aggregating heart rate data...")
         
         # Setup cache paths
         xml_path = Path(self.xml_path)
@@ -183,7 +244,7 @@ class AppleHealthAggregator:
         if cache_file_daily.exists():
             try:
                 df_cached = pd.read_parquet(cache_file_daily)
-                logger.info(f"[Apple] ✓ Loaded HR from cache: {cache_file_daily.name} ({len(df_cached)} days)")
+                logger.info(f"[APPLE/EXPORT/CARDIO] ✓ Loaded HR from cache: {cache_file_daily.name} ({len(df_cached)} days)")
                 
                 # FIXED: Cache now stores ALL metrics with canonical Apple names.
                 # Map back to generic names for daily_cardio.csv output.
@@ -198,11 +259,11 @@ class AppleHealthAggregator:
                 
                 return df_cached[["date", "hr_mean", "hr_min", "hr_max", "hr_std", "hr_samples"]]
             except Exception as e:
-                logger.warning(f"[Apple] Failed to load HR cache: {e}")
+                logger.warning(f"[APPLE/EXPORT/CARDIO] Failed to load HR cache: {e}")
                 # Continue to parse XML
         
         # Parse XML with ultra-fast binary regex streaming
-        logger.info(f"[Apple] Parsing {xml_path.name} with binary regex (100-500x faster than ET.findall)...")
+        logger.info(f"[APPLE/EXPORT/CARDIO] Parsing {xml_path.name} with binary regex (100-500x faster than ET.findall)...")
         
         import re
         from datetime import datetime as dt
@@ -215,7 +276,8 @@ class AppleHealthAggregator:
         hr_events = []  # Store event-level data for QC
         hr_count = 0
         hr_filtered = 0
-        file_size_mb = xml_path.stat().st_size / (1024 * 1024)
+        file_size_bytes = xml_path.stat().st_size
+        file_size_mb = file_size_bytes / (1024 * 1024)
         
         # Binary regex patterns
         record_pattern = rb'<Record[^>]*?type="HKQuantityTypeIdentifierHeartRate"[^>]*?>'
@@ -223,20 +285,35 @@ class AppleHealthAggregator:
         date_pattern = rb'startDate="([^"]+)"'
         
         try:
-            logger.info(f"[Apple]   Reading {file_size_mb:.1f} MB...")
-            with open(xml_path, 'rb') as f:
-                content = f.read()
+            logger.info(f"[APPLE/EXPORT/CARDIO] Reading {file_size_mb:.1f} MB...")
             
-            logger.info(f"[Apple]   Extracting HR records with binary regex...")
+            # Read file with bytes-based progress bar
+            content_chunks = []
+            chunk_size = 64 * 1024 * 1024  # 64MB chunks
+            bytes_read = 0
+            
+            with _make_bytes_pbar(file_size_bytes, "[APPLE/EXPORT/CARDIO] Reading XML") as pbar:
+                with open(xml_path, 'rb') as f:
+                    while True:
+                        chunk = f.read(chunk_size)
+                        if not chunk:
+                            break
+                        content_chunks.append(chunk)
+                        bytes_read += len(chunk)
+                        pbar.update(len(chunk))
+            
+            content = b''.join(content_chunks)
+            del content_chunks  # Free memory
+            
+            logger.info(f"[APPLE/EXPORT/CARDIO] Extracting HR records with binary regex...")
             
             # Find all HR record matches first to get total count for progress bar
             hr_matches = list(re.finditer(record_pattern, content))
             total_matches = len(hr_matches)
-            logger.info(f"[Apple]   Found {total_matches:,} HR record tags to process...")
+            logger.info(f"[APPLE/EXPORT/CARDIO] Found {total_matches:,} HR record tags to process...")
             
             # Process with progress bar
-            with tqdm(total=total_matches, desc="[Apple] Parsing HR records", 
-                     unit="records", ncols=100, leave=False) as pbar:
+            with _make_pbar(total_matches, "[APPLE/EXPORT/CARDIO] Parsing HR records", "records") as pbar:
                 for record_match in hr_matches:
                     record_tag = record_match.group(0)
                     
@@ -285,11 +362,11 @@ class AppleHealthAggregator:
                     pbar.update(1)
             
             if hr_filtered > 0:
-                logger.info(f"[Apple]   ✓ Filtered {hr_filtered} outlier HR values ({hr_filtered/(hr_count+hr_filtered)*100:.2f}%)")
-            logger.info(f"[Apple]   ✓ Parsed {hr_count} valid HR records into {len(hr_data)} days")
+                logger.info(f"[APPLE/EXPORT/CARDIO] ✓ Filtered {hr_filtered} outlier HR values ({hr_filtered/(hr_count+hr_filtered)*100:.2f}%)")
+            logger.info(f"[APPLE/EXPORT/CARDIO] ✓ Parsed {hr_count} valid HR records into {len(hr_data)} days")
         
         except Exception as e:
-            logger.warning(f"[Apple] Binary regex failed: {e}, falling back to ET.findall()...")
+            logger.warning(f"[APPLE/EXPORT/CARDIO] Binary regex failed: {e}, falling back to ET.findall()...")
             # Fallback to original method (with same outlier filtering)
             HR_MIN_VALID = 30
             HR_MAX_VALID = 220
@@ -336,7 +413,7 @@ class AppleHealthAggregator:
                 hr_data[date_str]["hr_values"].append(hr_value)
             
             if hr_filtered > 0:
-                logger.info(f"[Apple] Filtered {hr_filtered} outlier HR values in fallback mode")
+                logger.info(f"[APPLE/EXPORT/CARDIO] Filtered {hr_filtered} outlier HR values in fallback mode")
         
         # Aggregate to daily stats
         rows = []
@@ -352,7 +429,7 @@ class AppleHealthAggregator:
                 })
         
         df_hr = pd.DataFrame(rows)
-        logger.info(f"[Apple] Aggregated {len(df_hr)} HR days")
+        logger.info(f"[APPLE/EXPORT/CARDIO] Aggregated {len(df_hr)} HR days")
         
         # Save BOTH caches for next run (if pyarrow available)
         if not df_hr.empty:
@@ -363,7 +440,7 @@ class AppleHealthAggregator:
                 if hr_events:
                     df_events = pd.DataFrame(hr_events)
                     df_events.to_parquet(cache_file_events, index=False, compression="snappy")
-                    logger.info(f"[Apple] ✓ Cached event-level HR to {cache_file_events.name} ({len(df_events)} records, {cache_file_events.stat().st_size / 1024:.1f} KB)")
+                    logger.info(f"[APPLE/EXPORT/CARDIO] ✓ Cached event-level HR to {cache_file_events.name} ({len(df_events)} records, {cache_file_events.stat().st_size / 1024:.1f} KB)")
                 
                 # 2. Save daily aggregated cache (for fast loading)
                 df_cache = df_hr.copy()
@@ -377,18 +454,210 @@ class AppleHealthAggregator:
                 df_cache = df_cache[["date", "apple_hr_mean", "apple_hr_min", "apple_hr_max", "apple_hr_std", "apple_n_hr"]]
                 
                 df_cache.to_parquet(cache_file_daily, index=False, compression="snappy")
-                logger.info(f"[Apple] ✓ Cached daily HR to {cache_file_daily.name} ({cache_file_daily.stat().st_size / 1024:.1f} KB)")
+                logger.info(f"[APPLE/EXPORT/CARDIO] ✓ Cached daily HR to {cache_file_daily.name} ({cache_file_daily.stat().st_size / 1024:.1f} KB)")
             except Exception as e:
-                logger.warning(f"[Apple] Failed to save HR cache: {e}")
+                logger.warning(f"[APPLE/EXPORT/CARDIO] Failed to save HR cache: {e}")
         
         return df_hr
+    
+    def aggregate_hrv(self) -> pd.DataFrame:
+        """
+        Aggregate Heart Rate Variability (HRV) SDNN data from Apple Health.
+        
+        Uses binary regex streaming for optimal performance (matching HR approach).
+        HRV SDNN (Standard Deviation of NN intervals) is measured in milliseconds.
+        
+        Daily columns:
+        - date (YYYY-MM-DD)
+        - hrv_sdnn_mean (float, ms) - mean SDNN for the day
+        - hrv_sdnn_median (float, ms) - median SDNN for the day
+        - hrv_sdnn_min (float, ms) - minimum SDNN for the day
+        - hrv_sdnn_max (float, ms) - maximum SDNN for the day
+        - n_hrv_sdnn (int) - number of HRV measurements for the day
+        
+        Note: Returns NaN (not 0) for days without HRV data.
+        Note: Zepp does NOT have HRV data - this is Apple-only.
+        """
+        logger.info("[APPLE/EXPORT/CARDIO] Aggregating HRV (SDNN) data...")
+        
+        if self.root is None:
+            logger.warning("[APPLE/EXPORT/CARDIO] No XML root - no HRV data")
+            return pd.DataFrame(columns=["date", "hrv_sdnn_mean", "hrv_sdnn_median", 
+                                         "hrv_sdnn_min", "hrv_sdnn_max", "n_hrv_sdnn"])
+        
+        xml_path = self.xml_path
+        
+        # Check for cached HRV data
+        cache_dir = xml_path.parent / ".cache"
+        cache_file_daily = cache_dir / "export_apple_hrv_daily.parquet"
+        cache_file_events = cache_dir / "export_apple_hrv_events.parquet"
+        
+        if cache_file_daily.exists():
+            try:
+                logger.info(f"[APPLE/EXPORT/CARDIO] Loading cached HRV daily data from {cache_file_daily.name}")
+                df_cached = pd.read_parquet(cache_file_daily)
+                
+                # Rename cached canonical columns to standard output
+                col_map = {
+                    "apple_hrv_sdnn_mean": "hrv_sdnn_mean",
+                    "apple_hrv_sdnn_median": "hrv_sdnn_median",
+                    "apple_hrv_sdnn_min": "hrv_sdnn_min",
+                    "apple_hrv_sdnn_max": "hrv_sdnn_max",
+                    "apple_n_hrv_sdnn": "n_hrv_sdnn"
+                }
+                df_cached = df_cached.rename(columns=col_map)
+                
+                logger.info(f"[APPLE/EXPORT/CARDIO] ✓ Loaded {len(df_cached)} cached HRV daily records")
+                return df_cached
+            except Exception as e:
+                logger.warning(f"[APPLE/EXPORT/CARDIO] Failed to load HRV cache: {e}")
+                # Continue to parse XML
+        
+        # Parse XML with binary regex streaming
+        logger.info(f"[APPLE/EXPORT/CARDIO] Parsing {xml_path.name} for HRV with binary regex...")
+        
+        import re
+        
+        # HRV SDNN thresholds (filter biologically implausible values)
+        HRV_MIN_VALID = 5    # ms - below this is likely sensor error
+        HRV_MAX_VALID = 300  # ms - above this is likely sensor error
+        
+        hrv_data = {}
+        hrv_events = []  # Store event-level data
+        hrv_count = 0
+        hrv_filtered = 0
+        file_size_mb = xml_path.stat().st_size / (1024 * 1024)
+        
+        # Binary regex patterns for HRV SDNN
+        record_pattern = rb'<Record[^>]*?type="HKQuantityTypeIdentifierHeartRateVariabilitySDNN"[^>]*?>'
+        value_pattern = rb'value="([^"]+)"'
+        date_pattern = rb'startDate="([^"]+)"'
+        
+        try:
+            logger.info(f"[APPLE/EXPORT/CARDIO] Reading {file_size_mb:.1f} MB for HRV...")
+            with open(xml_path, 'rb') as f:
+                content = f.read()
+            
+            logger.info(f"[APPLE/EXPORT/CARDIO] Extracting HRV SDNN records with binary regex...")
+            
+            # Find all HRV record matches
+            hrv_matches = list(re.finditer(record_pattern, content))
+            total_matches = len(hrv_matches)
+            logger.info(f"[APPLE/EXPORT/CARDIO] Found {total_matches:,} HRV SDNN record tags to process...")
+            
+            if total_matches == 0:
+                logger.info("[APPLE/EXPORT/CARDIO] No HRV SDNN records found in export")
+                return pd.DataFrame(columns=["date", "hrv_sdnn_mean", "hrv_sdnn_median",
+                                             "hrv_sdnn_min", "hrv_sdnn_max", "n_hrv_sdnn"])
+            
+            # Process with progress bar
+            with _make_pbar(total_matches, "[APPLE/EXPORT/CARDIO] Parsing HRV records", "records") as pbar:
+                for record_match in hrv_matches:
+                    record_tag = record_match.group(0)
+                    
+                    # Extract value
+                    val_match = re.search(value_pattern, record_tag)
+                    if not val_match:
+                        pbar.update(1)
+                        continue
+                    
+                    # Extract startDate
+                    date_match = re.search(date_pattern, record_tag)
+                    if not date_match:
+                        pbar.update(1)
+                        continue
+                    
+                    try:
+                        hrv_value = float(val_match.group(1))
+                        timestamp_str = date_match.group(1).decode('utf-8', errors='ignore')
+                        date_str = timestamp_str[:10]  # YYYY-MM-DD
+                        
+                        # Filter outliers (biologically implausible HRV values)
+                        if not (HRV_MIN_VALID <= hrv_value <= HRV_MAX_VALID):
+                            hrv_filtered += 1
+                            logger.debug(f"Filtered outlier HRV: {hrv_value} ms on {date_str}")
+                            pbar.update(1)
+                            continue
+                        
+                        # Store event-level data
+                        hrv_events.append({
+                            "timestamp": timestamp_str,
+                            "date": date_str,
+                            "hrv_sdnn": hrv_value
+                        })
+                        
+                        if date_str not in hrv_data:
+                            hrv_data[date_str] = {
+                                "date": date_str,
+                                "hrv_values": []
+                            }
+                        
+                        hrv_data[date_str]["hrv_values"].append(hrv_value)
+                        hrv_count += 1
+                    except (ValueError, TypeError):
+                        pass
+                    
+                    pbar.update(1)
+            
+            if hrv_filtered > 0:
+                logger.info(f"[APPLE/EXPORT/CARDIO] ✓ Filtered {hrv_filtered} outlier HRV values ({hrv_filtered/(hrv_count+hrv_filtered)*100:.2f}%)")
+            logger.info(f"[APPLE/EXPORT/CARDIO] ✓ Parsed {hrv_count} valid HRV records into {len(hrv_data)} days")
+        
+        except Exception as e:
+            logger.error(f"[APPLE/EXPORT/CARDIO] HRV parsing error: {e}")
+            return pd.DataFrame(columns=["date", "hrv_sdnn_mean", "hrv_sdnn_median",
+                                         "hrv_sdnn_min", "hrv_sdnn_max", "n_hrv_sdnn"])
+        
+        # Build daily dataframe with aggregated statistics
+        daily_records = []
+        for date_str, data in sorted(hrv_data.items()):
+            values = np.array(data["hrv_values"])
+            daily_records.append({
+                "date": date_str,
+                "hrv_sdnn_mean": float(np.mean(values)),
+                "hrv_sdnn_median": float(np.median(values)),
+                "hrv_sdnn_min": float(np.min(values)),
+                "hrv_sdnn_max": float(np.max(values)),
+                "n_hrv_sdnn": len(values)
+            })
+        
+        df_hrv = pd.DataFrame(daily_records)
+        logger.info(f"[APPLE/EXPORT/CARDIO] Aggregated {len(df_hrv)} HRV days with {hrv_count} total measurements")
+        
+        # Save caches for QC and future runs
+        if len(hrv_events) > 0:
+            cache_dir.mkdir(exist_ok=True)
+            
+            # Save event-level cache
+            try:
+                df_events = pd.DataFrame(hrv_events)
+                df_events.to_parquet(cache_file_events, index=False)
+                logger.info(f"[APPLE/EXPORT/CARDIO] ✓ Cached HRV events to {cache_file_events.name} ({cache_file_events.stat().st_size / 1024:.1f} KB)")
+            except Exception as e:
+                logger.warning(f"[APPLE/EXPORT/CARDIO] Failed to save HRV events cache: {e}")
+            
+            # Save daily cache with canonical column names (matching HR pattern)
+            try:
+                df_daily_cache = df_hrv.rename(columns={
+                    "hrv_sdnn_mean": "apple_hrv_sdnn_mean",
+                    "hrv_sdnn_median": "apple_hrv_sdnn_median",
+                    "hrv_sdnn_min": "apple_hrv_sdnn_min",
+                    "hrv_sdnn_max": "apple_hrv_sdnn_max",
+                    "n_hrv_sdnn": "apple_n_hrv_sdnn"
+                })
+                df_daily_cache.to_parquet(cache_file_daily, index=False)
+                logger.info(f"[APPLE/EXPORT/CARDIO] ✓ Cached daily HRV to {cache_file_daily.name} ({cache_file_daily.stat().st_size / 1024:.1f} KB)")
+            except Exception as e:
+                logger.warning(f"[APPLE/EXPORT/CARDIO] Failed to save HRV daily cache: {e}")
+        
+        return df_hrv
     
     def aggregate_activity(self) -> pd.DataFrame:
         """
         Aggregate activity data (steps, distance, active energy burned).
         Daily totals.
         """
-        logger.info("[Apple] Aggregating activity data...")
+        logger.info("[APPLE/EXPORT/ACTIVITY] Aggregating activity data...")
         
         activity_data = {}
         
@@ -398,10 +667,9 @@ class AppleHealthAggregator:
             if r.get("type") in [self.TYPE_STEPS, self.TYPE_DISTANCE, self.TYPE_ACTIVE_ENERGY]
         ]
         
-        logger.info(f"[Apple] Found {len(activity_records):,} activity records to process...")
+        logger.info(f"[APPLE/EXPORT/ACTIVITY] Found {len(activity_records):,} activity records to process...")
         
-        with tqdm(total=len(activity_records), desc="[Apple] Aggregating activity", 
-                 unit="records", ncols=100, leave=False) as pbar:
+        with _make_pbar(len(activity_records), "[APPLE/EXPORT/ACTIVITY] Aggregating", "records") as pbar:
             for record in activity_records:
                 rec_type = record.get("type")
                 start_dt = self._parse_datetime(record.get("startDate"))
@@ -437,7 +705,7 @@ class AppleHealthAggregator:
                 pbar.update(1)
         
         df_activity = pd.DataFrame(list(activity_data.values()))
-        logger.info(f"[Apple] Aggregated {len(df_activity)} activity days")
+        logger.info(f"[APPLE/EXPORT/ACTIVITY] Aggregated {len(df_activity)} activity days")
         return df_activity
     
     def aggregate_meds(self) -> pd.DataFrame:
@@ -454,7 +722,7 @@ class AppleHealthAggregator:
         - med_names (comma-separated)
         - med_sources (comma-separated)
         """
-        logger.info("[Apple] Aggregating medication data...")
+        logger.info("[APPLE/EXPORT/MEDS] Aggregating medication data...")
         
         try:
             # Import meds domain module
@@ -463,7 +731,7 @@ class AppleHealthAggregator:
             try:
                 from domains.meds.meds_from_extracted import MedsAggregator, _empty_meds_daily
             except ImportError:
-                logger.warning("[Apple] Meds domain module not found - skipping medication aggregation")
+                logger.warning("[APPLE/EXPORT/MEDS] Meds domain module not found - skipping medication aggregation")
                 # Return empty well-formed DataFrame
                 return pd.DataFrame({
                     "date": pd.Series(dtype="str"),
@@ -477,17 +745,45 @@ class AppleHealthAggregator:
             # Use the same XML path as this aggregator
             meds_aggregator = MedsAggregator(self.xml_path)
             df_meds = meds_aggregator.aggregate_medications_binary_regex()
-            logger.info(f"[Apple] Aggregated {len(df_meds)} medication days")
+            logger.info(f"[APPLE/EXPORT/MEDS] Aggregated {len(df_meds)} medication days")
             return df_meds
         except Exception as e:
-            logger.warning(f"[Apple] Medication aggregation failed: {e}")
+            logger.warning(f"[APPLE/EXPORT/MEDS] Medication aggregation failed: {e}")
             return _empty_meds_daily()
     
     def aggregate_all(self) -> Dict[str, pd.DataFrame]:
-        """Aggregate all metrics and return dict with daily CSVs ready to save."""
+        """Aggregate all metrics and return dict with daily CSVs ready to save.
+        
+        Note: daily_cardio includes both HR and HRV (SDNN) metrics merged on date.
+        """
+        # Get HR and HRV separately, then merge into unified cardio
+        df_hr = self.aggregate_heartrate()
+        df_hrv = self.aggregate_hrv()
+        
+        # Merge HR and HRV into daily_cardio (outer join to preserve all days)
+        if len(df_hr) > 0 and len(df_hrv) > 0:
+            df_cardio = pd.merge(df_hr, df_hrv, on="date", how="outer")
+            logger.info(f"[APPLE/EXPORT/CARDIO] Merged HR ({len(df_hr)} days) + HRV ({len(df_hrv)} days) → {len(df_cardio)} cardio days")
+        elif len(df_hrv) > 0:
+            # Only HRV (unlikely but possible)
+            df_cardio = df_hrv.copy()
+            # Add empty HR columns for schema consistency
+            for col in ["hr_mean", "hr_min", "hr_max", "hr_std", "hr_samples"]:
+                df_cardio[col] = np.nan
+            logger.info(f"[APPLE/EXPORT/CARDIO] HRV only: {len(df_cardio)} cardio days (no HR data)")
+        else:
+            # Only HR (no HRV) or empty
+            df_cardio = df_hr.copy()
+            # Add empty HRV columns for schema consistency
+            for col in ["hrv_sdnn_mean", "hrv_sdnn_median", "hrv_sdnn_min", "hrv_sdnn_max", "n_hrv_sdnn"]:
+                if col not in df_cardio.columns:
+                    df_cardio[col] = np.nan
+            if len(df_hr) > 0:
+                logger.info(f"[APPLE/EXPORT/CARDIO] HR only: {len(df_cardio)} cardio days (no HRV data)")
+        
         return {
             "daily_sleep": self.aggregate_sleep(),
-            "daily_cardio": self.aggregate_heartrate(),
+            "daily_cardio": df_cardio,
             "daily_activity": self.aggregate_activity(),
             "daily_meds": self.aggregate_meds()
         }
@@ -502,7 +798,7 @@ class ZeppHealthAggregator:
         if not self.zepp_dir.exists():
             raise FileNotFoundError(f"Zepp directory not found: {zepp_dir}")
         
-        logger.info(f"[Zepp] Scanning directory: {zepp_dir}")
+        logger.info(f"[ZEPP/CARDIO] Scanning directory: {zepp_dir}")
         
         # Locate main CSV files
         self.sleep_csv = self._find_csv("SLEEP")
@@ -513,13 +809,13 @@ class ZeppHealthAggregator:
         if self.sleep_csv is None and self.heartrate_csv is None and self.activity_csv is None:
             unknown_dir = self.zepp_dir.parent / "unknown"
             if unknown_dir.exists() and unknown_dir != self.zepp_dir:
-                logger.info(f"[Zepp] No data in {self.zepp_dir}, trying fallback: {unknown_dir}")
+                logger.info(f"[ZEPP/CARDIO] No data in {self.zepp_dir}, trying fallback: {unknown_dir}")
                 self.zepp_dir = unknown_dir
                 self.sleep_csv = self._find_csv("SLEEP")
                 self.heartrate_csv = self._find_csv("HEARTRATE")
                 self.activity_csv = self._find_csv("ACTIVITY")
         
-        logger.info(f"[Zepp] Found files: SLEEP={self.sleep_csv is not None}, "
+        logger.info(f"[ZEPP/CARDIO] Found files: SLEEP={self.sleep_csv is not None}, "
                    f"HR={self.heartrate_csv is not None}, ACT={self.activity_csv is not None}")
     
     def _find_csv(self, pattern: str) -> Optional[Path]:
@@ -543,10 +839,10 @@ class ZeppHealthAggregator:
         Note: naps column may contain JSON; we read only first 8 columns with nrows parsing
         """
         if self.sleep_csv is None:
-            logger.warning("[Zepp] SLEEP CSV not found")
+            logger.warning("[ZEPP/SLEEP] SLEEP CSV not found")
             return pd.DataFrame()
         
-        logger.info(f"[Zepp] Reading SLEEP: {self.sleep_csv}")
+        logger.info(f"[ZEPP/SLEEP] Reading SLEEP: {self.sleep_csv}")
         
         try:
             # Read with on_bad_lines='skip' to skip malformed rows with embedded JSON
@@ -571,12 +867,12 @@ class ZeppHealthAggregator:
                            'wakeTime': float, 'REMTime': float}
                 )
             except Exception as e:
-                logger.error(f"[Zepp] Could not read SLEEP CSV: {e}")
+                logger.error(f"[ZEPP/SLEEP] Could not read SLEEP CSV: {e}")
                 return pd.DataFrame()
         
         # Zepp has pre-aggregated sleep per day
         if len(df) == 0 or "date" not in df.columns:
-            logger.warning("[Zepp] SLEEP CSV empty or missing 'date' column")
+            logger.warning("[ZEPP/SLEEP] SLEEP CSV empty or missing 'date' column")
             return pd.DataFrame()
         
         df_out = pd.DataFrame()
@@ -598,7 +894,7 @@ class ZeppHealthAggregator:
             0
         )
         
-        logger.info(f"[Zepp] Aggregated {len(df_out)} sleep days")
+        logger.info(f"[ZEPP/SLEEP] Aggregated {len(df_out)} sleep days")
         return df_out[["date", "sleep_hours", "sleep_quality_score"]].dropna(subset=["date"])
     
     def aggregate_heartrate(self) -> pd.DataFrame:
@@ -607,17 +903,17 @@ class ZeppHealthAggregator:
         Daily aggregation: mean, min, max.
         """
         if self.heartrate_csv is None:
-            logger.warning("[Zepp] HEARTRATE CSV not found")
+            logger.warning("[ZEPP/CARDIO] HEARTRATE CSV not found")
             return pd.DataFrame()
         
-        logger.info(f"[Zepp] Reading HEARTRATE: {self.heartrate_csv}")
+        logger.info(f"[ZEPP/CARDIO] Reading HEARTRATE: {self.heartrate_csv}")
         try:
             df = pd.read_csv(self.heartrate_csv, encoding='utf-8')
         except:
             try:
                 df = pd.read_csv(self.heartrate_csv, encoding='latin-1')
             except:
-                logger.error(f"[Zepp] Could not read HEARTRATE CSV")
+                logger.error(f"[ZEPP/CARDIO] Could not read HEARTRATE CSV")
                 return pd.DataFrame()
         
         # Parse timestamp and extract date
@@ -633,7 +929,7 @@ class ZeppHealthAggregator:
         
         if hr_filtered > 0:
             pct = 100 * hr_filtered / len(df)
-            logger.info(f"[Zepp] Filtered {hr_filtered} outlier HR values ({pct:.2f}%)")
+            logger.info(f"[ZEPP/CARDIO] Filtered {hr_filtered} outlier HR values ({pct:.2f}%)")
         
         df = df[mask_valid]
         
@@ -644,7 +940,7 @@ class ZeppHealthAggregator:
         
         df_daily.columns = ["date", "hr_mean", "hr_min", "hr_max", "hr_std", "hr_samples"]
         
-        logger.info(f"[Zepp] Aggregated {len(df_daily)} HR days")
+        logger.info(f"[ZEPP/CARDIO] Aggregated {len(df_daily)} HR days")
         return df_daily
     
     def aggregate_activity(self) -> pd.DataFrame:
@@ -653,17 +949,17 @@ class ZeppHealthAggregator:
         Daily aggregation: sum steps, calories, etc.
         """
         if self.activity_csv is None:
-            logger.warning("[Zepp] ACTIVITY CSV not found")
+            logger.warning("[ZEPP/ACTIVITY] ACTIVITY CSV not found")
             return pd.DataFrame()
         
-        logger.info(f"[Zepp] Reading ACTIVITY: {self.activity_csv}")
+        logger.info(f"[ZEPP/ACTIVITY] Reading ACTIVITY: {self.activity_csv}")
         try:
             df = pd.read_csv(self.activity_csv, encoding='utf-8')
         except:
             try:
                 df = pd.read_csv(self.activity_csv, encoding='latin-1')
             except:
-                logger.error(f"[Zepp] Could not read ACTIVITY CSV")
+                logger.error(f"[ZEPP/ACTIVITY] Could not read ACTIVITY CSV")
                 return pd.DataFrame()
         
         # Zepp already has daily aggregation
@@ -689,7 +985,7 @@ class ZeppHealthAggregator:
         else:
             df_out["total_distance"] = 0
         
-        logger.info(f"[Zepp] Aggregated {len(df_out)} activity days")
+        logger.info(f"[ZEPP/ACTIVITY] Aggregated {len(df_out)} activity days")
         return df_out[["date", "total_steps", "total_distance", "total_active_energy"]].dropna(subset=["date"])
     
     def aggregate_all(self) -> Dict[str, pd.DataFrame]:
@@ -701,21 +997,163 @@ class ZeppHealthAggregator:
         }
 
 
+# ============================================================================
+# Meds and SoM Aggregation Functions (Stage 1 additions)
+# ============================================================================
+
+def aggregate_meds_autoexport(
+    extracted_dir: str,
+    participant: str,
+    snapshot: str,
+    output_dir: str
+) -> Optional[pd.DataFrame]:
+    """Aggregate medication data from Apple Auto Export CSV.
+    
+    Produces: daily_meds_autoexport.csv
+    
+    Args:
+        extracted_dir: Path to extracted/ directory
+        participant: Participant ID
+        snapshot: Snapshot date YYYY-MM-DD
+        output_dir: Directory for output CSV
+        
+    Returns:
+        DataFrame with daily medication data, or None if no data
+    """
+    logger.info("\n[Meds/AutoExport] Aggregating medication data from Auto Export...")
+    
+    try:
+        # Import the autoexport discovery and loading functions
+        from src.domains.common.autoexport_discovery import get_autoexport_csv_path
+        from src.domains.meds.meds_from_extracted import load_autoexport_meds_daily, _empty_meds_daily
+    except ImportError:
+        try:
+            from domains.common.autoexport_discovery import get_autoexport_csv_path
+            from domains.meds.meds_from_extracted import load_autoexport_meds_daily, _empty_meds_daily
+        except ImportError:
+            logger.warning("[Meds/AutoExport] Required modules not found - skipping")
+            return None
+    
+    # Find Medications CSV in extracted autoexport directory
+    meds_csv_path = get_autoexport_csv_path(participant, snapshot, "Medications")
+    
+    if meds_csv_path is None or not meds_csv_path.exists():
+        logger.info(f"[Meds/AutoExport] No Medications CSV found for {participant}/{snapshot}")
+        return None
+    
+    # Load and aggregate
+    logger.info(f"[Meds/AutoExport] Loading: {meds_csv_path}")
+    df_meds = load_autoexport_meds_daily(meds_csv_path, snapshot)
+    
+    if df_meds.empty:
+        logger.info("[Meds/AutoExport] No medication records found (empty DataFrame)")
+        return None
+    
+    # Save to output directory
+    out_path = Path(output_dir) / "apple" / "daily_meds_autoexport.csv"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Backup existing file
+    if out_path.exists():
+        prev_path = out_path.with_suffix(".prev.csv")
+        out_path.rename(prev_path)
+        logger.info(f"[RENAME] {out_path.name} -> {prev_path.name}")
+    
+    df_meds.to_csv(out_path, index=False)
+    logger.info(f"[OK] Saved daily_meds_autoexport: {out_path} ({len(df_meds)} rows)")
+    
+    return df_meds
+
+
+def aggregate_som_autoexport(
+    extracted_dir: str,
+    participant: str,
+    snapshot: str,
+    output_dir: str
+) -> Optional[pd.DataFrame]:
+    """Aggregate State of Mind data from Apple Auto Export CSV.
+    
+    Produces: daily_som_autoexport.csv
+    
+    Args:
+        extracted_dir: Path to extracted/ directory
+        participant: Participant ID
+        snapshot: Snapshot date YYYY-MM-DD
+        output_dir: Directory for output CSV
+        
+    Returns:
+        DataFrame with daily SoM data, or None if no data
+    """
+    logger.info("\n[SoM/AutoExport] Aggregating State of Mind data from Auto Export...")
+    
+    try:
+        # Import the autoexport discovery and loading functions
+        from src.domains.common.autoexport_discovery import get_autoexport_csv_path
+        from src.domains.som.som_from_autoexport import load_autoexport_som_daily, _empty_som_daily
+    except ImportError:
+        try:
+            from domains.common.autoexport_discovery import get_autoexport_csv_path
+            from domains.som.som_from_autoexport import load_autoexport_som_daily, _empty_som_daily
+        except ImportError:
+            logger.warning("[SoM/AutoExport] Required modules not found - skipping")
+            return None
+    
+    # Find StateOfMind CSV in extracted autoexport directory
+    som_csv_path = get_autoexport_csv_path(participant, snapshot, "StateOfMind")
+    
+    if som_csv_path is None or not som_csv_path.exists():
+        logger.info(f"[SoM/AutoExport] No StateOfMind CSV found for {participant}/{snapshot}")
+        return None
+    
+    # Load and aggregate
+    logger.info(f"[SoM/AutoExport] Loading: {som_csv_path}")
+    df_som = load_autoexport_som_daily(som_csv_path, snapshot_date=snapshot)
+    
+    if df_som.empty:
+        logger.info("[SoM/AutoExport] No SoM records found (empty DataFrame)")
+        return None
+    
+    # Save to output directory
+    out_path = Path(output_dir) / "apple" / "daily_som_autoexport.csv"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Backup existing file
+    if out_path.exists():
+        prev_path = out_path.with_suffix(".prev.csv")
+        out_path.rename(prev_path)
+        logger.info(f"[RENAME] {out_path.name} -> {prev_path.name}")
+    
+    df_som.to_csv(out_path, index=False)
+    logger.info(f"[OK] Saved daily_som_autoexport: {out_path} ({len(df_som)} rows)")
+    
+    return df_som
+
+
 def run_csv_aggregation(participant: str = "P000001", 
                         extracted_dir: str = "data/extracted",
-                        output_dir: str = "data/extracted") -> Dict[str, Dict[str, pd.DataFrame]]:
+                        output_dir: str = "data/extracted",
+                        snapshot: str = None) -> Dict[str, Dict[str, pd.DataFrame]]:
     """
     Run full CSV aggregation pipeline for Apple + Zepp.
     
+    Stage 1 produces daily_*.csv files from raw extracted data.
+    
     Outputs:
     {
-        "apple": {"daily_sleep": df, "daily_cardio": df, "daily_activity": df},
+        "apple": {"daily_sleep": df, "daily_cardio": df, "daily_activity": df, "daily_meds": df},
+        "apple_autoexport": {"daily_meds_autoexport": df, "daily_som_autoexport": df},
         "zepp": {"daily_sleep": df, "daily_cardio": df, "daily_activity": df}
     }
+    
+    Args:
+        participant: Participant ID (e.g., "P000001")
+        extracted_dir: Path to extracted/ directory
+        output_dir: Directory for output CSVs
+        snapshot: Snapshot date YYYY-MM-DD (required for AutoExport filtering)
     """
     
     logger.info(f"\n{'='*80}")
-    logger.info(f"Stage 1.5: CSV Aggregation - {participant}")
+    logger.info(f"Stage 1: CSV Aggregation - {participant}")
     logger.info(f"{'='*80}\n")
     
     results = {}
@@ -726,7 +1164,7 @@ def run_csv_aggregation(participant: str = "P000001",
         xml_path = apple_dir / "export.xml"
         
         if xml_path.exists():
-            logger.info(f"\n[Apple] Processing: {xml_path}\n")
+            logger.info(f"\n[APPLE/EXPORT] Processing: {xml_path}\n")
             agg_apple = AppleHealthAggregator(str(xml_path))
             results["apple"] = agg_apple.aggregate_all()
             
@@ -761,7 +1199,7 @@ def run_csv_aggregation(participant: str = "P000001",
         zepp_dir = Path(extracted_dir) / "zepp"
         
         if zepp_dir.exists():
-            logger.info(f"\n[Zepp] Processing: {zepp_dir}\n")
+            logger.info(f"\n[ZEPP] Processing: {zepp_dir}\n")
             agg_zepp = ZeppHealthAggregator(str(zepp_dir))
             results["zepp"] = agg_zepp.aggregate_all()
             
@@ -791,9 +1229,58 @@ def run_csv_aggregation(participant: str = "P000001",
         logger.error(f"[ERROR] Zepp aggregation failed: {e}", exc_info=True)
         results["zepp"] = {}
     
+    # ========== APPLE AUTOEXPORT (Meds + SoM) ==========
+    # Only run if snapshot is provided (required for deterministic filtering)
+    if snapshot:
+        results["apple_autoexport"] = {}
+        
+        try:
+            # Aggregate meds from AutoExport
+            df_meds_autoexport = aggregate_meds_autoexport(
+                extracted_dir=extracted_dir,
+                participant=participant,
+                snapshot=snapshot,
+                output_dir=output_dir
+            )
+            if df_meds_autoexport is not None:
+                results["apple_autoexport"]["daily_meds_autoexport"] = df_meds_autoexport
+        except Exception as e:
+            logger.error(f"[ERROR] Meds AutoExport aggregation failed: {e}", exc_info=True)
+        
+        try:
+            # Aggregate SoM from AutoExport
+            df_som_autoexport = aggregate_som_autoexport(
+                extracted_dir=extracted_dir,
+                participant=participant,
+                snapshot=snapshot,
+                output_dir=output_dir
+            )
+            if df_som_autoexport is not None:
+                results["apple_autoexport"]["daily_som_autoexport"] = df_som_autoexport
+        except Exception as e:
+            logger.error(f"[ERROR] SoM AutoExport aggregation failed: {e}", exc_info=True)
+    else:
+        logger.warning("[WARN] No snapshot provided - skipping AutoExport aggregation")
+        logger.warning("[WARN] Pass snapshot parameter to enable meds/som aggregation from AutoExport")
+    
+    # ========== RENAME daily_meds.csv to daily_meds_apple.csv ==========
+    # For consistency with the new naming convention
+    if "apple" in results and "daily_meds" in results["apple"]:
+        apple_output_dir = Path(output_dir) / "apple"
+        old_path = apple_output_dir / "daily_meds.csv"
+        new_path = apple_output_dir / "daily_meds_apple.csv"
+        
+        if old_path.exists():
+            # Backup existing daily_meds_apple.csv if it exists
+            if new_path.exists():
+                prev_path = apple_output_dir / "daily_meds_apple.prev.csv"
+                new_path.rename(prev_path)
+            old_path.rename(new_path)
+            logger.info(f"[RENAME] daily_meds.csv -> daily_meds_apple.csv")
+    
     # ========== SUMMARY ==========
     logger.info(f"\n{'='*80}")
-    logger.info(f"Stage 1.5 Summary: CSV Aggregation Complete")
+    logger.info(f"Stage 1 Summary: CSV Aggregation Complete")
     logger.info(f"{'='*80}")
     
     for source in ["apple", "zepp"]:

@@ -29,6 +29,38 @@ try:
 except ImportError:
     HAS_PYZIPPER = False
 
+
+def _should_show_progress() -> bool:
+    """Determine if progress bars should be shown (Git Bash compatible)."""
+    if os.getenv("ETL_TQDM") == "1":
+        return True
+    if os.getenv("ETL_TQDM") == "0":
+        return False
+    if os.getenv("CI"):
+        return False
+    try:
+        if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
+            return True
+    except Exception:
+        pass
+    # Git Bash / MSYS2 detection
+    if os.getenv("MSYSTEM") or os.getenv("TERM"):
+        return True
+    return False
+
+
+def _make_pbar(total, desc, unit="files"):
+    """Create a tqdm progress bar with Git Bash compatible settings."""
+    return tqdm(
+        total=total,
+        desc=desc,
+        unit=unit,
+        leave=False,
+        dynamic_ncols=True,
+        disable=not _should_show_progress()
+    )
+
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -51,6 +83,142 @@ def banner(text: str, width: int = 80):
     print(f"\n{'='*width}")
     print(f" {text.center(width-2)} ")
     print(f"{'='*width}\n")
+
+
+def train_lstm_model_cfg3(
+    X_train, y_train, X_val, y_val,
+    n_classes: int, seq_len: int, n_features: int,
+    lstm_units: int = 32, dense_units: int = 32, dropout: float = 0.4,
+    use_early_stopping: bool = True, early_stopping_patience: int = 3,
+    use_class_weight: bool = True, epochs: int = 50, batch_size: int = 16
+) -> dict:
+    """
+    Train LSTM model with CFG-3 configuration (regularized).
+    
+    This is the optimized configuration from ML7 ablation study:
+    - Higher dropout (0.4) for regularization
+    - Early stopping to prevent overfitting
+    - Class weights to handle imbalance
+    
+    Args:
+        X_train, y_train: Training sequences
+        X_val, y_val: Validation sequences
+        n_classes: Number of classes
+        seq_len: Sequence length
+        n_features: Number of input features
+        lstm_units: LSTM units
+        dense_units: Dense layer units
+        dropout: Dropout rate
+        use_early_stopping: Whether to use early stopping
+        early_stopping_patience: Patience for early stopping
+        use_class_weight: Whether to use class weights
+        epochs: Max training epochs
+        batch_size: Batch size
+    
+    Returns:
+        Dict with model, history, metrics
+    """
+    try:
+        import tensorflow as tf
+        from tensorflow import keras
+        from tensorflow.keras import layers
+        from sklearn.metrics import f1_score, balanced_accuracy_score
+        from sklearn.utils.class_weight import compute_class_weight
+        
+        # Map labels to 0-indexed for Keras
+        unique_labels = sorted(set(y_train.tolist() + y_val.tolist()))
+        label_map = {label: idx for idx, label in enumerate(unique_labels)}
+        reverse_map = {idx: label for label, idx in label_map.items()}
+        
+        y_train_mapped = np.array([label_map[y] for y in y_train])
+        y_val_mapped = np.array([label_map[y] for y in y_val])
+        
+        # Build model
+        model = keras.Sequential([
+            layers.LSTM(lstm_units, input_shape=(seq_len, n_features), return_sequences=False),
+            layers.Dense(dense_units, activation='relu'),
+            layers.Dropout(dropout),
+            layers.Dense(n_classes, activation='softmax')
+        ])
+        
+        model.compile(
+            optimizer='adam',
+            loss='sparse_categorical_crossentropy',
+            metrics=['accuracy']
+        )
+        
+        # Callbacks
+        callbacks = []
+        if use_early_stopping:
+            callbacks.append(keras.callbacks.EarlyStopping(
+                monitor='val_loss',
+                patience=early_stopping_patience,
+                restore_best_weights=True,
+                verbose=0
+            ))
+        
+        # Class weights
+        class_weight = None
+        if use_class_weight:
+            weights = compute_class_weight(
+                'balanced',
+                classes=np.unique(y_train_mapped),
+                y=y_train_mapped
+            )
+            class_weight = dict(enumerate(weights))
+        
+        # Train
+        history = model.fit(
+            X_train, y_train_mapped,
+            validation_data=(X_val, y_val_mapped),
+            epochs=epochs,
+            batch_size=batch_size,
+            class_weight=class_weight,
+            callbacks=callbacks,
+            verbose=0
+        )
+        
+        # Evaluate
+        y_pred_proba = model.predict(X_val, verbose=0)
+        y_pred_mapped = np.argmax(y_pred_proba, axis=1)
+        y_pred = np.array([reverse_map[y] for y in y_pred_mapped])
+        
+        # Metrics
+        f1_macro = f1_score(y_val, y_pred, average='macro', zero_division=0)
+        f1_weighted = f1_score(y_val, y_pred, average='weighted', zero_division=0)
+        balanced_acc = balanced_accuracy_score(y_val, y_pred)
+        
+        # Training stats
+        n_epochs_trained = len(history.history['loss'])
+        early_stopped = n_epochs_trained < epochs if use_early_stopping else False
+        
+        return {
+            'model': model,
+            'history': history.history,
+            'f1_macro': float(f1_macro),
+            'f1_weighted': float(f1_weighted),
+            'balanced_accuracy': float(balanced_acc),
+            'val_loss': float(history.history['val_loss'][-1]),
+            'val_accuracy': float(history.history['val_accuracy'][-1]),
+            'n_epochs_trained': n_epochs_trained,
+            'early_stopped': early_stopped,
+            'config': {
+                'lstm_units': lstm_units,
+                'dense_units': dense_units,
+                'dropout': dropout,
+                'use_early_stopping': use_early_stopping,
+                'use_class_weight': use_class_weight,
+                'epochs': epochs,
+                'batch_size': batch_size
+            }
+        }
+        
+    except ImportError:
+        logger.warning("[LSTM] TensorFlow not available")
+        return {'error': 'tensorflow not installed'}
+    except Exception as e:
+        logger.error(f"[LSTM] Training error: {e}")
+        return {'error': str(e)}
 
 
 class PipelineContext:
@@ -191,6 +359,64 @@ def _select_autoexport_zip_for_snapshot(
     return selected
 
 
+def _select_zepp_zip_for_snapshot(
+    zip_files: list, 
+    snapshot: str
+) -> Optional[Path]:
+    """Select Zepp ZIP deterministically based on snapshot date.
+    
+    RULE: Select the ZIP with filesystem mtime <= snapshot date.
+          If multiple match, choose the one with the most recent mtime.
+          
+    Uses filesystem modification time (mtime) for date comparison,
+    as Zepp ZIP filenames use opaque numeric IDs.
+    
+    Args:
+        zip_files: List of Path objects to ZIP files
+        snapshot: Snapshot date as YYYY-MM-DD string
+        
+    Returns:
+        Path to selected ZIP, or None if no valid ZIP found
+    """
+    try:
+        snapshot_dt = datetime.strptime(snapshot, "%Y-%m-%d")
+        # Set to end of day for inclusive comparison
+        snapshot_dt = snapshot_dt.replace(hour=23, minute=59, second=59)
+    except ValueError:
+        logger.error(f"[Zepp] Invalid snapshot format: {snapshot}")
+        return None
+    
+    # Get mtime for all ZIPs and log for traceability
+    candidates = []
+    logger.info(f"[Zepp] Snapshot date: {snapshot}")
+    logger.info(f"[Zepp] Available ZIP files:")
+    
+    for zp in sorted(zip_files, key=lambda p: p.name):
+        try:
+            mtime = datetime.fromtimestamp(zp.stat().st_mtime)
+            date_str = mtime.strftime("%Y-%m-%d %H:%M:%S")
+            is_valid = mtime <= snapshot_dt
+            status = "✓ VALID" if is_valid else "✗ FUTURE"
+            logger.info(f"  - {zp.name} → mtime={date_str} [{status}]")
+            
+            if is_valid:
+                candidates.append((zp, mtime))
+        except OSError as e:
+            logger.warning(f"  - {zp.name} → mtime=ERROR [{e}]")
+    
+    if not candidates:
+        logger.warning(f"[Zepp] No ZIP with mtime <= {snapshot} found.")
+        return None
+    
+    # Select the most recent valid ZIP
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    selected = candidates[0][0]
+    selected_date = candidates[0][1].strftime("%Y-%m-%d %H:%M:%S")
+    
+    logger.info(f"[Zepp] Selected: {selected.name} (mtime={selected_date})")
+    return selected
+
+
 def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) -> bool:
     """
     Stage 0: Ingest
@@ -227,8 +453,7 @@ def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) ->
                 logger.info(f"[Apple] Extracting: {zip_file.name}")
                 with zipfile.ZipFile(zip_file, 'r') as z:
                     members = z.namelist()
-                    with tqdm(total=len(members), desc=f"[Apple] {zip_file.name}", 
-                             unit="files", ncols=100, leave=False) as pbar:
+                    with _make_pbar(len(members), f"[Apple] {zip_file.name}") as pbar:
                         for member in members:
                             z.extract(member, ctx.extracted_dir / "apple")
                             pbar.update(1)
@@ -249,8 +474,7 @@ def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) ->
                     autoexport_target.mkdir(parents=True, exist_ok=True)
                     with zipfile.ZipFile(selected_zip, 'r') as z:
                         members = z.namelist()
-                        with tqdm(total=len(members), desc=f"[AutoExport] {selected_zip.name}", 
-                                 unit="files", ncols=100, leave=False) as pbar:
+                        with _make_pbar(len(members), f"[AutoExport] {selected_zip.name}") as pbar:
                             for member in members:
                                 z.extract(member, autoexport_target)
                                 pbar.update(1)
@@ -262,47 +486,52 @@ def stage_0_ingest(ctx: PipelineContext, zepp_password: Optional[str] = None) ->
         else:
             logger.info(f"[SKIP] AutoExport dir not found: {autoexport_raw_dir}")
         
-        # Extract Zepp ZIPs (skip if no password)
+        # Extract Zepp ZIPs (deterministic: select ZIP with mtime <= snapshot)
         if zepp_raw_dir.exists() and not zepp_skip_warned:
             zepp_zips = list(zepp_raw_dir.glob("*.zip"))
-            for zip_file in zepp_zips:
-                logger.info(f"[Zepp] Extracting: {zip_file.name}")
-                try:
-                    # Try with pyzipper first (handles AES encryption)
-                    if HAS_PYZIPPER:
-                        try:
-                            with pyzipper.AESZipFile(zip_file, 'r') as z:
-                                members = z.namelist()
-                                with tqdm(total=len(members), desc=f"[Zepp] {zip_file.name}", 
-                                         unit="files", ncols=100, leave=False) as pbar:
-                                    for member in members:
-                                        if zpwd:
-                                            z.extract(member, ctx.extracted_dir / "zepp", pwd=zpwd.encode('utf-8'))
-                                        else:
+            if zepp_zips:
+                # Deterministic selection: find ZIP with mtime <= snapshot
+                selected_zip = _select_zepp_zip_for_snapshot(zepp_zips, ctx.snapshot)
+                if selected_zip:
+                    logger.info(f"[Zepp] Extracting: {selected_zip.name}")
+                    try:
+                        # Try with pyzipper first (handles AES encryption)
+                        if HAS_PYZIPPER:
+                            try:
+                                with pyzipper.AESZipFile(selected_zip, 'r') as z:
+                                    members = z.namelist()
+                                    with _make_pbar(len(members), f"[Zepp] {selected_zip.name}") as pbar:
+                                        for member in members:
+                                            if zpwd:
+                                                z.extract(member, ctx.extracted_dir / "zepp", pwd=zpwd.encode('utf-8'))
+                                            else:
+                                                z.extract(member, ctx.extracted_dir / "zepp")
+                                            pbar.update(1)
+                            except Exception as e:
+                                # Fallback to regular zipfile
+                                logger.warning(f"[Zepp] AES extraction failed, trying standard ZIP: {e}")
+                                with zipfile.ZipFile(selected_zip, 'r') as z:
+                                    members = z.namelist()
+                                    with _make_pbar(len(members), f"[Zepp] {selected_zip.name}") as pbar:
+                                        for member in members:
                                             z.extract(member, ctx.extracted_dir / "zepp")
-                                        pbar.update(1)
-                        except Exception as e:
-                            # Fallback to regular zipfile
-                            logger.warning(f"[Zepp] AES extraction failed, trying standard ZIP: {e}")
-                            with zipfile.ZipFile(zip_file, 'r') as z:
-                                members = z.namelist()
-                                with tqdm(total=len(members), desc=f"[Zepp] {zip_file.name}", 
-                                         unit="files", ncols=100, leave=False) as pbar:
-                                    for member in members:
-                                        z.extract(member, ctx.extracted_dir / "zepp")
-                                        pbar.update(1)
-                    else:
-                        # No pyzipper, try regular zipfile
-                        with zipfile.ZipFile(zip_file, 'r') as z:
-                            z.extractall(ctx.extracted_dir / "zepp")
-                except RuntimeError as e:
-                    if "encrypted" in str(e).lower() or "password" in str(e).lower():
-                        logger.warning(f"[SKIP] {zip_file.name} is encrypted (no valid password)")
-                    else:
-                        raise
-                except Exception as e:
-                    logger.warning(f"[SKIP] {zip_file.name}: {e}")
-            logger.info(f"[OK] Zepp extracted to {ctx.extracted_dir / 'zepp'}")
+                                            pbar.update(1)
+                        else:
+                            # No pyzipper, try regular zipfile
+                            with zipfile.ZipFile(selected_zip, 'r') as z:
+                                z.extractall(ctx.extracted_dir / "zepp")
+                        logger.info(f"[OK] Zepp extracted to {ctx.extracted_dir / 'zepp'}")
+                    except RuntimeError as e:
+                        if "encrypted" in str(e).lower() or "password" in str(e).lower():
+                            logger.warning(f"[SKIP] {selected_zip.name} is encrypted (no valid password)")
+                        else:
+                            raise
+                    except Exception as e:
+                        logger.warning(f"[SKIP] {selected_zip.name}: {e}")
+                else:
+                    logger.warning(f"[SKIP] No Zepp ZIP found with mtime <= {ctx.snapshot}")
+            else:
+                logger.info(f"[SKIP] No Zepp ZIPs found in {zepp_raw_dir}")
         elif zepp_raw_dir.exists() and zepp_skip_warned:
             logger.info(f"[SKIP] Zepp extraction skipped (no password)")
         else:
@@ -323,6 +552,7 @@ def stage_1_aggregate(ctx: PipelineContext) -> bool:
     """
     Stage 1: Aggregate
     Parse export.xml + Zepp CSVs → daily_*.csv
+    Also aggregates meds and SoM from AutoExport CSVs.
     """
     banner("STAGE 1: AGGREGATE (xml + csvs to daily_*.csv)")
     stage_start = time.time()
@@ -331,19 +561,23 @@ def stage_1_aggregate(ctx: PipelineContext) -> bool:
         logger.info(f"Aggregating from {ctx.extracted_dir}")
         
         # Pass the extracted dir (where export.xml should be)
+        # Include snapshot for AutoExport filtering
         results = run_csv_aggregation(
             participant=ctx.participant,
             extracted_dir=str(ctx.extracted_dir),
-            output_dir=str(ctx.extracted_dir)
+            output_dir=str(ctx.extracted_dir),
+            snapshot=ctx.snapshot
         )
         
         apple_total = sum(len(df) for df in results.get("apple", {}).values())
         zepp_total = sum(len(df) for df in results.get("zepp", {}).values())
+        autoexport_total = sum(len(df) for df in results.get("apple_autoexport", {}).values())
         
-        logger.info(f"[OK] Stage 1 complete: {apple_total} Apple + {zepp_total} Zepp days")
+        logger.info(f"[OK] Stage 1 complete: {apple_total} Apple + {zepp_total} Zepp + {autoexport_total} AutoExport days")
         elapsed = time.time() - stage_start
         ctx.log_stage_result(1, "success", duration_sec=elapsed, 
-                            apple_days=apple_total, zepp_days=zepp_total)
+                            apple_days=apple_total, zepp_days=zepp_total,
+                            autoexport_days=autoexport_total)
         return True
     
     except Exception as e:
@@ -488,120 +722,233 @@ def stage_4_segment(ctx: PipelineContext, df: pd.DataFrame) -> bool:
 
 def stage_5_prep_ml6(ctx: PipelineContext, df: pd.DataFrame) -> Optional[pd.DataFrame]:
     """
-    Stage 5: Prep ML6 (static daily classifier)
-    - Filter >= 2021-05-11 (Amazfit GTR 2 era with consistent cardio)
-    - Apply MICE imputation (M=5, segment-aware)
-    - Remove pbsi_score, pbsi_quality (anti-leak)
+    Stage 5: Prep ML6 (static daily classifier) - SoM-Centric
+    
+    ML6 now uses State of Mind (SoM) as the primary ML target.
+    
+    Based on ablation study (ml6_som_experiments.py), the optimal configuration is:
+    - Feature Set: FS-B (Baseline + HRV) - 15 features
+    - Target: som_binary (unstable vs rest)
+    - Rationale: HRV adds +0.14 F1; MEDS/PBSI add minimal value; binary > 3-class
+    
+    Steps:
+    1. Filter >= 2021-05-11 (Amazfit GTR 2 era with consistent cardio)
+    2. Filter to days with valid SoM labels (som_vendor == 'apple_autoexport')
+    3. Derive som_binary target (1 if som_category_3class == -1, else 0)
+    4. Apply MICE imputation (segment-aware) to features only
+    5. Export both targets (som_category_3class for analysis, som_binary for ML)
+    
+    Output:
+    - ai/local/<PID>/<SNAPSHOT>/ml6/features_daily_ml6.csv
+    - Contains: date, FS-B features (15), som_category_3class, som_binary
+    
+    Ablation Study Results (P000001/2025-12-08):
+    - FS-A (Baseline):     F1=0.15 (3-class), F1=0.29 (binary)
+    - FS-B (+ HRV):        F1=0.29 (3-class), F1=0.46 (binary) ← BEST
+    - FS-C (+ MEDS):       F1=0.31 (3-class), F1=0.45 (binary)
+    - FS-D (+ PBSI):       F1=0.29 (3-class), F1=0.46 (binary)
     """
-    banner("STAGE 5: PREP ML6 (temporal filter + MICE + anti-leak)")
+    banner("STAGE 5: PREP ML6 (SoM target, FS-B features)")
     stage_start = time.time()
     
     try:
         from sklearn.experimental import enable_iterative_imputer
         from sklearn.impute import IterativeImputer
+        import numpy as np
         
         df_clean = df.copy()
         df_clean['date'] = pd.to_datetime(df_clean['date'])
         
+        # =====================================================================
+        # FEATURE SET FS-B: Baseline + HRV (15 features)
+        # =====================================================================
+        # Based on ablation study: FS-B × binary achieves F1=0.4623
+        # HRV adds +0.14 F1 over baseline; MEDS/PBSI add minimal value
+        FS_B_FEATURE_COLS = [
+            # Sleep (2)
+            'sleep_hours', 'sleep_quality_score',
+            # Cardio (5)
+            'hr_mean', 'hr_min', 'hr_max', 'hr_std', 'hr_samples',
+            # HRV (5) - Adds +0.14 F1 according to ablation study
+            'hrv_sdnn_mean', 'hrv_sdnn_median', 'hrv_sdnn_min', 'hrv_sdnn_max', 'n_hrv_sdnn',
+            # Activity (3)
+            'total_steps', 'total_distance', 'total_active_energy',
+        ]
+        # Note: MEDS and PBSI excluded based on ablation study (minimal benefit)
+        
+        # =====================================================================
         # 1. TEMPORAL FILTER: >= 2021-05-11 (Amazfit GTR 2 start)
+        # =====================================================================
         ml_cutoff = pd.Timestamp('2021-05-11')
         n_before = len(df_clean)
         df_clean = df_clean[df_clean['date'] >= ml_cutoff].copy()
-        n_after = len(df_clean)
-        n_excluded = n_before - n_after
+        n_after_temporal = len(df_clean)
+        n_excluded_temporal = n_before - n_after_temporal
         
         logger.info(f"[Temporal Filter] ML cutoff: >= {ml_cutoff.strftime('%Y-%m-%d')}")
-        logger.info(f"  Excluded: {n_excluded} days (pre-Amazfit era)")
-        logger.info(f"  Retained: {n_after} days (Amazfit GTR 2/4 + Helio Ring)")
+        logger.info(f"  Excluded: {n_excluded_temporal} days (pre-Amazfit era)")
+        logger.info(f"  Retained: {n_after_temporal} days")
         
-        # 2. REMOVE BLACKLIST (anti-leak)
-        blacklist = ["pbsi_score", "pbsi_quality", "sleep_sub", "cardio_sub", "activity_sub"]
-        cols_drop = [c for c in blacklist if c in df_clean.columns]
+        # =====================================================================
+        # 2. SoM VALIDITY FILTER
+        # =====================================================================
+        # Keep only days with real SoM data (not fallback)
+        n_before_som = len(df_clean)
+        
+        # Check SoM columns exist
+        if 'som_category_3class' not in df_clean.columns:
+            logger.error("[SoM Filter] som_category_3class column not found!")
+            raise ValueError("som_category_3class column required for ML6")
+        
+        # Filter: som_category_3class not NaN and som_vendor is 'apple_autoexport'
+        som_valid_mask = df_clean['som_category_3class'].notna()
+        if 'som_vendor' in df_clean.columns:
+            som_valid_mask &= (df_clean['som_vendor'] == 'apple_autoexport')
+        
+        n_som_valid = som_valid_mask.sum()
+        
+        logger.info(f"[SoM Filter] Days with valid SoM: {n_som_valid} / {n_before_som}")
+        
+        # Check if we have enough SoM data
+        MIN_SOM_DAYS = 10  # Minimum days required for ML
+        if n_som_valid < MIN_SOM_DAYS:
+            logger.warning(f"[SoM Filter] Only {n_som_valid} days with SoM (min={MIN_SOM_DAYS})")
+            logger.warning("[SoM Filter] Insufficient SoM data for ML - Stage 5 will produce limited dataset")
+        
+        # Apply SoM filter
+        df_clean = df_clean[som_valid_mask].copy()
+        n_after_som = len(df_clean)
+        n_excluded_som = n_before_som - n_after_som
+        
+        logger.info(f"  Excluded: {n_excluded_som} days (no valid SoM)")
+        logger.info(f"  Retained: {n_after_som} days with SoM labels")
+        
+        if n_after_som == 0:
+            logger.error("[SoM Filter] No days with valid SoM after filtering!")
+            logger.error("[ML6] Cannot proceed - returning None")
+            ctx.log_stage_result(5, "skipped", error="No valid SoM data")
+            return None
+        
+        # =====================================================================
+        # 3. SoM CLASS DISTRIBUTION & DERIVED TARGETS
+        # =====================================================================
+        # Log SoM class distribution
+        som_dist = df_clean['som_category_3class'].value_counts().sort_index()
+        logger.info(f"[SoM Classes] Distribution:")
+        for cls, count in som_dist.items():
+            pct = 100 * count / len(df_clean)
+            label_name = {-1: "Negative/Unstable", 0: "Neutral", 1: "Positive/Stable"}.get(int(cls), "Unknown")
+            logger.info(f"  Class {int(cls):+d} ({label_name}): {count} ({pct:.1f}%)")
+        
+        # Derive som_binary: 1 if som_category_3class == -1 (unstable), else 0
+        df_clean['som_binary'] = (df_clean['som_category_3class'] == -1).astype(int)
+        
+        n_unstable = df_clean['som_binary'].sum()
+        logger.info(f"[SoM Binary] Unstable (som_binary=1): {n_unstable} ({100*n_unstable/len(df_clean):.1f}%)")
+        
+        # =====================================================================
+        # 4. SELECT FEATURES (FS-B: Baseline + HRV)
+        # =====================================================================
+        feature_cols = [c for c in FS_B_FEATURE_COLS if c in df_clean.columns]
+        missing_features = [c for c in FS_B_FEATURE_COLS if c not in df_clean.columns]
+        
+        if missing_features:
+            logger.warning(f"[Features] Missing columns (will be skipped): {missing_features}")
+        
+        logger.info(f"[Features] Using FS-B feature set ({len(feature_cols)} features):")
+        for fc in feature_cols:
+            n_valid = df_clean[fc].notna().sum()
+            pct_valid = 100 * n_valid / len(df_clean)
+            logger.info(f"  {fc}: {n_valid}/{len(df_clean)} valid ({pct_valid:.1f}%)")
+        
+        # =====================================================================
+        # 5. ANTI-LEAK: Remove PBSI intermediate columns
+        # =====================================================================
+        # Note: pbsi_score excluded from FS-B based on ablation study
+        anti_leak_cols = ["pbsi_quality", "sleep_sub", "cardio_sub", "activity_sub", 
+                        "label_3cls", "label_2cls", "pbsi_score"]  # All PBSI artifacts
+        cols_drop = [c for c in anti_leak_cols if c in df_clean.columns]
         if cols_drop:
-            logger.info(f"[Anti-leak] Removing: {cols_drop}")
+            logger.info(f"[Anti-leak] Removing PBSI and intermediate columns: {cols_drop}")
             df_clean = df_clean.drop(columns=cols_drop)
         
-        # 3. SELECT FEATURES FOR ML
-        feature_cols = [
-            'sleep_hours', 'sleep_quality_score',
-            'hr_mean', 'hr_min', 'hr_max', 'hr_std', 'hr_samples',
-            'total_steps', 'total_distance', 'total_active_energy'
-        ]
-        feature_cols = [c for c in feature_cols if c in df_clean.columns]
-        
-        # 4. CHECK MISSING DATA BEFORE IMPUTATION
+        # =====================================================================
+        # 6. MICE IMPUTATION (segment-aware, features only)
+        # =====================================================================
+        # Only impute feature columns, NOT targets
         n_missing_before = df_clean[feature_cols].isna().sum().sum()
         pct_missing_before = 100 * n_missing_before / (len(df_clean) * len(feature_cols))
         logger.info(f"[Missing Data] Before imputation: {n_missing_before} values ({pct_missing_before:.1f}%)")
         
-        # 5. MICE IMPUTATION (segment-aware)
-        logger.info("[MICE] Running IterativeImputer (M=5, max_iter=10, segment-aware)...")
-        
-        # Use segment_id if available for segment-aware imputation
-        if 'segment_id' in df_clean.columns:
-            logger.info("[MICE] Segment-aware imputation (per segment)")
-            df_imputed_list = []
+        if n_missing_before > 0:
+            logger.info("[MICE] Running IterativeImputer (max_iter=10, segment-aware)...")
             
-            for segment in df_clean['segment_id'].unique():
-                segment_mask = df_clean['segment_id'] == segment
-                segment_df = df_clean[segment_mask].copy()
+            if 'segment_id' in df_clean.columns:
+                logger.info("[MICE] Segment-aware imputation")
+                df_imputed_list = []
                 
-                # Only impute if segment has enough data
-                if len(segment_df) >= 5:
-                    imputer = IterativeImputer(
-                        max_iter=10,
-                        random_state=42,
-                        verbose=0,
-                        n_nearest_features=None,
-                        sample_posterior=True
-                    )
+                for segment in df_clean['segment_id'].unique():
+                    segment_mask = df_clean['segment_id'] == segment
+                    segment_df = df_clean[segment_mask].copy()
                     
-                    segment_df[feature_cols] = imputer.fit_transform(segment_df[feature_cols])
+                    if len(segment_df) >= 5:
+                        imputer = IterativeImputer(
+                            max_iter=10, random_state=42, verbose=0,
+                            n_nearest_features=None, sample_posterior=True
+                        )
+                        segment_df[feature_cols] = imputer.fit_transform(segment_df[feature_cols])
+                    
+                    df_imputed_list.append(segment_df)
                 
-                df_imputed_list.append(segment_df)
-            
-            df_clean = pd.concat(df_imputed_list, ignore_index=False).sort_values('date')
+                df_clean = pd.concat(df_imputed_list, ignore_index=False).sort_values('date')
+            else:
+                logger.info("[MICE] Global imputation (no segments)")
+                imputer = IterativeImputer(
+                    max_iter=10, random_state=42, verbose=0,
+                    n_nearest_features=None, sample_posterior=True
+                )
+                df_clean[feature_cols] = imputer.fit_transform(df_clean[feature_cols])
         else:
-            # Global imputation if no segments
-            logger.info("[MICE] Global imputation (no segments)")
-            imputer = IterativeImputer(
-                max_iter=10,
-                random_state=42,
-                verbose=0,
-                n_nearest_features=None,
-                sample_posterior=True
-            )
-            df_clean[feature_cols] = imputer.fit_transform(df_clean[feature_cols])
+            logger.info("[MICE] No missing data - skipping imputation")
         
-        # 6. CHECK MISSING DATA AFTER IMPUTATION
         n_missing_after = df_clean[feature_cols].isna().sum().sum()
-        logger.info(f"[MICE] Imputed {n_missing_before - n_missing_after} missing values")
-        logger.info(f"[MICE] Remaining NaN: {n_missing_after} (should be 0)")
+        logger.info(f"[MICE] Remaining NaN: {n_missing_after}")
         
-        # 7. KEEP ONLY ML-READY COLUMNS (exclude segment_id - not needed for ML)
-        cols_keep = ['date', 'label_3cls'] + feature_cols
-        df_clean = df_clean[cols_keep]
+        # =====================================================================
+        # 7. FINAL COLUMN SELECTION
+        # =====================================================================
+        # Keep: date, features, SoM targets, segment_id (for CV)
+        target_cols = ['som_category_3class', 'som_binary']
+        meta_cols = ['segment_id'] if 'segment_id' in df_clean.columns else []
         
-        # 8. VERIFY ANTI-LEAK
-        assert "pbsi_score" not in df_clean.columns, "LEAK: pbsi_score present!"
-        assert "pbsi_quality" not in df_clean.columns, "LEAK: pbsi_quality present!"
-        assert n_missing_after == 0, f"MICE failed: {n_missing_after} NaN remaining"
+        cols_keep = ['date'] + feature_cols + target_cols + meta_cols
+        cols_keep = [c for c in cols_keep if c in df_clean.columns]
         
-        # 9. SAVE
+        df_clean = df_clean[cols_keep].copy()
+        
+        # =====================================================================
+        # 8. VERIFY & SAVE
+        # =====================================================================
+        # Verify targets are present
+        assert 'som_category_3class' in df_clean.columns, "Missing target: som_category_3class"
+        assert 'som_binary' in df_clean.columns, "Missing target: som_binary"
+        
         ml6_path = ctx.ai_snapshot_dir / "ml6" / "features_daily_ml6.csv"
         ml6_path.parent.mkdir(parents=True, exist_ok=True)
         df_clean.to_csv(ml6_path, index=False)
         
         logger.info(f"[OK] Stage 5 complete: {df_clean.shape}")
-        logger.info(f"  ML period: >= {ml_cutoff.strftime('%Y-%m-%d')} ({n_after} days)")
-        logger.info(f"  MICE imputation: SUCCESS (0 NaN)")
-        logger.info(f"  Anti-leak verified: YES")
+        logger.info(f"  ML period: >= {ml_cutoff.strftime('%Y-%m-%d')}")
+        logger.info(f"  SoM days: {len(df_clean)}")
+        logger.info(f"  Features: {len(feature_cols)}")
+        logger.info(f"  Targets: som_category_3class, som_binary")
         logger.info(f"  Output: {ml6_path}")
         
         elapsed = time.time() - stage_start
-        ctx.log_stage_result(5, "success", duration_sec=elapsed, 
+        ctx.log_stage_result(5, "success", duration_sec=elapsed,
                             rows=len(df_clean), columns=len(df_clean.columns),
-                            n_excluded=n_excluded, n_imputed=n_missing_before)
+                            n_som_days=len(df_clean), n_features=len(feature_cols),
+                            som_distribution=som_dist.to_dict())
         return df_clean
     
     except Exception as e:
@@ -612,15 +959,29 @@ def stage_5_prep_ml6(ctx: PipelineContext, df: pd.DataFrame) -> Optional[pd.Data
 
 def stage_6_ml6(ctx: PipelineContext, df: pd.DataFrame) -> bool:
     """
-    Stage 6: ML6 Training (static daily classifier)
-    6-fold temporal CV with calendar-based splits (4mo train / 2mo val)
+    Stage 6: ML6 Training (Logistic Regression) - SoM-Centric
+    
+    Based on ablation study (ml6_som_experiments.py):
+    - **Best configuration**: FS-B × som_binary (F1=0.4623)
+    - **Primary target**: som_binary (unstable vs rest)
+    - **Fallback**: som_category_3class if binary fails
+    
+    Ablation study findings:
+    - Binary target outperforms 3-class by +59% (0.46 vs 0.29 F1)
+    - HRV features are critical (+0.14 F1 improvement)
+    - MEDS and PBSI add minimal value
+    
+    Cross-Validation:
+    - 6-fold temporal CV
+    - Deterministic splits based on date
+    - class_weight='balanced' to handle imbalance
     """
-    banner("STAGE 6: ML6 TRAINING (6-fold calendar cv)")
+    banner("STAGE 6: ML6 TRAINING (SoM Binary, FS-B, LogisticRegression)")
     stage_start = time.time()
     
     try:
         from sklearn.linear_model import LogisticRegression
-        from sklearn.metrics import f1_score, balanced_accuracy_score
+        from sklearn.metrics import f1_score, balanced_accuracy_score, confusion_matrix, cohen_kappa_score
         from src.etl.ml7_analysis import create_calendar_folds
         import numpy as np
         
@@ -628,77 +989,200 @@ def stage_6_ml6(ctx: PipelineContext, df: pd.DataFrame) -> bool:
         df['date'] = pd.to_datetime(df['date'])
         df = df.sort_values('date').reset_index(drop=True)
         
-        # Create calendar-based folds
-        folds = create_calendar_folds(df, n_folds=6, train_months=4, val_months=2)
+        # =====================================================================
+        # 1. SELECT TARGET (Binary preferred, 3-class fallback)
+        # =====================================================================
+        # Ablation study showed binary outperforms 3-class by +59%
+        MIN_SAMPLES_PER_CLASS = 5
         
-        if len(folds) == 0:
-            logger.warning("No valid folds created (classes too imbalanced for CV)")
-            logger.warning("Skipping ML6 training - continuing with rest of pipeline")
+        # Check binary distribution first (preferred)
+        y_binary = df['som_binary'].copy()
+        class_dist_binary = y_binary.value_counts().sort_index()
+        min_binary_count = class_dist_binary.min()
+        
+        logger.info("[SoM Target] Binary distribution (preferred per ablation study):")
+        for cls, count in class_dist_binary.items():
+            label = "Unstable" if cls == 1 else "Not Unstable"
+            logger.info(f"  Class {cls} ({label}): {count}")
+        
+        # Check 3-class distribution (fallback)
+        y_multi = df['som_category_3class'].copy()
+        class_dist_multi = y_multi.value_counts().sort_index()
+        
+        logger.info("[SoM Target] 3-class distribution (fallback):")
+        for cls, count in class_dist_multi.items():
+            logger.info(f"  Class {cls:+.0f}: {count}")
+        
+        # Determine target: prefer binary per ablation study
+        if min_binary_count >= MIN_SAMPLES_PER_CLASS:
+            y = y_binary
+            target_name = "som_binary"
+            n_classes = 2
+            class_dist = class_dist_binary.to_dict()
+            logger.info(f"[SoM Target] Using: {target_name} (preferred - F1≈0.46 per ablation)")
+        elif class_dist_multi.min() >= MIN_SAMPLES_PER_CLASS:
+            y = y_multi
+            target_name = "som_3class"
+            n_classes = int(len(class_dist_multi))
+            class_dist = class_dist_multi.to_dict()
+            logger.info(f"[SoM Target] Using: {target_name} (fallback - binary too imbalanced)")
+        else:
+            logger.warning("[SoM Target] Both targets too imbalanced")
+            logger.warning("[ML6] SKIPPED - Insufficient class balance")
+            
             elapsed = time.time() - stage_start
-            ctx.log_stage_result(6, "skipped", duration_sec=elapsed, 
-                                error="No valid folds (imbalanced classes)")
+            ctx.log_stage_result(6, "skipped", duration_sec=elapsed,
+                                error="Insufficient class balance",
+                                class_dist_3class=class_dist_multi.to_dict(),
+                                class_dist_binary=class_dist_binary.to_dict())
             return True  # Return True to continue pipeline
         
-        X = df.drop(columns=['date', 'label_3cls'])
-        y = df['label_3cls']
+        # =====================================================================
+        # 2. PREPARE FEATURES (exclude date and target columns)
+        # =====================================================================
+        exclude_cols = ['date', 'som_category_3class', 'som_binary', 'segment_id']
+        feature_cols = [c for c in df.columns if c not in exclude_cols]
         
+        X = df[feature_cols].copy()
+        
+        logger.info(f"[Features] Using {len(feature_cols)} features")
+        
+        # =====================================================================
+        # 3. CREATE CV FOLDS
+        # =====================================================================
+        # Note: create_calendar_folds uses label_3cls internally, need to adapt
+        # For now, create simple temporal folds
+        
+        n_samples = len(df)
+        n_folds = min(6, n_samples // 10)  # Ensure at least 10 samples per fold
+        
+        if n_folds < 2:
+            logger.warning(f"[CV] Only {n_samples} samples - insufficient for CV")
+            logger.warning("[ML6] SKIPPED - Need at least 20 samples for minimal CV")
+            
+            elapsed = time.time() - stage_start
+            ctx.log_stage_result(6, "skipped", duration_sec=elapsed,
+                                error=f"Only {n_samples} samples",
+                                target_used=target_name,
+                                class_dist=class_dist)
+            return True
+        
+        # Simple temporal CV: split into folds by time
+        fold_size = n_samples // n_folds
         cv_results = []
         
-        for fold_info in folds:
-            fold_idx = fold_info['fold']
-            train_idx = fold_info['train_idx']
-            val_idx = fold_info['val_idx']
+        logger.info(f"[CV] Creating {n_folds}-fold temporal CV (fold_size≈{fold_size})")
+        
+        for fold_idx in range(n_folds):
+            # Use last portion as validation
+            val_start = fold_idx * fold_size
+            val_end = min((fold_idx + 1) * fold_size, n_samples)
+            
+            val_idx = list(range(val_start, val_end))
+            train_idx = [i for i in range(n_samples) if i not in val_idx]
+            
+            if len(train_idx) < 5 or len(val_idx) < 2:
+                continue
             
             X_train = X.iloc[train_idx]
             y_train = y.iloc[train_idx]
             X_val = X.iloc[val_idx]
             y_val = y.iloc[val_idx]
             
-            model = LogisticRegression(multi_class='multinomial', 
-                                      class_weight='balanced', max_iter=1000, random_state=42)
+            # Check if both train and val have all classes
+            train_classes = set(y_train.unique())
+            val_classes = set(y_val.unique())
+            
+            if len(train_classes) < 2:
+                logger.warning(f"  Fold {fold_idx}: train has only {len(train_classes)} class(es) - skipping")
+                continue
+            
+            # Train model
+            model = LogisticRegression(
+                multi_class='auto',
+                class_weight='balanced',
+                max_iter=1000,
+                random_state=42
+            )
             model.fit(X_train, y_train)
             
             y_pred = model.predict(X_val)
             f1 = f1_score(y_val, y_pred, average='macro', zero_division=0)
             ba = balanced_accuracy_score(y_val, y_pred)
+            kappa = cohen_kappa_score(y_val, y_pred)
+            
+            val_start_date = df.iloc[val_start]['date'].strftime('%Y-%m-%d')
+            val_end_date = df.iloc[val_end-1]['date'].strftime('%Y-%m-%d')
             
             result = {
                 "fold": fold_idx,
-                "train_start": fold_info['train_start'],
-                "train_end": fold_info['train_end'],
-                "val_start": fold_info['val_start'],
-                "val_end": fold_info['val_end'],
-                "n_train": fold_info['n_train'],
-                "n_val": fold_info['n_val'],
+                "val_start": val_start_date,
+                "val_end": val_end_date,
+                "n_train": len(train_idx),
+                "n_val": len(val_idx),
                 "f1_macro": float(f1),
-                "balanced_accuracy": float(ba)
+                "balanced_accuracy": float(ba),
+                "cohen_kappa": float(kappa)
             }
             cv_results.append(result)
-            logger.info(f"  Fold {fold_idx} ({fold_info['val_start']}→{fold_info['val_end']}): "
-                       f"F1={f1:.4f}, BA={ba:.4f}")
+            logger.info(f"  Fold {fold_idx} ({val_start_date}→{val_end_date}): "
+                       f"F1={f1:.4f}, BA={ba:.4f}, κ={kappa:.4f}")
+        
+        # =====================================================================
+        # 4. AGGREGATE RESULTS
+        # =====================================================================
+        if len(cv_results) == 0:
+            logger.warning("[ML6] No valid CV folds - all folds had class issues")
+            elapsed = time.time() - stage_start
+            ctx.log_stage_result(6, "skipped", duration_sec=elapsed,
+                                error="No valid CV folds",
+                                target_used=target_name,
+                                class_dist=class_dist)
+            return True
         
         mean_f1 = np.mean([r["f1_macro"] for r in cv_results])
         std_f1 = np.std([r["f1_macro"] for r in cv_results])
+        mean_ba = np.mean([r["balanced_accuracy"] for r in cv_results])
+        mean_kappa = np.mean([r["cohen_kappa"] for r in cv_results])
         
+        # =====================================================================
+        # 5. SAVE SUMMARY
+        # =====================================================================
         cv_summary = {
             "model": "LogisticRegression",
-            "cv_type": "temporal_calendar_6fold",
-            "train_months": 4,
-            "val_months": 2,
+            "feature_set": "FS-B (Baseline + HRV)",
+            "target": target_name,
+            "target_type": "som",
+            "n_classes": n_classes,
+            "class_distribution": class_dist,
+            "cv_type": f"temporal_{len(cv_results)}fold",
             "mean_f1_macro": float(mean_f1),
             "std_f1_macro": float(std_f1),
-            "folds": cv_results
+            "mean_balanced_accuracy": float(mean_ba),
+            "mean_cohen_kappa": float(mean_kappa),
+            "n_samples": n_samples,
+            "n_features": len(feature_cols),
+            "folds": cv_results,
+            "ablation_reference": "docs/reports/ML6_SOM_feature_ablation_P000001_2025-12-08.md",
+            "warnings": []
         }
+        
+        # Add warning if had to use 3-class as fallback
+        if target_name == "som_3class":
+            cv_summary["warnings"].append("Used 3-class fallback (binary too imbalanced)")
         
         cv_path = ctx.ai_snapshot_dir / "ml6" / "cv_summary.json"
         with open(cv_path, 'w') as f:
             json.dump(cv_summary, f, indent=2)
         
-        logger.info(f"[OK] Stage 6 complete: F1={mean_f1:.4f}±{std_f1:.4f}")
+        logger.info(f"[OK] Stage 6 complete: target={target_name}, F1={mean_f1:.4f}±{std_f1:.4f}, κ={mean_kappa:.4f}")
         
         elapsed = time.time() - stage_start
-        ctx.log_stage_result(6, "success", duration_sec=elapsed, 
-                            mean_f1=float(mean_f1), std_f1=float(std_f1))
+        ctx.log_stage_result(6, "success", duration_sec=elapsed,
+                            target_used=target_name,
+                            mean_f1=float(mean_f1), std_f1=float(std_f1),
+                            mean_kappa=float(mean_kappa),
+                            n_folds=len(cv_results))
         return True
     
     except Exception as e:
@@ -709,20 +1193,47 @@ def stage_6_ml6(ctx: PipelineContext, df: pd.DataFrame) -> bool:
 
 def stage_7_ml7(ctx: PipelineContext) -> bool:
     """
-    Stage 7: ML7 Analysis (LSTM sequence classifier)
-    SHAP interpretability + Drift detection (ADWIN + KS) + LSTM training
+    Stage 7: ML7 Analysis (LSTM + SHAP + Drift) - SoM-Centric
+    
+    Uses SoM as the primary target for sequence classification.
+    Configuration based on ablation study (CFG-3 × som_binary):
+    - Seq len: 14 days
+    - LSTM: 32 units
+    - Dense: 32 units
+    - Dropout: 0.4 (regularized)
+    - Early stopping: patience=3
+    - Class weights: balanced
+    - Target: som_binary (preferred per ablation results)
+    
+    Components:
+    1. SHAP: Feature importance on LogisticRegression
+    2. Drift: SoM distribution changes over time
+    3. LSTM: Sequence classifier for SoM prediction
     """
-    banner("STAGE 7: ML7 ANALYSIS (SHAP + Drift + LSTM)")
+    banner("STAGE 7: ML7 ANALYSIS (SoM LSTM + SHAP)")
     stage_start = time.time()
     
     try:
         from sklearn.linear_model import LogisticRegression
+        from sklearn.utils.class_weight import compute_class_weight
         from src.etl.ml7_analysis import (
-            create_calendar_folds, compute_shap_values, detect_drift_adwin,
-            detect_drift_ks_segments, create_lstm_sequences, train_lstm_model,
-            prepare_ml7_features, ML7_FEATURE_COLS
+            compute_shap_values, create_lstm_sequences
         )
         import numpy as np
+        
+        # =================================================================
+        # CFG-3 Configuration (from ablation study)
+        # =================================================================
+        SEQ_LEN = 14
+        LSTM_UNITS = 32
+        DENSE_UNITS = 32
+        DROPOUT = 0.4
+        USE_EARLY_STOPPING = True
+        EARLY_STOPPING_PATIENCE = 3
+        USE_CLASS_WEIGHT = True
+        EPOCHS = 50
+        BATCH_SIZE = 16
+        MIN_DAYS_FOR_LSTM = 30
         
         # Create output directories
         shap_dir = ctx.ai_snapshot_dir / "ml7" / "shap"
@@ -732,280 +1243,285 @@ def stage_7_ml7(ctx: PipelineContext) -> bool:
         for d in [shap_dir, drift_dir, models_dir]:
             d.mkdir(parents=True, exist_ok=True)
         
-        # ===== Use MICE-imputed ML6 data with inter-device consistency filter =====
-        # ML7 uses the same temporal filter as ML6 (Amazfit-only era, >= 2021-05-11)
-        # This ensures inter-device consistency: cardio data does not exist before 2021-05-11
+        # =====================================================================
+        # LOAD ML6 DATA (already filtered for SoM)
+        # =====================================================================
         ml6_path = ctx.ai_snapshot_dir / "ml6" / "features_daily_ml6.csv"
         
-        if ml6_path.exists():
-            logger.info(f"[ML7] Using MICE-imputed data from Stage 5: {ml6_path}")
-            logger.info(f"[ML7] Applying inter-device consistency filter (Amazfit-only era, >= 2021-05-11)")
-            
-            df = pd.read_csv(ml6_path)
-            df['date'] = pd.to_datetime(df['date'])
-            
-            # ===== CRITICAL: Apply temporal filter before any processing =====
-            # ML7 uses the same inter-device consistency filter as ML6 (>= 2021-05-11)
-            ml_cutoff = pd.Timestamp('2021-05-11')
-            df = df[df['date'] >= ml_cutoff].copy()
-            df = df.sort_values('date').reset_index(drop=True)
-            
-            logger.info(f"[ML7] After temporal filter (>= {ml_cutoff.date()}): {len(df)} days")
-            logger.info(f"[ML7] Date range: {df['date'].min()} to {df['date'].max()}")
-            
-            # Extract feature columns (exclude date, label_3cls)
-            feature_cols = [c for c in df.columns if c not in ['date', 'label_3cls']]
-            
-            # Verify no NaN
-            nan_count = df[feature_cols].isna().sum().sum()
-            if nan_count > 0:
-                raise ValueError(f"[ML7] MICE-imputed data still has {nan_count} NaN values!")
-            
-            logger.info(f"[ML7] Features: {', '.join(feature_cols)}")
-            logger.info(f"[ML7] NaN check: PASSED (0 NaN)")
-            
-            # For ML7 analysis, we need z-scored features (not raw features)
-            # Compute z-scores on the filtered MICE-imputed data
-            logger.info("[ML7] Computing z-scores on filtered MICE-imputed features...")
-            
-            # Compute z-scores for each feature
-            z_feature_map = {
-                'sleep_hours': 'z_sleep_total_h',
-                'sleep_quality_score': 'z_sleep_efficiency',
-                'hr_mean': 'z_hr_mean',
-                'hr_std': 'z_hrv_rmssd',  # HRV proxy
-                'hr_max': 'z_hr_max',
-                'total_steps': 'z_steps',
-                'total_active_energy': 'z_exercise_min',  # Exercise proxy
-            }
-            
-            for raw_col, z_col in z_feature_map.items():
-                if raw_col in df.columns:
-                    mean_val = df[raw_col].mean()
-                    std_val = df[raw_col].std()
-                    df[z_col] = (df[raw_col] - mean_val) / (std_val if std_val > 0 else 1.0)
-                else:
-                    logger.warning(f"[ML7] Missing raw feature: {raw_col}")
-                    df[z_col] = 0.0  # Fallback
-            
-            # Select only required columns for ML7
-            ml7_cols = ['date'] + ML7_FEATURE_COLS + ['label_3cls']
-            df = df[ml7_cols].copy()
-            
-            logger.info(f"[ML7] Dataset shape after z-scoring: {df.shape}")
-            logger.info(f"[ML7] Z-features: {', '.join(ML7_FEATURE_COLS)}")
-            
-            # Final NaN check on z-scored features
-            nan_counts_z = df[ML7_FEATURE_COLS].isna().sum()
-            if nan_counts_z.sum() > 0:
-                logger.warning(f"[ML7] NaN found in z-features: {nan_counts_z[nan_counts_z > 0].to_dict()}")
-                logger.info("[ML7] Dropping rows with NaN in z-features...")
-                df = df.dropna(subset=ML7_FEATURE_COLS).copy()
-                logger.info(f"[ML7] After dropna: {len(df)} days")
-            else:
-                logger.info(f"[ML7] NaN check: PASSED (0 NaN in z-features)")
-        else:
-            # ML6 data not found - cannot proceed
+        if not ml6_path.exists():
             logger.error(f"[ML7] Required ML6 data not found: {ml6_path}")
-            logger.error("[ML7] Please run Stage 5 (prep-ml6) first:")
-            logger.error(f"      make prep-ml6 PARTICIPANT={ctx.participant} SNAPSHOT={ctx.snapshot}")
-            raise FileNotFoundError(f"ML6 data not found: {ml6_path}")
+            logger.warning("[ML7] SKIPPED - Run Stage 5 first")
+            ctx.log_stage_result(7, "skipped", error="ML6 data not found")
+            return True
         
-        # ===== SHAP ANALYSIS =====
+        logger.info(f"[ML7] Loading SoM-filtered data from Stage 5: {ml6_path}")
+        df = pd.read_csv(ml6_path)
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.sort_values('date').reset_index(drop=True)
+        
+        n_samples = len(df)
+        logger.info(f"[ML7] Loaded {n_samples} days with SoM labels")
+        
+        # Check minimum data for LSTM
+        if n_samples < MIN_DAYS_FOR_LSTM:
+            logger.warning(f"[ML7] Only {n_samples} days (need {MIN_DAYS_FOR_LSTM} for LSTM)")
+            logger.warning("[ML7] SKIPPED - Insufficient SoM data for sequence learning")
+            
+            # Save minimal reports
+            with open(shap_dir.parent / "shap_summary.md", 'w') as f:
+                f.write("# SHAP Feature Importance Summary\n\n")
+                f.write(f"**Status**: SKIPPED - Only {n_samples} samples available\n\n")
+                f.write("Minimum 30 samples required for meaningful analysis.\n")
+            
+            with open(drift_dir.parent / "drift_report.md", 'w') as f:
+                f.write("# Drift Detection Report\n\n")
+                f.write(f"**Status**: SKIPPED - Only {n_samples} samples available\n")
+            
+            with open(models_dir.parent / "lstm_report.md", 'w') as f:
+                f.write("# LSTM M1 Training Report\n\n")
+                f.write(f"**Status**: SKIPPED - Only {n_samples} samples available\n\n")
+                f.write(f"Minimum {MIN_DAYS_FOR_LSTM} days required for sequence learning.\n")
+            
+            elapsed = time.time() - stage_start
+            ctx.log_stage_result(7, "skipped", duration_sec=elapsed,
+                                error=f"Only {n_samples} samples",
+                                min_required=MIN_DAYS_FOR_LSTM)
+            return True
+        
+        # =====================================================================
+        # DETERMINE TARGET & FEATURES (prefer som_binary per ablation)
+        # =====================================================================
+        exclude_cols = ['date', 'som_category_3class', 'som_binary', 'segment_id']
+        feature_cols = [c for c in df.columns if c not in exclude_cols]
+        
+        # Prefer som_binary based on ML7 ablation study (CFG-3 × binary = F1 0.5667)
+        # Fallback to 3-class only if binary has severe issues
+        class_dist_binary = df['som_binary'].value_counts()
+        class_dist_3 = df['som_category_3class'].value_counts()
+        
+        # Check if binary is viable (at least 3 samples in minority class)
+        binary_viable = class_dist_binary.min() >= 3
+        
+        if binary_viable:
+            y = df['som_binary'].values
+            target_name = "som_binary"
+            n_classes = 2
+            logger.info(f"[ML7 Target] Using som_binary (preferred per ablation study)")
+            logger.info(f"[ML7 Target]   Class 0: {class_dist_binary.get(0, 0)}")
+            logger.info(f"[ML7 Target]   Class 1: {class_dist_binary.get(1, 0)}")
+        else:
+            # Fallback to 3-class
+            y = df['som_category_3class'].values
+            target_name = "som_3class"
+            n_classes = len(class_dist_3)
+            logger.info(f"[ML7 Target] Using som_3class (binary fallback not viable)")
+        
+        X = df[feature_cols].values
+        
+        logger.info(f"[ML7] Target: {target_name} ({n_classes} classes)")
+        logger.info(f"[ML7] Features: {len(feature_cols)}")
+        logger.info(f"[ML7] Config: CFG-3 (seq={SEQ_LEN}, lstm={LSTM_UNITS}, "
+                   f"drop={DROPOUT}, early_stop={USE_EARLY_STOPPING}, class_wt={USE_CLASS_WEIGHT})")
+        
+        # =====================================================================
+        # SHAP ANALYSIS (on LogisticRegression)
+        # =====================================================================
         logger.info("\n[ML7] SHAP Analysis...")
-        folds = create_calendar_folds(df, n_folds=6, train_months=4, val_months=2)
-        
-        # Prepare feature matrix and target
-        X = df[ML7_FEATURE_COLS].copy()  # 7 z-scored features
-        y = df['label_3cls'].copy()
-        feature_names = ML7_FEATURE_COLS  # Explicit z-feature names
-        
-        logger.info(f"[ML7 SHAP] Feature matrix shape: {X.shape}")
-        logger.info(f"[ML7 SHAP] Label distribution: {y.value_counts().to_dict()}")
         
         shap_results = []
-        for fold_info in folds:
-            fold_idx = fold_info['fold']
-            train_idx = fold_info['train_idx']
-            val_idx = fold_info['val_idx']
-            
-            X_train = X.iloc[train_idx]
-            y_train = y.iloc[train_idx]
-            X_val = X.iloc[val_idx]
-            
-            # Train model (LogisticRegression on z-scored features)
-            model = LogisticRegression(multi_class='multinomial', class_weight='balanced',
-                                      max_iter=1000, random_state=42)
-            model.fit(X_train, y_train)
-            
-            # Compute SHAP (explains LogisticRegression, not LSTM)
-            shap_result = compute_shap_values(model, X_train, X_val, feature_names,
-                                             fold_idx, shap_dir)
-            shap_results.append(shap_result)
+        global_ranking = []
         
-        # Aggregate SHAP rankings
-        all_features = {}
-        for result in shap_results:
-            if 'top_features' in result:
-                for feat_info in result['top_features']:
-                    feat = feat_info['feature']
-                    imp = feat_info['shap_importance']
-                    if feat not in all_features:
-                        all_features[feat] = []
-                    all_features[feat].append(imp)
+        try:
+            # Simple train/test split for SHAP (80/20)
+            split_idx = int(0.8 * len(df))
+            X_train = X[:split_idx]
+            y_train = y[:split_idx]
+            X_val = X[split_idx:]
+            
+            if len(set(y_train)) >= 2:  # Need at least 2 classes in train
+                model = LogisticRegression(
+                    multi_class='auto',
+                    class_weight='balanced',
+                    max_iter=1000,
+                    random_state=42
+                )
+                model.fit(X_train, y_train)
+                
+                # Compute SHAP
+                shap_result = compute_shap_values(
+                    model,
+                    pd.DataFrame(X_train, columns=feature_cols),
+                    pd.DataFrame(X_val, columns=feature_cols),
+                    feature_cols,
+                    fold_idx=0,
+                    output_dir=shap_dir
+                )
+                shap_results.append(shap_result)
+                
+                if 'top_features' in shap_result:
+                    global_ranking = [(f['feature'], f['shap_importance']) 
+                                     for f in shap_result['top_features']]
+                
+                logger.info(f"[SHAP] Computed successfully")
+            else:
+                logger.warning("[SHAP] Skipped - train set has only 1 class")
         
-        # Global ranking
-        global_ranking = [(f, np.mean(imps)) for f, imps in all_features.items()]
-        global_ranking.sort(key=lambda x: x[1], reverse=True)
+        except Exception as e:
+            logger.warning(f"[SHAP] Failed: {e}")
         
         # Save SHAP summary
         with open(shap_dir.parent / "shap_summary.md", 'w') as f:
-            f.write("# SHAP Feature Importance Summary\n\n")
-            f.write("**Model Explained**: Logistic Regression (multinomial, class_weight='balanced')\n\n")
-            f.write("**Feature Set**: Z-scored canonical features from PBSI pipeline\n")
-            f.write(f"- {len(ML7_FEATURE_COLS)} features: {', '.join(ML7_FEATURE_COLS)}\n")
-            f.write("- Segment-wise normalized (119 temporal segments) to prevent leakage\n\n")
-            f.write("**Note**: SHAP explains the LogisticRegression baseline, NOT the LSTM model.\n\n")
-            f.write("---\n\n")
-            f.write("## Global Top-10 Features\n\n")
-            for i, (feat, imp) in enumerate(global_ranking[:10], 1):
-                f.write(f"{i}. **{feat}**: {imp:.4f}\n")
-            f.write("\n## Per-Fold Top-5\n\n")
-            for result in shap_results:
-                if 'top_features' in result:
-                    f.write(f"\n### Fold {result['fold']}\n\n")
-                    for i, feat_info in enumerate(result['top_features'][:5], 1):
-                        f.write(f"{i}. {feat_info['feature']}: {feat_info['shap_importance']:.4f}\n")
+            f.write("# SHAP Feature Importance Summary (SoM-Centric)\n\n")
+            f.write(f"**Target**: {target_name}\n")
+            f.write(f"**Model**: Logistic Regression (class_weight='balanced')\n")
+            f.write(f"**Samples**: {n_samples}\n\n")
+            
+            if global_ranking:
+                f.write("## Global Feature Ranking\n\n")
+                for i, (feat, imp) in enumerate(global_ranking[:10], 1):
+                    f.write(f"{i}. **{feat}**: {imp:.4f}\n")
+            else:
+                f.write("*SHAP analysis skipped due to insufficient data*\n")
         
-        logger.info(f"[SHAP] Top-3 global: {', '.join([f[0] for f in global_ranking[:3]])}")
+        # =====================================================================
+        # DRIFT DETECTION (SoM distribution over time)
+        # =====================================================================
+        logger.info("\n[ML7] Drift Detection...")
         
-        # ===== DRIFT DETECTION: ADWIN =====
-        # Note: Drift detection requires pbsi_score which is not in the ML7 z-scored dataset.
-        # Skip drift detection or load original labeled data if available.
-        logger.info("\n[ML7] Drift Detection: Skipped (pbsi_score not available in z-scored dataset)")
-        adwin_result = {'n_changes': 0, 'delta': 0.002, 'changes': []}
-        
-        # ===== DRIFT DETECTION: KS at Segment Boundaries =====
-        logger.info("\n[ML7] Drift Detection: KS at Segment Boundaries (skipped)")
-        ks_result = {'n_tests': 0, 'n_significant': 0, 'results': []}
+        # Simple drift: check SoM distribution in first vs last half
+        mid_idx = len(df) // 2
+        first_half_dist = df.iloc[:mid_idx]['som_category_3class'].value_counts(normalize=True)
+        second_half_dist = df.iloc[mid_idx:]['som_category_3class'].value_counts(normalize=True)
         
         # Save drift report
         with open(drift_dir.parent / "drift_report.md", 'w') as f:
-            f.write("# Drift Detection Report\n\n")
-            f.write("## ADWIN Drift Detection\n\n")
-            f.write(f"- **Delta**: {adwin_result.get('delta', 'N/A')}\n")
-            f.write(f"- **Changes Detected**: {adwin_result.get('n_changes', 0)}\n\n")
-            
-            if adwin_result.get('changes'):
-                f.write("### Drift Points\n\n")
-                for ch in adwin_result['changes'][:10]:  # Top 10
-                    f.write(f"- {ch['date']}: value={ch['value']:.2f}\n")
-            
-            f.write("\n## KS Test at Segment Boundaries\n\n")
-            f.write(f"- **Total Tests**: {ks_result.get('n_tests', 0)}\n")
-            f.write(f"- **Significant (p<0.05)**: {ks_result.get('n_significant', 0)}\n\n")
+            f.write("# Drift Detection Report (SoM-Centric)\n\n")
+            f.write("## SoM Distribution Over Time\n\n")
+            f.write("### First Half of Data\n")
+            for cls, pct in first_half_dist.items():
+                f.write(f"- Class {cls:+.0f}: {100*pct:.1f}%\n")
+            f.write(f"\n### Second Half of Data\n")
+            for cls, pct in second_half_dist.items():
+                f.write(f"- Class {cls:+.0f}: {100*pct:.1f}%\n")
         
-        logger.info(f"[Drift] ADWIN: {adwin_result.get('n_changes', 0)} changes, "
-                   f"KS: {ks_result.get('n_significant', 0)}/{ks_result.get('n_tests', 0)} significant")
+        logger.info("[Drift] SoM distribution analysis complete")
         
-        # ===== LSTM TRAINING =====
-        logger.info("\n[ML7] LSTM M1 Training...")
+        # =====================================================================
+        # LSTM TRAINING (CFG-3: regularized with class weights)
+        # =====================================================================
+        logger.info("\n[ML7] LSTM Training (CFG-3 Regularized)...")
         
-        # Create sequences (z-scored features)
-        X_np = X.values
-        y_np = y.values
+        # Check if we have enough classes for classification
+        if n_classes < 2:
+            logger.warning(f"[LSTM] Only {n_classes} class(es) in target - need at least 2")
+            logger.warning("[LSTM] Skipped - insufficient class variability")
+            best_model = None
+            lstm_results = []
         
-        seq_len = 14
-        n_features = len(ML7_FEATURE_COLS)  # 7 z-scored features
-        n_classes = len(np.unique(y_np))
-        
-        logger.info(f"[ML7 LSTM] Sequence length: {seq_len}")
-        logger.info(f"[ML7 LSTM] N features: {n_features} (z-scored)")
-        logger.info(f"[ML7 LSTM] N classes: {n_classes}")
-        
-        lstm_results = []
-        best_f1 = 0
-        best_model = None
-        
-        for fold_info in folds:
-            fold_idx = fold_info['fold']
-            train_idx = fold_info['train_idx']
-            val_idx = fold_info['val_idx']
-            
+        elif (n_sequences := n_samples - SEQ_LEN + 1) < 10:
+            logger.warning(f"[LSTM] Only {n_sequences} sequences possible (need 10+)")
+            logger.warning("[LSTM] Skipped - insufficient sequences")
+            best_model = None
+            lstm_results = []
+        else:
             # Create sequences
-            X_train_seq, y_train_seq = create_lstm_sequences(X_np[train_idx], y_np[train_idx], seq_len)
-            X_val_seq, y_val_seq = create_lstm_sequences(X_np[val_idx], y_np[val_idx], seq_len)
+            X_seq, y_seq = create_lstm_sequences(X, y, SEQ_LEN)
             
-            if len(X_train_seq) == 0 or len(X_val_seq) == 0:
-                logger.warning(f"[LSTM] Fold {fold_idx}: Not enough data for sequences")
-                continue
-            
-            # Train LSTM
-            result = train_lstm_model(X_train_seq, y_train_seq, X_val_seq, y_val_seq,
-                                     n_classes=n_classes, seq_len=seq_len, n_features=n_features)
-            
-            if 'error' not in result:
-                result['fold'] = fold_idx
-                lstm_results.append(result)
-                logger.info(f"  Fold {fold_idx}: LSTM F1={result['f1_macro']:.4f}")
+            if len(X_seq) < 10:
+                logger.warning(f"[LSTM] Only {len(X_seq)} valid sequences - skipping")
+                best_model = None
+                lstm_results = []
+            else:
+                # Simple train/val split for LSTM (80/20)
+                split_idx = int(0.8 * len(X_seq))
+                X_train_seq = X_seq[:split_idx]
+                y_train_seq = y_seq[:split_idx]
+                X_val_seq = X_seq[split_idx:]
+                y_val_seq = y_seq[split_idx:]
                 
-                if result['f1_macro'] > best_f1:
-                    best_f1 = result['f1_macro']
-                    best_model = result['model']
+                logger.info(f"[LSTM] Train sequences: {len(X_train_seq)}")
+                logger.info(f"[LSTM] Val sequences: {len(X_val_seq)}")
+                
+                # Train LSTM with CFG-3 configuration
+                result = train_lstm_model_cfg3(
+                    X_train_seq, y_train_seq,
+                    X_val_seq, y_val_seq,
+                    n_classes=n_classes,
+                    seq_len=SEQ_LEN,
+                    n_features=len(feature_cols),
+                    lstm_units=LSTM_UNITS,
+                    dense_units=DENSE_UNITS,
+                    dropout=DROPOUT,
+                    use_early_stopping=USE_EARLY_STOPPING,
+                    early_stopping_patience=EARLY_STOPPING_PATIENCE,
+                    use_class_weight=USE_CLASS_WEIGHT,
+                    epochs=EPOCHS,
+                    batch_size=BATCH_SIZE
+                )
+                
+                if 'error' not in result:
+                    lstm_results = [result]
+                    best_model = result.get('model')
+                    logger.info(f"[LSTM] F1={result['f1_macro']:.4f}, "
+                               f"epochs={result['n_epochs_trained']}, "
+                               f"early_stopped={result['early_stopped']}")
+                else:
+                    logger.warning(f"[LSTM] Training failed: {result.get('error')}")
+                    lstm_results = []
+                    best_model = None
         
-        # Calculate total sequences generated
-        n_total_days = len(df)
-        n_total_sequences = n_total_days - seq_len + 1 if n_total_days >= seq_len else 0
-        
-        logger.info(f"\n[ML7 Summary]")
-        logger.info(f"  Total days used (post-filter, post-dropna): {n_total_days}")
-        logger.info(f"  Total sequences generated (seq_len={seq_len}): {n_total_sequences}")
-        logger.info(f"  Temporal filter: >= 2021-05-11 (Amazfit-only era)")
-        logger.info(f"  Date range: {df['date'].min().date()} to {df['date'].max().date()}")
-        
-        # Save LSTM report
-        with open(ctx.ai_snapshot_dir / "ml7" / "lstm_report.md", 'w', encoding='utf-8') as f:
-            f.write("# LSTM M1 Training Report\n\n")
+        # Save LSTM report (CFG-3 configuration)
+        with open(models_dir.parent / "lstm_report.md", 'w', encoding='utf-8') as f:
+            f.write("# LSTM M1 Training Report (SoM-Centric, CFG-3)\n\n")
             f.write(f"## Dataset Summary\n\n")
-            f.write(f"- **Total Days**: {n_total_days} (after temporal filter and dropna)\n")
-            f.write(f"- **Total Sequences**: {n_total_sequences} (14-day windows)\n")
-            f.write(f"- **Temporal Filter**: >= 2021-05-11 (Amazfit-only era)\n")
-            f.write(f"- **Date Range**: {df['date'].min().date()} to {df['date'].max().date()}\n")
-            f.write(f"- **Rationale**: ML7 uses the same inter-device consistency filter as ML6\n")
-            f.write(f"  (cardio data does not exist before 2021-05-11)\n\n")
-            f.write(f"## Architecture\n\n")
-            f.write("- Sequence Length: 14 days\n")
-            f.write(f"- Input Features: {n_features} z-scored canonical features\n")
-            f.write(f"  - {', '.join(ML7_FEATURE_COLS)}\n")
-            f.write("- LSTM(32) -> Dense(32) -> Dropout(0.2) -> Softmax\n")
-            f.write(f"- Classes: {n_classes}\n\n")
-            f.write(f"## Feature Set\n\n")
-            f.write("**Z-scored Canonical Features** (computed from ML6 MICE-imputed data):\n\n")
-            for i, feat in enumerate(ML7_FEATURE_COLS, 1):
-                f.write(f"{i}. `{feat}`\n")
-            f.write("\n**Note**: Features are z-scored on the entire ML7 dataset to enable LSTM learning.\n\n")
-            f.write(f"## Cross-Validation Results\n\n")
+            f.write(f"- **Total Days**: {n_samples}\n")
+            f.write(f"- **Target**: {target_name}\n")
+            f.write(f"- **Sequence Length**: {SEQ_LEN} days\n")
+            f.write(f"- **N Features**: {len(feature_cols)}\n")
+            f.write(f"- **N Classes**: {n_classes}\n\n")
             
-            for res in lstm_results:
-                f.write(f"### Fold {res['fold']}\n\n")
-                f.write(f"- **Macro-F1**: {res['f1_macro']:.4f}\n")
-                f.write(f"- **Val Loss**: {res['val_loss']:.4f}\n")
-                f.write(f"- **Val Accuracy**: {res['val_accuracy']:.4f}\n\n")
+            f.write("## Configuration (CFG-3 Regularized)\n\n")
+            f.write(f"- **LSTM Units**: {LSTM_UNITS}\n")
+            f.write(f"- **Dense Units**: {DENSE_UNITS}\n")
+            f.write(f"- **Dropout**: {DROPOUT}\n")
+            f.write(f"- **Early Stopping**: {USE_EARLY_STOPPING} (patience={EARLY_STOPPING_PATIENCE})\n")
+            f.write(f"- **Class Weights**: {USE_CLASS_WEIGHT}\n")
+            f.write(f"- **Max Epochs**: {EPOCHS}\n")
+            f.write(f"- **Batch Size**: {BATCH_SIZE}\n\n")
             
             if lstm_results:
-                mean_f1 = np.mean([r['f1_macro'] for r in lstm_results])
-                f.write(f"\n**Mean Macro-F1**: {mean_f1:.4f}\n")
+                r = lstm_results[0]
+                f.write("## Training Results\n\n")
+                f.write(f"- **Architecture**: LSTM({LSTM_UNITS}) → Dense({DENSE_UNITS}) → Dropout({DROPOUT}) → Softmax\n")
+                f.write(f"- **Macro-F1**: {r['f1_macro']:.4f}\n")
+                f.write(f"- **F1-Weighted**: {r.get('f1_weighted', 0):.4f}\n")
+                f.write(f"- **Balanced Accuracy**: {r.get('balanced_accuracy', 0):.4f}\n")
+                f.write(f"- **Val Loss**: {r['val_loss']:.4f}\n")
+                f.write(f"- **Val Accuracy**: {r['val_accuracy']:.4f}\n")
+                f.write(f"- **Epochs Trained**: {r.get('n_epochs_trained', 'N/A')}\n")
+                f.write(f"- **Early Stopped**: {r.get('early_stopped', False)}\n")
+                f.write("\n### Ablation Reference\n\n")
+                f.write("Configuration selected from ML7 ablation study: CFG-3 × som_binary achieved F1=0.5667\n")
+            else:
+                f.write("## Status\n\n")
+                f.write("*LSTM training skipped due to insufficient data*\n")
         
-        # Store best model for Stage 8
+        # Store results in context for Stage 8
         ctx.results['best_lstm_model'] = best_model
         ctx.results['lstm_results'] = lstm_results
         ctx.results['shap_global_ranking'] = global_ranking
-        ctx.results['adwin_changes'] = adwin_result.get('n_changes', 0)
-        ctx.results['ks_significant'] = ks_result.get('n_significant', 0)
+        ctx.results['ml7_target'] = target_name
+        ctx.results['ml7_n_samples'] = n_samples
+        ctx.results['ml7_config'] = f"CFG-3 (seq={SEQ_LEN}, lstm={LSTM_UNITS}, drop={DROPOUT})"
         
-        logger.info(f"[OK] Stage 7 complete: SHAP [OK] Drift [OK] LSTM [OK]")
+        logger.info(f"[OK] Stage 7 complete: SHAP [{'OK' if global_ranking else 'SKIP'}] "
+                   f"Drift [OK] LSTM [{'OK' if best_model else 'SKIP'}]")
+        
         elapsed = time.time() - stage_start
-        ctx.log_stage_result(7, "success", duration_sec=elapsed)
+        ctx.log_stage_result(7, "success", duration_sec=elapsed,
+                            target=target_name,
+                            n_samples=n_samples,
+                            lstm_trained=best_model is not None)
         return True
     
     except Exception as e:
@@ -1016,10 +1532,10 @@ def stage_7_ml7(ctx: PipelineContext) -> bool:
 
 def stage_8_tflite(ctx: PipelineContext) -> bool:
     """
-    Stage 8: TFLite Export
-    Convert best LSTM model to TFLite and measure latency
+    Stage 8: TFLite Export (SoM-Centric)
+    Convert best LSTM model (trained on SoM target) to TFLite and measure latency
     """
-    banner("STAGE 8: TFLITE EXPORT")
+    banner("STAGE 8: TFLITE EXPORT (SoM Model)")
     stage_start = time.time()
     
     try:
@@ -1029,20 +1545,21 @@ def stage_8_tflite(ctx: PipelineContext) -> bool:
         best_model = ctx.results.get('best_lstm_model')
         
         if best_model is None:
-            logger.warning("[TFLite] No LSTM model available, skipping")
-            ctx.log_stage_result(8, "skipped", error="No LSTM model")
+            logger.warning("[TFLite] No LSTM model available (SoM data insufficient)")
+            logger.info("[TFLite] Skipped - Stage 7 did not produce a model")
+            ctx.log_stage_result(8, "skipped", error="No LSTM model from Stage 7")
             return True
         
         # Convert to TFLite
         tflite_path = ctx.ai_snapshot_dir / "ml7" / "models" / "best_model.tflite"
+        tflite_path.parent.mkdir(parents=True, exist_ok=True)
         success = convert_to_tflite(best_model, tflite_path)
         
         if not success:
             raise RuntimeError("TFLite conversion failed")
         
         # Measure latency
-        # Create dummy input (1 sequence)
-        # Use ML6 features from Stage 5 output
+        # Use ML6 features from Stage 5 output (SoM-filtered data)
         ml6_path = ctx.ai_snapshot_dir / "ml6" / "features_daily_ml6.csv"
         
         if not ml6_path.exists():
@@ -1052,7 +1569,10 @@ def stage_8_tflite(ctx: PipelineContext) -> bool:
             return True
         
         df = pd.read_csv(ml6_path)
-        X = df.drop(columns=['date', 'label_3cls']).values
+        # Drop target columns and identifiers to get feature matrix
+        drop_cols = ['date', 'som_category_3class', 'som_binary', 'segment_id']
+        drop_cols = [c for c in drop_cols if c in df.columns]
+        X = df.drop(columns=drop_cols).values
         
         seq_len = 14
         n_features = X.shape[1]
@@ -1066,17 +1586,20 @@ def stage_8_tflite(ctx: PipelineContext) -> bool:
             json.dump(latency_stats, f, indent=2)
         
         p95 = latency_stats.get('p95_ms', 0)
+        target_used = ctx.results.get('ml7_target', 'som_category_3class')
+        
         if isinstance(p95, (int, float)):
-            logger.info(f"[OK] Stage 8 complete: TFLite exported, latency p95={p95:.2f}ms")
+            logger.info(f"[OK] Stage 8 complete: TFLite exported (target={target_used}), latency p95={p95:.2f}ms")
         else:
-            logger.info(f"[OK] Stage 8 complete: TFLite exported, latency p95={p95}")
+            logger.info(f"[OK] Stage 8 complete: TFLite exported (target={target_used}), latency p95={p95}")
         
         ctx.results['latency_p95'] = latency_stats.get('p95_ms', 0)
         ctx.results['tflite_path'] = str(tflite_path)
         
         elapsed = time.time() - stage_start
         ctx.log_stage_result(8, "success", duration_sec=elapsed, 
-                            latency_p95=latency_stats.get('p95_ms', 0))
+                            latency_p95=latency_stats.get('p95_ms', 0),
+                            target=target_used)
         return True
     
     except Exception as e:
@@ -1085,15 +1608,24 @@ def stage_8_tflite(ctx: PipelineContext) -> bool:
         return False
 
 
-def stage_9_report(ctx: PipelineContext) -> bool:
+def stage_9_report(ctx: PipelineContext, stages_executed: str = "0-9") -> bool:
     """
-    Stage 9: Generate Report
-    Create RUN_REPORT.md with all ML6/ML7 metrics
+    Stage 9: Generate Report (SoM-Centric)
+    
+    Create RUN_<PID>_<SNAPSHOT>_<STAGES>_<TIMESTAMP>.md in docs/reports/
+    
+    Report content:
+    - SoM (State of Mind) as primary ML target
+    - PBSI as auxiliary feature (no longer target)
+    - MEDS and HRV domain coverage
+    - ML6/ML7 results with SoM target
     """
-    banner("STAGE 9: GENERATE REPORT")
+    banner("STAGE 9: GENERATE REPORT (SoM-Centric)")
     stage_start = time.time()
     
     try:
+        import numpy as np
+        
         # Read key files
         labeled_path = ctx.joined_dir / "features_daily_labeled.csv"
         if not labeled_path.exists():
@@ -1104,136 +1636,283 @@ def stage_9_report(ctx: PipelineContext) -> bool:
         
         df = pd.read_csv(labeled_path)
         
-        # Build report
+        # =====================================================================
+        # Build SoM-Centric Report
+        # =====================================================================
         lines = [
-            "# RUN_REPORT.md - Pipeline Execution Summary",
+            "# RUN_REPORT.md - Pipeline Execution Summary (SoM-Centric)",
             "",
             f"**Generated**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             f"**Participant**: {ctx.participant}",
             f"**Snapshot**: {ctx.snapshot}",
+            f"**Stages Executed**: {stages_executed}",
+            "",
+            "---",
+            "",
+            "## ML Strategy",
+            "",
+            "- **Primary ML Target**: `som_category_3class` (State of Mind)",
+            "- **Secondary Target**: `som_binary` (1 if unstable, 0 otherwise)",
+            "- **PBSI**: Used as auxiliary feature (`pbsi_score`), NOT as target",
+            "- **Extended Features**: HR, HRV (SDNN), Sleep, Activity, Meds",
+            "",
+            "---",
             "",
             "## Data Summary",
             "",
             f"- **Date Range**: {df['date'].min()} to {df['date'].max()}",
-            f"- **Total Rows**: {len(df)}",
-            f"- **Missing Values**: 0",
-            "",
-            "## Label Distribution",
+            f"- **Total Days**: {len(df)}",
             "",
         ]
         
-        for label in [-1, 0, 1]:
-            count = (df['label_3cls'] == label).sum()
-            pct = count / len(df) * 100
-            label_name = {-1: "Dysregulated", 0: "Typical", 1: "Regulated"}[label]
-            lines.append(f"- **Label {label:+2d} ({label_name})**: {count} ({pct:.1f}%)")
+        # =====================================================================
+        # SoM Coverage
+        # =====================================================================
+        n_som_valid = df['som_category_3class'].notna().sum() if 'som_category_3class' in df.columns else 0
+        som_pct = 100 * n_som_valid / len(df) if len(df) > 0 else 0
         
-        # ML6 Results
+        lines.extend([
+            "### SoM (State of Mind) Coverage",
+            "",
+            f"- **Days with SoM labels**: {n_som_valid} / {len(df)} ({som_pct:.1f}%)",
+        ])
+        
+        if 'som_category_3class' in df.columns and n_som_valid > 0:
+            som_dist = df['som_category_3class'].value_counts().sort_index()
+            lines.append("")
+            lines.append("**SoM Distribution:**")
+            for cls, count in som_dist.items():
+                pct = 100 * count / n_som_valid if n_som_valid > 0 else 0
+                label_name = {-1: "Negative/Unstable", 0: "Neutral", 1: "Positive/Stable"}.get(int(cls), "Unknown")
+                lines.append(f"  - Class {int(cls):+d} ({label_name}): {count} ({pct:.1f}%)")
+        
+        lines.append("")
+        
+        # =====================================================================
+        # MEDS Coverage
+        # =====================================================================
+        n_meds = df['med_any'].notna().sum() if 'med_any' in df.columns else 0
+        n_meds_taken = (df['med_any'] == 1).sum() if 'med_any' in df.columns else 0
+        meds_pct = 100 * n_meds / len(df) if len(df) > 0 else 0
+        
+        lines.extend([
+            "### MEDS (Medication) Coverage",
+            "",
+            f"- **Days with meds data**: {n_meds} / {len(df)} ({meds_pct:.1f}%)",
+            f"- **Days with med_any=1**: {n_meds_taken}",
+        ])
+        
+        if 'med_event_count' in df.columns:
+            med_events = df['med_event_count'].sum()
+            lines.append(f"- **Total medication events**: {int(med_events)}")
+        
+        lines.append("")
+        
+        # =====================================================================
+        # HRV Coverage
+        # =====================================================================
+        n_hrv = df['hrv_sdnn_mean'].notna().sum() if 'hrv_sdnn_mean' in df.columns else 0
+        hrv_pct = 100 * n_hrv / len(df) if len(df) > 0 else 0
+        
+        lines.extend([
+            "### HRV (Heart Rate Variability) Coverage",
+            "",
+            f"- **Days with HRV data**: {n_hrv} / {len(df)} ({hrv_pct:.1f}%)",
+        ])
+        
+        if 'hrv_sdnn_mean' in df.columns and n_hrv > 0:
+            hrv_mean = df['hrv_sdnn_mean'].mean()
+            hrv_min = df['hrv_sdnn_mean'].min()
+            hrv_max = df['hrv_sdnn_mean'].max()
+            lines.append(f"- **HRV SDNN range**: {hrv_min:.1f} - {hrv_max:.1f} ms (mean={hrv_mean:.1f})")
+        
+        lines.append("")
+        
+        # =====================================================================
+        # PBSI Distribution (auxiliary feature)
+        # =====================================================================
+        if 'label_3cls' in df.columns:
+            lines.extend([
+                "### PBSI Distribution (Auxiliary Feature)",
+                "",
+            ])
+            for label in [-1, 0, 1]:
+                count = (df['label_3cls'] == label).sum()
+                pct = count / len(df) * 100
+                label_name = {-1: "Dysregulated", 0: "Typical", 1: "Regulated"}[label]
+                lines.append(f"- **PBSI {label:+2d} ({label_name})**: {count} ({pct:.1f}%)")
+            lines.append("")
+        
+        lines.append("---")
+        lines.append("")
+        
+        # =====================================================================
+        # ML6 Results (SoM target)
+        # =====================================================================
         cv_summary_path = ctx.ai_snapshot_dir / "ml6" / "cv_summary.json"
         if cv_summary_path.exists():
             with open(cv_summary_path, 'r') as f:
                 cv_data = json.load(f)
             
+            target_used = cv_data.get('target', 'unknown')
             lines.extend([
+                "## ML6: Logistic Regression (SoM Target)",
                 "",
-                "## ML6: Logistic Regression (Temporal Calendar CV)",
-                "",
+                f"- **Target Used**: `{target_used}`",
+                f"- **N Classes**: {cv_data.get('n_classes', 'N/A')}",
+                f"- **N Samples**: {cv_data.get('n_samples', 'N/A')}",
+                f"- **N Features**: {cv_data.get('n_features', 'N/A')}",
                 f"- **CV Type**: {cv_data.get('cv_type', 'N/A')}",
-                f"- **Train/Val**: {cv_data.get('train_months', 4)}mo / {cv_data.get('val_months', 2)}mo",
                 f"- **Mean Macro-F1**: {cv_data.get('mean_f1_macro', 0):.4f} ± {cv_data.get('std_f1_macro', 0):.4f}",
-                "",
-                "### Per-Fold Results",
+                f"- **Mean Balanced Accuracy**: {cv_data.get('mean_balanced_accuracy', 0):.4f}",
                 "",
             ])
             
-            for fold in cv_data.get('folds', []):
-                lines.append(f"- **Fold {fold['fold']}** ({fold['val_start']} → {fold['val_end']}): "
-                           f"F1={fold['f1_macro']:.4f}, BA={fold['balanced_accuracy']:.4f}")
+            # Warnings
+            warnings = cv_data.get('warnings', [])
+            if warnings:
+                lines.append("**Warnings:**")
+                for w in warnings:
+                    lines.append(f"- {w}")
+                lines.append("")
+            
+            # Class distribution
+            class_dist = cv_data.get('class_distribution', {})
+            if class_dist:
+                lines.append("**Class Distribution:**")
+                for cls, count in sorted(class_dist.items(), key=lambda x: float(x[0])):
+                    lines.append(f"- Class {cls}: {count}")
+                lines.append("")
+            
+            # Per-fold results
+            folds = cv_data.get('folds', [])
+            if folds:
+                lines.append("### Per-Fold Results")
+                lines.append("")
+                for fold in folds:
+                    lines.append(f"- **Fold {fold['fold']}** ({fold.get('val_start', '?')} → {fold.get('val_end', '?')}): "
+                               f"F1={fold.get('f1_macro', 0):.4f}, BA={fold.get('balanced_accuracy', 0):.4f}")
+                lines.append("")
+        else:
+            lines.extend([
+                "## ML6: Logistic Regression (SoM Target)",
+                "",
+                "*ML6 was skipped or not run*",
+                "",
+            ])
+        
+        lines.append("---")
+        lines.append("")
+        
+        # =====================================================================
+        # ML7 Results (SHAP, Drift, LSTM)
+        # =====================================================================
+        lines.append("## ML7: LSTM + SHAP + Drift (SoM Target)")
+        lines.append("")
+        
+        # Target used
+        ml7_target = ctx.results.get('ml7_target', 'unknown')
+        ml7_n_samples = ctx.results.get('ml7_n_samples', 0)
+        lines.append(f"- **Target Used**: `{ml7_target}`")
+        lines.append(f"- **N Samples**: {ml7_n_samples}")
+        lines.append("")
         
         # SHAP Top-10
         shap_ranking = ctx.results.get('shap_global_ranking', [])
         if shap_ranking:
             lines.extend([
-                "",
-                "## ML7: SHAP Feature Importance (Global Top-10)",
+                "### SHAP Feature Importance (Global Top-10)",
                 "",
             ])
             for i, (feat, imp) in enumerate(shap_ranking[:10], 1):
                 lines.append(f"{i}. **{feat}**: {imp:.4f}")
-        
-        # Drift Detection
-        adwin_changes = ctx.results.get('adwin_changes', 0)
-        ks_significant = ctx.results.get('ks_significant', 0)
-        
-        lines.extend([
-            "",
-            "## ML7: Drift Detection",
-            "",
-            f"- **ADWIN Changes Detected (δ=0.002)**: {adwin_changes}",
-            f"- **KS Significant Tests (p<0.05)**: {ks_significant}",
-        ])
+            lines.append("")
+        else:
+            lines.append("*SHAP analysis was skipped (insufficient data)*")
+            lines.append("")
         
         # LSTM Results
         lstm_results = ctx.results.get('lstm_results', [])
         if lstm_results:
             mean_lstm_f1 = np.mean([r['f1_macro'] for r in lstm_results])
             lines.extend([
+                "### LSTM Training",
                 "",
-                "## ML7: LSTM M1",
-                "",
-                f"- **Architecture**: LSTM(32) -> Dense(32) -> Dropout(0.2) -> Softmax(3)",
+                f"- **Architecture**: LSTM(32) -> Dense(32) -> Dropout(0.2) -> Softmax",
                 f"- **Sequence Length**: 14 days",
                 f"- **Mean Macro-F1**: {mean_lstm_f1:.4f}",
-                "",
-                "### Per-Fold LSTM Results",
+                f"- **Folds Trained**: {len(lstm_results)}",
                 "",
             ])
-            for res in lstm_results:
-                lines.append(f"- **Fold {res['fold']}**: F1={res['f1_macro']:.4f}, "
-                           f"Loss={res['val_loss']:.4f}, Acc={res['val_accuracy']:.4f}")
+        else:
+            lines.extend([
+                "### LSTM Training",
+                "",
+                "*LSTM was skipped (insufficient SoM sequences)*",
+                "",
+            ])
         
-        # TFLite & Latency
+        lines.append("---")
+        lines.append("")
+        
+        # =====================================================================
+        # Stage 8: TFLite & Latency
+        # =====================================================================
         tflite_path = ctx.results.get('tflite_path')
         latency_p95 = ctx.results.get('latency_p95', 0)
         
+        lines.append("## Stage 8: TFLite Export")
+        lines.append("")
+        
         if tflite_path:
             lines.extend([
-                "",
-                "## Model Export & Latency",
-                "",
-                f"- **Best Model**: {tflite_path}",
+                f"- **Model Path**: `{tflite_path}`",
                 f"- **Inference Latency (p95)**: {latency_p95:.2f} ms",
             ])
+        else:
+            lines.append("*TFLite export was skipped (no LSTM model available)*")
         
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        
+        # =====================================================================
         # Artifact Paths
+        # =====================================================================
         lines.extend([
-            "",
             "## Artifact Paths",
             "",
-            f"- **Unified**: {ctx.joined_dir / 'features_daily_unified.csv'}",
-            f"- **Labeled**: {labeled_path}",
-            f"- **ML6 Clean**: {ctx.joined_dir / 'features_ml6_clean.csv'}",
-            f"- **Segments**: {ctx.snapshot_dir / 'segment_autolog.csv'}",
-            f"- **ML6 CV Summary**: {ctx.ai_snapshot_dir / 'ml6' / 'cv_summary.json'}",
-            f"- **SHAP Summary**: {ctx.ai_snapshot_dir / 'ml7' / 'shap_summary.md'}",
-            f"- **Drift Report**: {ctx.ai_snapshot_dir / 'ml7' / 'drift_report.md'}",
-            f"- **LSTM Report**: {ctx.ai_snapshot_dir / 'ml7' / 'lstm_report.md'}",
-            f"- **Latency Stats**: {ctx.ai_snapshot_dir / 'ml7' / 'latency_stats.json'}",
+            f"- **Unified CSV**: `{ctx.joined_dir / 'features_daily_unified.csv'}`",
+            f"- **Labeled CSV**: `{labeled_path}`",
+            f"- **ML6 Dataset**: `{ctx.ai_snapshot_dir / 'ml6' / 'features_daily_ml6.csv'}`",
+            f"- **ML6 CV Summary**: `{ctx.ai_snapshot_dir / 'ml6' / 'cv_summary.json'}`",
+            f"- **SHAP Summary**: `{ctx.ai_snapshot_dir / 'ml7' / 'shap_summary.md'}`",
+            f"- **Drift Report**: `{ctx.ai_snapshot_dir / 'ml7' / 'drift_report.md'}`",
+            f"- **LSTM Report**: `{ctx.ai_snapshot_dir / 'ml7' / 'lstm_report.md'}`",
+            "",
+            "---",
             "",
             "## Status",
             "",
-            "✅ **PIPELINE COMPLETE**",
+            "✅ **PIPELINE COMPLETE (SoM-Centric ML)**",
             "",
         ])
         
         report_text = "\n".join(lines)
-        report_path = Path("RUN_REPORT.md")
+        
+        # Generate report filename with PID, snapshot, stages, timestamp
+        timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+        report_dir = Path("docs/reports")
+        report_dir.mkdir(parents=True, exist_ok=True)
+        report_filename = f"RUN_{ctx.participant}_{ctx.snapshot}_stages{stages_executed}_{timestamp}.md"
+        report_path = report_dir / report_filename
+        
         with open(report_path, 'w', encoding='utf-8') as f:
             f.write(report_text)
         
         logger.info(f"[OK] Stage 9 complete: {report_path}")
         elapsed = time.time() - stage_start
-        ctx.log_stage_result(9, "success", duration_sec=elapsed)
+        ctx.log_stage_result(9, "success", duration_sec=elapsed, report_path=str(report_path))
         return True
     
     except Exception as e:
@@ -1367,7 +2046,8 @@ def main():
                     success = False
     
     if args.start_stage <= 9 <= args.end_stage:
-        if not stage_9_report(ctx):
+        stages_str = f"{args.start_stage}-{args.end_stage}"
+        if not stage_9_report(ctx, stages_executed=stages_str):
             success = False
     
     # Summary
@@ -1375,7 +2055,8 @@ def main():
     if success:
         logger.info("[OK] All stages successful")
         logger.info(f"[OK] Output: {ctx.snapshot_dir}")
-        logger.info(f"[OK] Report: RUN_REPORT.md")
+        report_info = ctx.results.get('stage_9', {}).get('report_path', 'docs/reports/')
+        logger.info(f"[OK] Report: {report_info}")
         sys.exit(0)
     else:
         logger.error("✗ Some stages failed")
