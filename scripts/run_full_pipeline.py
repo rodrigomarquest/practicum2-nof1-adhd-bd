@@ -722,33 +722,46 @@ def stage_4_segment(ctx: PipelineContext, df: pd.DataFrame) -> bool:
 
 def stage_5_prep_ml6(ctx: PipelineContext, df: pd.DataFrame) -> Optional[pd.DataFrame]:
     """
-    Stage 5: Prep ML6 (static daily classifier) - SoM-Centric
+    Stage 5: ML Data Preparation - SoM-Centric (Composite Stage)
     
-    ML6 now uses State of Mind (SoM) as the primary ML target.
+    This stage prepares the Feature Universe for ML6/ML7 training using
+    State of Mind (SoM) as the primary target.
     
-    Based on ablation study (ml6_som_experiments.py), the optimal configuration is:
-    - Feature Set: FS-B (Baseline + HRV) - 15 features
-    - Target: som_binary (unstable vs rest)
-    - Rationale: HRV adds +0.14 F1; MEDS/PBSI add minimal value; binary > 3-class
+    SUB-STAGES:
+    -----------
+    5.1 TEMPORAL FILTER
+        - Filter to ML-ready period (>= 2021-05-11, Amazfit GTR 2 era)
+        - Keep only days with valid SoM labels (som_vendor == 'apple_autoexport')
     
-    Steps:
-    1. Filter >= 2021-05-11 (Amazfit GTR 2 era with consistent cardio)
-    2. Filter to days with valid SoM labels (som_vendor == 'apple_autoexport')
-    3. Derive som_binary target (1 if som_category_3class == -1, else 0)
-    4. Apply MICE imputation (segment-aware) to features only
-    5. Export both targets (som_category_3class for analysis, som_binary for ML)
+    5.2 ANTI-LEAK REMOVAL
+        - Remove columns that would leak target information
+        - Keep pbsi_score as candidate feature (not in anti-leak list)
     
-    Output:
+    5.3 MICE IMPUTATION
+        - Segment-aware iterative imputation on feature columns
+        - Targets (som_*) are NOT imputed
+    
+    5.4 FEATURE UNIVERSE
+        - Build complete imputed feature matrix with all candidates
+        - Save as features_daily_ml_universe.csv
+    
+    5.5 EXPERIMENT SUITE
+        - Run ML6/ML7 ablation to select best feature set & config
+        - Save model_selection.json artifact
+        - Export selected features as features_daily_ml6.csv
+    
+    OUTPUTS:
+    --------
+    - ai/local/<PID>/<SNAPSHOT>/ml6/features_daily_ml_universe.csv
     - ai/local/<PID>/<SNAPSHOT>/ml6/features_daily_ml6.csv
-    - Contains: date, FS-B features (15), som_category_3class, som_binary
+    - ai/local/<PID>/<SNAPSHOT>/model_selection.json
     
-    Ablation Study Results (P000001/2025-12-08):
-    - FS-A (Baseline):     F1=0.15 (3-class), F1=0.29 (binary)
-    - FS-B (+ HRV):        F1=0.29 (3-class), F1=0.46 (binary) ← BEST
-    - FS-C (+ MEDS):       F1=0.31 (3-class), F1=0.45 (binary)
-    - FS-D (+ PBSI):       F1=0.29 (3-class), F1=0.46 (binary)
+    Based on prior ablation studies:
+    - FS-B (Baseline + HRV) is typically best for SoM prediction
+    - Binary target (som_binary) outperforms 3-class
+    - CFG-3 (regularized LSTM) works best for sequences
     """
-    banner("STAGE 5: PREP ML6 (SoM target, FS-B features)")
+    banner("STAGE 5: ML DATA PREPARATION (SoM-Centric, Composite)")
     stage_start = time.time()
     
     try:
@@ -756,140 +769,152 @@ def stage_5_prep_ml6(ctx: PipelineContext, df: pd.DataFrame) -> Optional[pd.Data
         from sklearn.impute import IterativeImputer
         import numpy as np
         
-        df_clean = df.copy()
-        df_clean['date'] = pd.to_datetime(df_clean['date'])
+        df_work = df.copy()
+        df_work['date'] = pd.to_datetime(df_work['date'])
         
-        # =====================================================================
-        # FEATURE SET FS-B: Baseline + HRV (15 features)
-        # =====================================================================
-        # Based on ablation study: FS-B × binary achieves F1=0.4623
-        # HRV adds +0.14 F1 over baseline; MEDS/PBSI add minimal value
-        FS_B_FEATURE_COLS = [
+        # =================================================================
+        # FEATURE UNIVERSE DEFINITION
+        # =================================================================
+        # All candidate features for ablation experiments
+        FEATURE_UNIVERSE_COLS = [
             # Sleep (2)
             'sleep_hours', 'sleep_quality_score',
             # Cardio (5)
             'hr_mean', 'hr_min', 'hr_max', 'hr_std', 'hr_samples',
-            # HRV (5) - Adds +0.14 F1 according to ablation study
+            # HRV (5)
             'hrv_sdnn_mean', 'hrv_sdnn_median', 'hrv_sdnn_min', 'hrv_sdnn_max', 'n_hrv_sdnn',
             # Activity (3)
             'total_steps', 'total_distance', 'total_active_energy',
+            # MEDS (3) - candidate features
+            'med_any', 'med_event_count', 'med_dose_total',
+            # PBSI (1) - candidate feature (NOT target)
+            'pbsi_score',
         ]
-        # Note: MEDS and PBSI excluded based on ablation study (minimal benefit)
         
-        # =====================================================================
-        # 1. TEMPORAL FILTER: >= 2021-05-11 (Amazfit GTR 2 start)
-        # =====================================================================
+        # Anti-leak columns: MUST be removed before ML
+        ANTI_LEAK_COLS = [
+            # PBSI intermediate outputs (encode target derivation)
+            'pbsi_quality', 'sleep_sub', 'cardio_sub', 'activity_sub',
+            # PBSI labels (old targets - would leak)
+            'label_3cls', 'label_2cls', 'label_clinical',
+        ]
+        # Note: pbsi_score is NOT in anti-leak - it's a candidate feature
+        
+        # Default feature set (FS-B) for fallback
+        FS_B_FEATURE_COLS = [
+            'sleep_hours', 'sleep_quality_score',
+            'hr_mean', 'hr_min', 'hr_max', 'hr_std', 'hr_samples',
+            'hrv_sdnn_mean', 'hrv_sdnn_median', 'hrv_sdnn_min', 'hrv_sdnn_max', 'n_hrv_sdnn',
+            'total_steps', 'total_distance', 'total_active_energy',
+        ]
+        
+        # =================================================================
+        # 5.1 TEMPORAL FILTER
+        # =================================================================
+        logger.info("=" * 60)
+        logger.info("5.1 TEMPORAL FILTER")
+        logger.info("=" * 60)
+        
         ml_cutoff = pd.Timestamp('2021-05-11')
-        n_before = len(df_clean)
-        df_clean = df_clean[df_clean['date'] >= ml_cutoff].copy()
-        n_after_temporal = len(df_clean)
+        n_before = len(df_work)
+        df_work = df_work[df_work['date'] >= ml_cutoff].copy()
+        n_after_temporal = len(df_work)
         n_excluded_temporal = n_before - n_after_temporal
         
-        logger.info(f"[Temporal Filter] ML cutoff: >= {ml_cutoff.strftime('%Y-%m-%d')}")
+        logger.info(f"[5.1] ML cutoff: >= {ml_cutoff.strftime('%Y-%m-%d')}")
         logger.info(f"  Excluded: {n_excluded_temporal} days (pre-Amazfit era)")
         logger.info(f"  Retained: {n_after_temporal} days")
         
-        # =====================================================================
-        # 2. SoM VALIDITY FILTER
-        # =====================================================================
-        # Keep only days with real SoM data (not fallback)
-        n_before_som = len(df_clean)
+        # SoM validity filter
+        if 'som_category_3class' not in df_work.columns:
+            logger.error("[5.1] som_category_3class column not found!")
+            raise ValueError("som_category_3class column required for ML")
         
-        # Check SoM columns exist
-        if 'som_category_3class' not in df_clean.columns:
-            logger.error("[SoM Filter] som_category_3class column not found!")
-            raise ValueError("som_category_3class column required for ML6")
-        
-        # Filter: som_category_3class not NaN and som_vendor is 'apple_autoexport'
-        som_valid_mask = df_clean['som_category_3class'].notna()
-        if 'som_vendor' in df_clean.columns:
-            som_valid_mask &= (df_clean['som_vendor'] == 'apple_autoexport')
+        som_valid_mask = df_work['som_category_3class'].notna()
+        if 'som_vendor' in df_work.columns:
+            som_valid_mask &= (df_work['som_vendor'] == 'apple_autoexport')
         
         n_som_valid = som_valid_mask.sum()
+        logger.info(f"[5.1] Days with valid SoM: {n_som_valid} / {n_after_temporal}")
         
-        logger.info(f"[SoM Filter] Days with valid SoM: {n_som_valid} / {n_before_som}")
-        
-        # Check if we have enough SoM data
-        MIN_SOM_DAYS = 10  # Minimum days required for ML
+        MIN_SOM_DAYS = 10
         if n_som_valid < MIN_SOM_DAYS:
-            logger.warning(f"[SoM Filter] Only {n_som_valid} days with SoM (min={MIN_SOM_DAYS})")
-            logger.warning("[SoM Filter] Insufficient SoM data for ML - Stage 5 will produce limited dataset")
+            logger.warning(f"[5.1] Only {n_som_valid} days with SoM (min={MIN_SOM_DAYS})")
         
-        # Apply SoM filter
-        df_clean = df_clean[som_valid_mask].copy()
-        n_after_som = len(df_clean)
-        n_excluded_som = n_before_som - n_after_som
+        df_work = df_work[som_valid_mask].copy()
         
-        logger.info(f"  Excluded: {n_excluded_som} days (no valid SoM)")
-        logger.info(f"  Retained: {n_after_som} days with SoM labels")
-        
-        if n_after_som == 0:
-            logger.error("[SoM Filter] No days with valid SoM after filtering!")
-            logger.error("[ML6] Cannot proceed - returning None")
+        if len(df_work) == 0:
+            logger.error("[5.1] No days with valid SoM after filtering!")
             ctx.log_stage_result(5, "skipped", error="No valid SoM data")
             return None
         
-        # =====================================================================
-        # 3. SoM CLASS DISTRIBUTION & DERIVED TARGETS
-        # =====================================================================
         # Log SoM class distribution
-        som_dist = df_clean['som_category_3class'].value_counts().sort_index()
-        logger.info(f"[SoM Classes] Distribution:")
+        som_dist = df_work['som_category_3class'].value_counts().sort_index()
+        logger.info(f"[5.1] SoM class distribution:")
         for cls, count in som_dist.items():
-            pct = 100 * count / len(df_clean)
+            pct = 100 * count / len(df_work)
             label_name = {-1: "Negative/Unstable", 0: "Neutral", 1: "Positive/Stable"}.get(int(cls), "Unknown")
             logger.info(f"  Class {int(cls):+d} ({label_name}): {count} ({pct:.1f}%)")
         
-        # Derive som_binary: 1 if som_category_3class == -1 (unstable), else 0
-        df_clean['som_binary'] = (df_clean['som_category_3class'] == -1).astype(int)
+        # Derive som_binary
+        df_work['som_binary'] = (df_work['som_category_3class'] == -1).astype(int)
+        n_unstable = df_work['som_binary'].sum()
+        logger.info(f"[5.1] Derived som_binary: {n_unstable} unstable ({100*n_unstable/len(df_work):.1f}%)")
         
-        n_unstable = df_clean['som_binary'].sum()
-        logger.info(f"[SoM Binary] Unstable (som_binary=1): {n_unstable} ({100*n_unstable/len(df_clean):.1f}%)")
+        # =================================================================
+        # 5.2 ANTI-LEAK REMOVAL
+        # =================================================================
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("5.2 ANTI-LEAK REMOVAL")
+        logger.info("=" * 60)
         
-        # =====================================================================
-        # 4. SELECT FEATURES (FS-B: Baseline + HRV)
-        # =====================================================================
-        feature_cols = [c for c in FS_B_FEATURE_COLS if c in df_clean.columns]
-        missing_features = [c for c in FS_B_FEATURE_COLS if c not in df_clean.columns]
+        cols_to_drop = [c for c in ANTI_LEAK_COLS if c in df_work.columns]
+        if cols_to_drop:
+            logger.info(f"[5.2] Removing anti-leak columns: {cols_to_drop}")
+            df_work = df_work.drop(columns=cols_to_drop)
+        else:
+            logger.info("[5.2] No anti-leak columns found to remove")
+        
+        # Verify pbsi_score kept as candidate feature
+        if 'pbsi_score' in df_work.columns:
+            logger.info("[5.2] pbsi_score retained as candidate feature (FS-D)")
+        
+        # =================================================================
+        # 5.3 MICE IMPUTATION
+        # =================================================================
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("5.3 MICE IMPUTATION")
+        logger.info("=" * 60)
+        
+        # Get available feature columns
+        feature_cols = [c for c in FEATURE_UNIVERSE_COLS if c in df_work.columns]
+        missing_features = [c for c in FEATURE_UNIVERSE_COLS if c not in df_work.columns]
         
         if missing_features:
-            logger.warning(f"[Features] Missing columns (will be skipped): {missing_features}")
+            logger.warning(f"[5.3] Missing feature columns: {missing_features}")
         
-        logger.info(f"[Features] Using FS-B feature set ({len(feature_cols)} features):")
+        logger.info(f"[5.3] Feature universe: {len(feature_cols)} columns")
+        
+        # Log feature coverage before imputation
         for fc in feature_cols:
-            n_valid = df_clean[fc].notna().sum()
-            pct_valid = 100 * n_valid / len(df_clean)
-            logger.info(f"  {fc}: {n_valid}/{len(df_clean)} valid ({pct_valid:.1f}%)")
+            n_valid = df_work[fc].notna().sum()
+            pct_valid = 100 * n_valid / len(df_work)
+            logger.info(f"  {fc}: {n_valid}/{len(df_work)} ({pct_valid:.1f}%)")
         
-        # =====================================================================
-        # 5. ANTI-LEAK: Remove PBSI intermediate columns
-        # =====================================================================
-        # Note: pbsi_score excluded from FS-B based on ablation study
-        anti_leak_cols = ["pbsi_quality", "sleep_sub", "cardio_sub", "activity_sub", 
-                        "label_3cls", "label_2cls", "pbsi_score"]  # All PBSI artifacts
-        cols_drop = [c for c in anti_leak_cols if c in df_clean.columns]
-        if cols_drop:
-            logger.info(f"[Anti-leak] Removing PBSI and intermediate columns: {cols_drop}")
-            df_clean = df_clean.drop(columns=cols_drop)
-        
-        # =====================================================================
-        # 6. MICE IMPUTATION (segment-aware, features only)
-        # =====================================================================
-        # Only impute feature columns, NOT targets
-        n_missing_before = df_clean[feature_cols].isna().sum().sum()
-        pct_missing_before = 100 * n_missing_before / (len(df_clean) * len(feature_cols))
-        logger.info(f"[Missing Data] Before imputation: {n_missing_before} values ({pct_missing_before:.1f}%)")
+        n_missing_before = df_work[feature_cols].isna().sum().sum()
+        pct_missing = 100 * n_missing_before / (len(df_work) * len(feature_cols))
+        logger.info(f"[5.3] Missing values: {n_missing_before} ({pct_missing:.1f}%)")
         
         if n_missing_before > 0:
-            logger.info("[MICE] Running IterativeImputer (max_iter=10, segment-aware)...")
+            logger.info("[5.3] Running MICE imputation (segment-aware)...")
             
-            if 'segment_id' in df_clean.columns:
-                logger.info("[MICE] Segment-aware imputation")
+            if 'segment_id' in df_work.columns:
                 df_imputed_list = []
-                
-                for segment in df_clean['segment_id'].unique():
-                    segment_mask = df_clean['segment_id'] == segment
-                    segment_df = df_clean[segment_mask].copy()
+                for segment in df_work['segment_id'].unique():
+                    segment_mask = df_work['segment_id'] == segment
+                    segment_df = df_work[segment_mask].copy()
                     
                     if len(segment_df) >= 5:
                         imputer = IterativeImputer(
@@ -900,56 +925,182 @@ def stage_5_prep_ml6(ctx: PipelineContext, df: pd.DataFrame) -> Optional[pd.Data
                     
                     df_imputed_list.append(segment_df)
                 
-                df_clean = pd.concat(df_imputed_list, ignore_index=False).sort_values('date')
+                df_work = pd.concat(df_imputed_list, ignore_index=False).sort_values('date')
             else:
-                logger.info("[MICE] Global imputation (no segments)")
                 imputer = IterativeImputer(
                     max_iter=10, random_state=42, verbose=0,
                     n_nearest_features=None, sample_posterior=True
                 )
-                df_clean[feature_cols] = imputer.fit_transform(df_clean[feature_cols])
+                df_work[feature_cols] = imputer.fit_transform(df_work[feature_cols])
+            
+            n_missing_after = df_work[feature_cols].isna().sum().sum()
+            logger.info(f"[5.3] After MICE: {n_missing_after} missing values")
         else:
-            logger.info("[MICE] No missing data - skipping imputation")
+            logger.info("[5.3] No imputation needed - data complete")
         
-        n_missing_after = df_clean[feature_cols].isna().sum().sum()
-        logger.info(f"[MICE] Remaining NaN: {n_missing_after}")
+        # =================================================================
+        # 5.4 FEATURE UNIVERSE
+        # =================================================================
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("5.4 FEATURE UNIVERSE")
+        logger.info("=" * 60)
         
-        # =====================================================================
-        # 7. FINAL COLUMN SELECTION
-        # =====================================================================
-        # Keep: date, features, SoM targets, segment_id (for CV)
+        # Build universe dataframe
         target_cols = ['som_category_3class', 'som_binary']
-        meta_cols = ['segment_id'] if 'segment_id' in df_clean.columns else []
+        meta_cols = ['segment_id'] if 'segment_id' in df_work.columns else []
         
-        cols_keep = ['date'] + feature_cols + target_cols + meta_cols
-        cols_keep = [c for c in cols_keep if c in df_clean.columns]
+        universe_cols = ['date'] + feature_cols + target_cols + meta_cols
+        universe_cols = [c for c in universe_cols if c in df_work.columns]
         
-        df_clean = df_clean[cols_keep].copy()
+        df_universe = df_work[universe_cols].copy()
         
-        # =====================================================================
-        # 8. VERIFY & SAVE
-        # =====================================================================
-        # Verify targets are present
-        assert 'som_category_3class' in df_clean.columns, "Missing target: som_category_3class"
-        assert 'som_binary' in df_clean.columns, "Missing target: som_binary"
+        # Save Feature Universe
+        universe_path = ctx.ai_snapshot_dir / "ml6" / "features_daily_ml_universe.csv"
+        universe_path.parent.mkdir(parents=True, exist_ok=True)
+        df_universe.to_csv(universe_path, index=False)
+        
+        logger.info(f"[5.4] Feature Universe: {df_universe.shape}")
+        logger.info(f"  Saved: {universe_path}")
+        
+        # =================================================================
+        # 5.5 EXPERIMENT SUITE
+        # =================================================================
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("5.5 EXPERIMENT SUITE")
+        logger.info("=" * 60)
+        
+        model_selection = None
+        experiment_suite_ran = False
+        selected_features = FS_B_FEATURE_COLS  # Default
+        
+        try:
+            from src.etl.experiment_suite import run_experiment_suite
+            
+            logger.info("[5.5] Running Experiment Suite (ML6/ML7 ablation)...")
+            
+            model_selection = run_experiment_suite(
+                df_universe=df_universe,
+                participant=ctx.participant,
+                snapshot=ctx.snapshot,
+                output_dir=ctx.ai_snapshot_dir,
+                skip_ml7_lstm=(len(df_universe) < 30)  # Skip LSTM if too few samples
+            )
+            
+            experiment_suite_ran = True
+            
+            # Extract selected features from model_selection
+            if model_selection and 'ml6' in model_selection:
+                ml6_selection = model_selection['ml6']
+                selected_features = ml6_selection.get('features', FS_B_FEATURE_COLS)
+                selected_fs = ml6_selection.get('selected_fs', 'FS-B')
+                selected_target = ml6_selection.get('selected_target', 'binary')
+                
+                logger.info(f"[5.5] ML6 Selection: {selected_fs} × {selected_target}")
+                logger.info(f"  Features: {len(selected_features)}")
+                if 'metrics' in ml6_selection:
+                    f1 = ml6_selection['metrics'].get('f1_macro', 0)
+                    logger.info(f"  Expected F1-macro: {f1:.4f}")
+            
+            if model_selection and 'ml7' in model_selection:
+                ml7_selection = model_selection['ml7']
+                ml7_config = ml7_selection.get('selected_config', 'CFG-3')
+                ml7_status = ml7_selection.get('status', 'unknown')
+                logger.info(f"[5.5] ML7 Selection: {ml7_config} (status={ml7_status})")
+                
+        except ImportError as e:
+            logger.warning(f"[5.5] Experiment Suite not available: {e}")
+            logger.warning("[5.5] Using default FS-B feature set")
+            experiment_suite_ran = False
+            
+        except Exception as e:
+            logger.warning(f"[5.5] Experiment Suite failed: {e}")
+            logger.warning("[5.5] Falling back to FS-B defaults")
+            experiment_suite_ran = False
+            
+            # Create fallback model_selection
+            model_selection = {
+                'snapshot': ctx.snapshot,
+                'participant': ctx.participant,
+                'generated_at': datetime.now().isoformat(),
+                'experiment_suite_version': '1.0.0',
+                'fallback': True,
+                'fallback_reason': str(e),
+                'ml6': {
+                    'selected_fs': 'FS-B',
+                    'selected_target': 'binary',
+                    'features': [f for f in FS_B_FEATURE_COLS if f in df_universe.columns],
+                    'n_features': len([f for f in FS_B_FEATURE_COLS if f in df_universe.columns]),
+                    'selection_reason': 'Fallback to FS-B defaults',
+                },
+                'ml7': {
+                    'selected_config': 'CFG-3',
+                    'selected_target': 'som_binary',
+                    'features': [f for f in FS_B_FEATURE_COLS if f in df_universe.columns],
+                    'selection_reason': 'Fallback to CFG-3 defaults',
+                }
+            }
+            
+            # Save fallback model_selection
+            ms_path = ctx.ai_snapshot_dir / 'model_selection.json'
+            with open(ms_path, 'w') as f:
+                json.dump(model_selection, f, indent=2, default=str)
+        
+        # =================================================================
+        # 5.6 SAVE ML6 VIEW (backward compatibility)
+        # =================================================================
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("5.6 SAVE ML6 VIEW")
+        logger.info("=" * 60)
+        
+        # Build ML6 output with selected features
+        selected_features = [f for f in selected_features if f in df_universe.columns]
+        ml6_cols = ['date'] + selected_features + target_cols + meta_cols
+        ml6_cols = [c for c in ml6_cols if c in df_universe.columns]
+        
+        df_ml6 = df_universe[ml6_cols].copy()
         
         ml6_path = ctx.ai_snapshot_dir / "ml6" / "features_daily_ml6.csv"
-        ml6_path.parent.mkdir(parents=True, exist_ok=True)
-        df_clean.to_csv(ml6_path, index=False)
+        df_ml6.to_csv(ml6_path, index=False)
         
-        logger.info(f"[OK] Stage 5 complete: {df_clean.shape}")
+        logger.info(f"[5.6] ML6 view: {df_ml6.shape}")
+        logger.info(f"  Features: {len(selected_features)}")
+        logger.info(f"  Saved: {ml6_path}")
+        
+        # =================================================================
+        # STAGE 5 SUMMARY
+        # =================================================================
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("STAGE 5 COMPLETE")
+        logger.info("=" * 60)
         logger.info(f"  ML period: >= {ml_cutoff.strftime('%Y-%m-%d')}")
-        logger.info(f"  SoM days: {len(df_clean)}")
-        logger.info(f"  Features: {len(feature_cols)}")
-        logger.info(f"  Targets: som_category_3class, som_binary")
-        logger.info(f"  Output: {ml6_path}")
+        logger.info(f"  SoM days: {len(df_ml6)}")
+        logger.info(f"  Feature Universe: {len(feature_cols)} columns")
+        logger.info(f"  ML6 Features: {len(selected_features)} columns")
+        logger.info(f"  Experiment Suite: {'ran' if experiment_suite_ran else 'fallback'}")
+        logger.info(f"  Outputs:")
+        logger.info(f"    - {universe_path}")
+        logger.info(f"    - {ml6_path}")
+        if model_selection:
+            logger.info(f"    - {ctx.ai_snapshot_dir / 'model_selection.json'}")
         
         elapsed = time.time() - stage_start
         ctx.log_stage_result(5, "success", duration_sec=elapsed,
-                            rows=len(df_clean), columns=len(df_clean.columns),
-                            n_som_days=len(df_clean), n_features=len(feature_cols),
-                            som_distribution=som_dist.to_dict())
-        return df_clean
+                            rows=len(df_ml6), columns=len(df_ml6.columns),
+                            n_som_days=len(df_ml6),
+                            n_features_universe=len(feature_cols),
+                            n_features_ml6=len(selected_features),
+                            experiment_suite_ran=experiment_suite_ran,
+                            som_distribution=som_dist.to_dict(),
+                            model_selection_summary={
+                                'ml6_fs': model_selection.get('ml6', {}).get('selected_fs') if model_selection else 'FS-B',
+                                'ml6_target': model_selection.get('ml6', {}).get('selected_target') if model_selection else 'binary',
+                                'ml7_config': model_selection.get('ml7', {}).get('selected_config') if model_selection else 'CFG-3',
+                            })
+        return df_ml6
     
     except Exception as e:
         logger.error(f"✗ Stage 5 failed: {e}", exc_info=True)
@@ -1530,6 +1681,130 @@ def stage_7_ml7(ctx: PipelineContext) -> bool:
         return False
 
 
+def stage_6_extended(ctx: PipelineContext) -> bool:
+    """
+    Stage 6-Extended: ML6-Extended Multi-Algorithm Pipeline
+    
+    Runs multiple classical ML algorithms on the selected feature set:
+    - LogisticRegression
+    - RandomForest
+    - GradientBoosting
+    - XGBoost (optional)
+    - SVM (Linear, RBF)
+    - GaussianNB
+    - KNN (k=3, 5, 7)
+    
+    All models:
+    - Load feature set and target from model_selection.json
+    - Apply anti-leak column filtering
+    - Fit scaler ONLY on training data per fold
+    - Use 6-fold temporal CV
+    
+    Output: data/ai/<PID>/<SNAPSHOT>/ml6_extended/
+    """
+    banner("STAGE 6-EXTENDED: ML6 Multi-Algorithm Pipeline")
+    stage_start = time.time()
+    
+    try:
+        from src.etl.ml6_extended import run_ml6_extended
+        
+        results = run_ml6_extended(
+            participant=ctx.participant,
+            snapshot=ctx.snapshot,
+            output_base=Path('data/ai'),
+            skip_shap=False
+        )
+        
+        if results.get('status') == 'success':
+            best_model = results.get('best_model', {})
+            logger.info(f"[OK] Stage 6-Extended complete: Best={best_model.get('name')} "
+                       f"(F1={best_model.get('f1_macro', 0):.4f})")
+            
+            elapsed = time.time() - stage_start
+            ctx.log_stage_result("6_extended", "success", duration_sec=elapsed,
+                                best_model=best_model.get('name'),
+                                f1_macro=best_model.get('f1_macro', 0),
+                                n_models_tested=len(results.get('models', {})))
+            
+            # Store for reporting
+            ctx.results['ml6_extended'] = results
+            return True
+        else:
+            raise Exception(results.get('error', 'Unknown error'))
+    
+    except ImportError as e:
+        logger.warning(f"[ML6-Ext] Skipped - Import error: {e}")
+        ctx.log_stage_result("6_extended", "skipped", error=f"Import error: {e}")
+        return True  # Continue pipeline
+    
+    except Exception as e:
+        logger.error(f"✗ Stage 6-Extended failed: {e}", exc_info=True)
+        ctx.log_stage_result("6_extended", "failed", error=str(e))
+        return True  # Continue pipeline (non-critical)
+
+
+def stage_7_extended(ctx: PipelineContext) -> bool:
+    """
+    Stage 7-Extended: ML7-Extended Multi-Architecture Pipeline
+    
+    Runs multiple sequence-based deep learning architectures:
+    - LSTM (CFG-3 configuration)
+    - GRU
+    - 1D-CNN (Conv1D)
+    - CNN-LSTM Hybrid
+    
+    All models:
+    - Load feature set, target, and sequence length from model_selection.json
+    - Apply anti-leak column filtering BEFORE sequence creation
+    - Fit scaler ONLY on training data per fold
+    - Use temporal CV for sequences
+    
+    Output: data/ai/<PID>/<SNAPSHOT>/ml7_extended/
+    """
+    banner("STAGE 7-EXTENDED: ML7 Multi-Architecture Pipeline")
+    stage_start = time.time()
+    
+    try:
+        from src.etl.ml7_extended import run_ml7_extended
+        
+        results = run_ml7_extended(
+            participant=ctx.participant,
+            snapshot=ctx.snapshot,
+            output_base=Path('data/ai'),
+            epochs=50,
+            batch_size=16
+        )
+        
+        if results.get('status') == 'success':
+            best_model = results.get('best_model', {})
+            logger.info(f"[OK] Stage 7-Extended complete: Best={best_model.get('name')} "
+                       f"(F1={best_model.get('f1_macro', 0):.4f})")
+            
+            elapsed = time.time() - stage_start
+            ctx.log_stage_result("7_extended", "success", duration_sec=elapsed,
+                                best_model=best_model.get('name'),
+                                f1_macro=best_model.get('f1_macro', 0),
+                                n_models_tested=len(results.get('models', {})),
+                                seq_len=results.get('seq_len'))
+            
+            # Store for reporting
+            ctx.results['ml7_extended'] = results
+            return True
+        else:
+            raise Exception(results.get('error', 'Unknown error'))
+    
+    except ImportError as e:
+        logger.warning(f"[ML7-Ext] Skipped - Import error: {e}")
+        logger.warning(f"[ML7-Ext] TensorFlow may not be installed")
+        ctx.log_stage_result("7_extended", "skipped", error=f"Import error: {e}")
+        return True  # Continue pipeline
+    
+    except Exception as e:
+        logger.error(f"✗ Stage 7-Extended failed: {e}", exc_info=True)
+        ctx.log_stage_result("7_extended", "failed", error=str(e))
+        return True  # Continue pipeline (non-critical)
+
+
 def stage_8_tflite(ctx: PipelineContext) -> bool:
     """
     Stage 8: TFLite Export (SoM-Centric)
@@ -2036,10 +2311,16 @@ def main():
             if args.start_stage <= 6 <= args.end_stage:
                 if not stage_6_ml6(ctx, df_clean):
                     success = False
+                
+                # Run ML6-Extended after standard ML6
+                stage_6_extended(ctx)
             
             if args.start_stage <= 7 <= args.end_stage:
                 if not stage_7_ml7(ctx):
                     success = False
+                
+                # Run ML7-Extended after standard ML7
+                stage_7_extended(ctx)
             
             if args.start_stage <= 8 <= args.end_stage:
                 if not stage_8_tflite(ctx):
