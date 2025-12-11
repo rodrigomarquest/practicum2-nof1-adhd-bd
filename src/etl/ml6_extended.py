@@ -42,6 +42,21 @@ from src.etl.ml_extended_utils import (
     update_model_leaderboard,
 )
 
+from src.etl.ml_metrics_extended import (
+    compute_metrics_extended,
+    compute_naive_baselines,
+    aggregate_extended_metrics,
+    export_per_class_metrics_csv,
+    export_confusion_matrices_json,
+    export_baseline_comparison_csv,
+    setup_metrics_output_dir,
+    format_metrics_table,
+    format_per_class_table,
+    format_baseline_comparison_table,
+    format_confusion_matrix_md,
+    ExtendedMetrics,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -207,10 +222,11 @@ def train_model_cv(
     model_config: Dict,
     X: np.ndarray,
     y: np.ndarray,
-    folds: List[Tuple[List[int], List[int]]]
+    folds: List[Tuple[List[int], List[int]]],
+    class_labels: Optional[List[int]] = None
 ) -> Dict[str, Any]:
     """
-    Train a single model using cross-validation.
+    Train a single model using cross-validation with extended metrics.
     
     Args:
         model_name: Name of the model
@@ -218,9 +234,11 @@ def train_model_cv(
         X: Feature matrix (n_samples, n_features)
         y: Target vector (n_samples,)
         folds: List of (train_idx, val_idx) tuples
+        class_labels: Optional list of class labels for consistent metrics
     
     Returns:
-        Dict with model results including per-fold and aggregate metrics
+        Dict with model results including per-fold and aggregate metrics,
+        confusion matrices, and per-class breakdowns
     """
     # Load model class
     model_class = load_model_class(model_config)
@@ -233,8 +251,14 @@ def train_model_cv(
     
     from sklearn.preprocessing import StandardScaler
     
+    # Determine class labels if not provided
+    if class_labels is None:
+        class_labels = sorted(set(y.tolist()))
+    
     fold_metrics = []
+    fold_extended_metrics = []
     fold_predictions = []
+    fold_confusion_matrices = []
     
     for fold_idx, (train_idx, val_idx) in enumerate(folds):
         try:
@@ -264,10 +288,17 @@ def train_model_cv(
             model.fit(X_train, y_train)
             y_pred = model.predict(X_val)
             
-            # Compute metrics
+            # Compute basic metrics (for backward compatibility)
             metrics = compute_classification_metrics(y_val, y_pred)
             metrics['fold_idx'] = fold_idx
             fold_metrics.append(metrics)
+            
+            # Compute extended metrics with per-class breakdown
+            ext_metrics = compute_metrics_extended(y_val, y_pred, class_labels)
+            fold_extended_metrics.append(ext_metrics)
+            
+            # Store confusion matrix
+            fold_confusion_matrices.append(ext_metrics.confusion_matrix)
             
             fold_predictions.append({
                 'fold_idx': fold_idx,
@@ -286,8 +317,11 @@ def train_model_cv(
             'reason': 'All folds failed',
         }
     
-    # Aggregate metrics
+    # Aggregate basic metrics (backward compatible)
     agg_metrics = aggregate_fold_metrics(fold_metrics)
+    
+    # Aggregate extended metrics
+    agg_extended = aggregate_extended_metrics(fold_extended_metrics)
     
     return {
         'model_name': model_name,
@@ -295,6 +329,9 @@ def train_model_cv(
         'n_folds_completed': len(fold_metrics),
         'per_fold_metrics': fold_metrics,
         'aggregate_metrics': agg_metrics,
+        'extended_metrics': agg_extended,
+        'confusion_matrices': fold_confusion_matrices,
+        'class_labels': class_labels,
         'predictions': fold_predictions,
     }
 
@@ -477,6 +514,47 @@ def run_ml6_extended(
         folds = create_temporal_folds(n_samples, n_folds=6)
         results['n_folds'] = len(folds)
         
+        # Determine class labels
+        class_labels = sorted(set(y.tolist()))
+        results['class_labels'] = class_labels
+        
+        # =====================================================================
+        # Compute Naïve Baselines
+        # =====================================================================
+        logger.info("[ML6-Ext] Computing naïve baselines...")
+        
+        baseline_fold_metrics = {
+            'majority_class': [],
+            'stratified_random': [],
+            'persistence': [],
+        }
+        
+        for fold_idx, (train_idx, val_idx) in enumerate(folds):
+            y_train = y[train_idx]
+            y_val = y[val_idx]
+            
+            # Compute baselines for this fold
+            bl_metrics = compute_naive_baselines(
+                y_train=y_train,
+                y_val=y_val,
+                y_full=y,
+                val_idx=val_idx,
+                class_labels=class_labels,
+                random_seed=42 + fold_idx  # Vary seed per fold for stratified-random
+            )
+            
+            for bl_name, bl_ext_metrics in bl_metrics.items():
+                baseline_fold_metrics[bl_name].append(bl_ext_metrics)
+        
+        # Aggregate baseline metrics across folds
+        baseline_results = {}
+        for bl_name, fold_ext_list in baseline_fold_metrics.items():
+            agg_bl = aggregate_extended_metrics(fold_ext_list)
+            baseline_results[bl_name] = agg_bl
+            logger.info(f"  → {bl_name}: F1={agg_bl.get('mean_f1_macro', 0):.4f}")
+        
+        results['baselines'] = baseline_results
+        
         # =====================================================================
         # Train all models
         # =====================================================================
@@ -487,7 +565,7 @@ def run_ml6_extended(
             logger.info(f"[ML6-Ext] Training {model_name}...")
             
             try:
-                result = train_model_cv(model_name, model_config, X, y, folds)
+                result = train_model_cv(model_name, model_config, X, y, folds, class_labels)
                 model_results[model_name] = result
                 
                 if result['status'] == 'success':
@@ -556,6 +634,57 @@ def run_ml6_extended(
                     if shap_path:
                         results['shap_summaries'][model_name] = shap_path
         
+        # =====================================================================
+        # Export Extended Metrics (PhD-level)
+        # =====================================================================
+        logger.info("[ML6-Ext] Exporting extended metrics...")
+        
+        metrics_dir = setup_metrics_output_dir(
+            base_dir=Path('results'),
+            participant=participant,
+            snapshot=snapshot
+        )
+        
+        results['metrics_exports'] = {}
+        
+        # Export for best model if available
+        if results.get('best_model') and results['best_model']['name'] in model_results:
+            best_name = results['best_model']['name']
+            best_res = model_results[best_name]
+            target_name = selected_target
+            
+            # Per-class metrics CSV
+            if 'extended_metrics' in best_res:
+                pc_path = export_per_class_metrics_csv(
+                    metrics=best_res['extended_metrics'],
+                    output_path=metrics_dir / 'per_class' / f'per_class_{best_name}_{target_name}.csv',
+                    model_name=best_name,
+                    target_name=target_name
+                )
+                results['metrics_exports']['per_class_csv'] = str(pc_path)
+            
+            # Confusion matrices JSON
+            if 'confusion_matrices' in best_res:
+                cm_path = export_confusion_matrices_json(
+                    fold_matrices=best_res['confusion_matrices'],
+                    class_labels=class_labels,
+                    output_path=metrics_dir / 'confusion_matrices' / f'cm_{best_name}_{target_name}.json',
+                    model_name=best_name,
+                    target_name=target_name
+                )
+                results['metrics_exports']['confusion_matrices_json'] = str(cm_path)
+            
+            # Baseline comparison CSV
+            if 'baselines' in results and 'extended_metrics' in best_res:
+                bl_path = export_baseline_comparison_csv(
+                    model_metrics=best_res['extended_metrics'],
+                    baseline_metrics=results['baselines'],
+                    output_path=metrics_dir / 'baseline_comparisons' / f'baseline_comparison_{target_name}.csv',
+                    model_name=best_name,
+                    target_name=target_name
+                )
+                results['metrics_exports']['baseline_comparison_csv'] = str(bl_path)
+        
         results['status'] = 'success'
         
     except Exception as e:
@@ -602,7 +731,10 @@ def run_ml6_extended(
     # Best model summary
     if results.get('best_model'):
         best_summary_path = ml6_ext_dir / 'best_model_summary.md'
-        with open(best_summary_path, 'w') as f:
+        best_name = results['best_model']['name']
+        best_res = results['models'].get(best_name, {})
+        
+        with open(best_summary_path, 'w', encoding='utf-8') as f:
             f.write("# ML6-Extended Best Model Summary\n\n")
             f.write(f"**Generated**: {results['completed']}\n\n")
             f.write(f"## Configuration\n\n")
@@ -617,6 +749,55 @@ def run_ml6_extended(
             f.write(f"| F1-macro | {results['best_model']['f1_macro']:.4f} |\n")
             f.write(f"| Balanced Accuracy | {results['best_model']['balanced_accuracy']:.4f} |\n")
             f.write(f"| Cohen's Kappa | {results['best_model']['cohen_kappa']:.4f} |\n")
+            
+            # Add baseline comparison section
+            if 'baselines' in results:
+                f.write("\n## Baseline Comparison\n\n")
+                f.write("| Method | F1-Macro | Bal. Acc | Cohen κ |\n")
+                f.write("|--------|----------|----------|--------|\n")
+                f.write(f"| **{best_name}** | **{results['best_model']['f1_macro']:.4f}** | **{results['best_model']['balanced_accuracy']:.4f}** | **{results['best_model']['cohen_kappa']:.4f}** |\n")
+                
+                baseline_order = ['majority_class', 'stratified_random', 'persistence']
+                baseline_names = {
+                    'majority_class': 'Majority Class',
+                    'stratified_random': 'Stratified Random',
+                    'persistence': 'Persistence',
+                }
+                for bl_key in baseline_order:
+                    if bl_key in results['baselines']:
+                        bl = results['baselines'][bl_key]
+                        f1 = bl.get('mean_f1_macro', 0)
+                        ba = bl.get('mean_balanced_accuracy', 0)
+                        kappa = bl.get('mean_cohen_kappa', 0)
+                        f.write(f"| {baseline_names.get(bl_key, bl_key)} | {f1:.4f} | {ba:.4f} | {kappa:.4f} |\n")
+            
+            # Add per-class metrics section
+            if best_res.get('extended_metrics', {}).get('per_class'):
+                f.write("\n## Per-Class Metrics\n\n")
+                f.write("| Class | Precision | Recall | F1 | Support |\n")
+                f.write("|-------|-----------|--------|----|---------|\n")
+                for pc in best_res['extended_metrics']['per_class']:
+                    prec = f"{pc['precision_mean']:.3f}±{pc['precision_std']:.3f}"
+                    rec = f"{pc['recall_mean']:.3f}±{pc['recall_std']:.3f}"
+                    f1 = f"{pc['f1_mean']:.3f}±{pc['f1_std']:.3f}"
+                    supp = pc['support_total']
+                    f.write(f"| {pc['class_label']} | {prec} | {rec} | {f1} | {supp} |\n")
+            
+            # Add aggregated confusion matrix section
+            if best_res.get('extended_metrics', {}).get('confusion_matrix_sum'):
+                f.write("\n## Aggregated Confusion Matrix (Sum)\n\n")
+                f.write("*Rows: True labels, Columns: Predicted labels*\n\n")
+                class_labels = best_res['extended_metrics'].get('class_labels', results.get('class_labels', []))
+                cm = best_res['extended_metrics']['confusion_matrix_sum']
+                
+                header = "| True \\ Pred | " + " | ".join(str(l) for l in class_labels) + " |"
+                f.write(header + "\n")
+                f.write("|" + "---|" * (len(class_labels) + 1) + "\n")
+                
+                for i, row in enumerate(cm):
+                    row_str = f"| **{class_labels[i]}** | " + " | ".join(f"{v:.0f}" for v in row) + " |"
+                    f.write(row_str + "\n")
+            
             f.write(f"\n## All Models\n\n")
             f.write("| Model | Status | F1-macro |\n")
             f.write("|-------|--------|----------|\n")
@@ -629,6 +810,12 @@ def run_ml6_extended(
                 f1 = model_res.get('aggregate_metrics', {}).get('mean_f1_macro', 'N/A')
                 f1_str = f"{f1:.4f}" if isinstance(f1, float) else f1
                 f.write(f"| {model_name} | {status} | {f1_str} |\n")
+            
+            # Add export references
+            if results.get('metrics_exports'):
+                f.write("\n## Extended Metrics Exports\n\n")
+                for export_name, export_path in results['metrics_exports'].items():
+                    f.write(f"- **{export_name}**: `{export_path}`\n")
         
         logger.info(f"[ML6-Ext] Best model summary: {best_summary_path}")
     

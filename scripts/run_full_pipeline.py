@@ -917,24 +917,56 @@ def stage_5_prep_ml6(ctx: PipelineContext, df: pd.DataFrame) -> Optional[pd.Data
                     segment_df = df_work[segment_mask].copy()
                     
                     if len(segment_df) >= 5:
-                        imputer = IterativeImputer(
-                            max_iter=10, random_state=42, verbose=0,
-                            n_nearest_features=None, sample_posterior=True
-                        )
-                        segment_df[feature_cols] = imputer.fit_transform(segment_df[feature_cols])
+                        # Filter to columns that have at least one non-NaN value in this segment
+                        cols_with_data = [c for c in feature_cols if segment_df[c].notna().any()]
+                        cols_all_nan = [c for c in feature_cols if c not in cols_with_data]
+                        
+                        if cols_with_data:
+                            imputer = IterativeImputer(
+                                max_iter=10, random_state=42, verbose=0,
+                                n_nearest_features=None, sample_posterior=True
+                            )
+                            # Only impute columns that have at least one value
+                            imputed_values = imputer.fit_transform(segment_df[cols_with_data])
+                            segment_df[cols_with_data] = imputed_values
+                        
+                        # Fill all-NaN columns with 0 (they have no data in this segment)
+                        for c in cols_all_nan:
+                            segment_df[c] = 0.0
                     
                     df_imputed_list.append(segment_df)
                 
                 df_work = pd.concat(df_imputed_list, ignore_index=False).sort_values('date')
             else:
-                imputer = IterativeImputer(
-                    max_iter=10, random_state=42, verbose=0,
-                    n_nearest_features=None, sample_posterior=True
-                )
-                df_work[feature_cols] = imputer.fit_transform(df_work[feature_cols])
+                # Filter to columns that have at least one non-NaN value
+                cols_with_data = [c for c in feature_cols if df_work[c].notna().any()]
+                cols_all_nan = [c for c in feature_cols if c not in cols_with_data]
+                
+                if cols_with_data:
+                    imputer = IterativeImputer(
+                        max_iter=10, random_state=42, verbose=0,
+                        n_nearest_features=None, sample_posterior=True
+                    )
+                    df_work[cols_with_data] = imputer.fit_transform(df_work[cols_with_data])
+                
+                # Fill all-NaN columns with 0
+                for c in cols_all_nan:
+                    df_work[c] = 0.0
             
             n_missing_after = df_work[feature_cols].isna().sum().sum()
             logger.info(f"[5.3] After MICE: {n_missing_after} missing values")
+            
+            # Fallback: If any NaN remains, use global median imputation
+            if n_missing_after > 0:
+                logger.info(f"[5.3] Applying global median fallback for {n_missing_after} remaining NaN values...")
+                for col in feature_cols:
+                    if df_work[col].isna().any():
+                        median_val = df_work[col].median()
+                        if pd.isna(median_val):
+                            median_val = 0.0  # If column is all NaN, use 0
+                        df_work[col] = df_work[col].fillna(median_val)
+                n_final = df_work[feature_cols].isna().sum().sum()
+                logger.info(f"[5.3] After global fallback: {n_final} missing values")
         else:
             logger.info("[5.3] No imputation needed - data complete")
         

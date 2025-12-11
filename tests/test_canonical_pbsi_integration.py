@@ -107,9 +107,9 @@ def test_canonical_pbsi_integration():
         seg_df = df_labeled[df_labeled['segment_id'] == seg_id]
         mean_pbsi = seg_df['pbsi_score'].mean()
         mode_label = seg_df['label_3cls'].mode()[0]
-        label_name = {1: "stable", 0: "neutral", -1: "unstable"}[mode_label]
+        label_name = {1: "stable", 0: "neutral", -1: "unstable"}.get(int(mode_label), "unknown")
         
-        print(f"  Segment {seg_id}: mean_pbsi={mean_pbsi:+.3f}, mode_label={mode_label:+2d} ({label_name})")
+        print(f"  Segment {seg_id}: mean_pbsi={mean_pbsi:+.3f}, mode_label={int(mode_label):+2d} ({label_name})")
     
     # Expected behavior: Segment 1 should have lower (more negative) PBSI → stable (+1)
     seg1_mean = df_labeled[df_labeled['segment_id'] == 1]['pbsi_score'].mean()

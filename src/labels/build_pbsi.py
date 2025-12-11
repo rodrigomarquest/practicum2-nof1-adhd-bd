@@ -69,10 +69,17 @@ def compute_z_scores_by_segment(
                 df = df.drop(columns=[date_col])
             logger.info("✓ Joined segment info from version_log")
         except Exception as e:
-            logger.warning(f"Could not load version_log: {e}. Using global z-scores.")
-            df['segment_id'] = 'global'
+            logger.warning(f"Could not load version_log: {e}. Using existing segment_id or global.")
+            if 'segment_id' not in df.columns:
+                df['segment_id'] = 'global'
     else:
-        df['segment_id'] = 'global'
+        # Preserve existing segment_id if present (e.g., from stage_apply_labels temporal segmentation)
+        if 'segment_id' not in df.columns:
+            df['segment_id'] = 'global'
+            logger.info("ℹ No segment_id in data, using global z-scores")
+        else:
+            n_segments = df['segment_id'].nunique()
+            logger.info(f"✓ Using existing segment_id ({n_segments} segments) for z-scores")
     
     # Compute z-scores per segment
     features_for_zscores = [
