@@ -37,6 +37,13 @@ notebook.log
 # --- Pipeline execution logs
 pipeline_run.log
 
+# --- Tests (deprecated pytest artifacts)
+tests/out/
+tests/out/**
+tests/.pytest_cache/
+tests/__pycache__/
+*.pytest_cache/
+
 # --- Data layout (canonical)
 # Keep raw data private (never commit)
 data/raw/

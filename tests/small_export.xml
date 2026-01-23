@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<HealthData>
-  <Record type="HKQuantityTypeIdentifierHeartRate" startDate="2025-09-28 08:00:00 +0000" endDate="2025-09-28 08:00:05 +0000" value="72" unit="count/min" sourceName="Watch" sourceVersion="1.0" device="Apple Watch"/>
-  <Record type="HKQuantityTypeIdentifierHeartRate" startDate="2025-09-28 08:05:00 +0000" endDate="2025-09-28 08:05:05 +0000" value="75" unit="count/min" sourceName="Watch" sourceVersion="1.0" device="Apple Watch"/>
-  <Record type="HKQuantityTypeIdentifierHeartRateVariabilitySDNN" startDate="2025-09-28 08:10:00 +0000" endDate="2025-09-28 08:10:05 +0000" value="45" unit="ms" sourceName="Watch" sourceVersion="1.0" device="Apple Watch"/>
-</HealthData>

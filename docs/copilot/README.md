@@ -2,6 +2,25 @@
 
 This folder contains **AI-assisted session logs, completion reports, implementation summaries, and execution plans** generated with the help of GitHub Copilot, Claude, and ChatGPT during the v4.0-v4.1.x development cycles.
 
+---
+
+## ⚠️ IMPORTANT: File Location Policy
+
+**ALL Copilot/AI-assisted documentation MUST be created in `docs/copilot/`.**
+
+- ❌ Do NOT create AI work files in repository root
+- ❌ Do NOT create AI work files in `docs/` root
+- ✅ Always use `docs/copilot/` for session logs, audits, summaries, and reports
+- ✅ Reference files with full path: `docs/copilot/FILENAME.md`
+
+**Examples:**
+- ✅ `docs/copilot/TESTS_CLEANUP_AUDIT.md`
+- ✅ `docs/copilot/PAPER_CODE_AUDIT_REPORT.md`
+- ❌ `TESTS_CLEANUP_AUDIT.md` (root level)
+- ❌ `docs/PAPER_CODE_AUDIT.md` (docs root)
+
+---
+
 ## Purpose
 
 These documents serve as:
