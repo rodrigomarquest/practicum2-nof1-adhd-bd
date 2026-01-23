@@ -14,6 +14,7 @@ This folder contains **AI-assisted session logs, completion reports, implementat
 - ✅ Reference files with full path: `docs/copilot/FILENAME.md`
 
 **Examples:**
+
 - ✅ `docs/copilot/TESTS_CLEANUP_AUDIT.md`
 - ✅ `docs/copilot/PAPER_CODE_AUDIT_REPORT.md`
 - ❌ `TESTS_CLEANUP_AUDIT.md` (root level)

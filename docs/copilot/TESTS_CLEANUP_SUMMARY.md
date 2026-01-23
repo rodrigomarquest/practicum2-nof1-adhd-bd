@@ -13,6 +13,7 @@
 Created comprehensive audit report: `TESTS_CLEANUP_AUDIT.md`
 
 **Key Findings:**
+
 - 30 files deleted (11 test files, 6 fixtures, 5 outputs, 1 config)
 - 0 code dependencies found
 - All functionality covered by `src/etl/etl_audit.py` (~1,874 lines)
@@ -21,6 +22,7 @@ Created comprehensive audit report: `TESTS_CLEANUP_AUDIT.md`
 ### 2. Documentation Added ✅
 
 Created `tests/README.md` explaining:
+
 - Why pytest was deprecated
 - Current QA strategy (ETL audit system)
 - How to run audits (`make qc-cardio`, `make qc-all`)
@@ -46,6 +48,7 @@ tests/__pycache__/
 ### Step 1: Review Audit Report
 
 Read `docs/copilot/TESTS_CLEANUP_AUDIT.md` for full analysis:
+
 - Section 2: Detailed breakdown of each deleted test
 - Section 3: Dependency scan results
 - Section 7: Post-deletion checklist
@@ -111,23 +114,23 @@ git rm pytest.ini
 
 ## Files Created/Modified
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `docs/copilot/TESTS_CLEANUP_AUDIT.md` | ✅ Created | Comprehensive audit report (470+ lines) |
-| `tests/README.md` | ✅ Created | QA strategy explanation for future developers |
-| `.gitignore` | ✅ Modified | Block `tests/out/` artifacts from future commits |
+| File                                  | Action      | Purpose                                          |
+| ------------------------------------- | ----------- | ------------------------------------------------ |
+| `docs/copilot/TESTS_CLEANUP_AUDIT.md` | ✅ Created  | Comprehensive audit report (470+ lines)          |
+| `tests/README.md`                     | ✅ Created  | QA strategy explanation for future developers    |
+| `.gitignore`                          | ✅ Modified | Block `tests/out/` artifacts from future commits |
 
 ---
 
 ## Evidence Summary
 
-| Metric | Value |
-|--------|-------|
-| **Files deleted** | 30 |
-| **Code dependencies** | 0 (safe to delete) |
-| **Test lines removed** | ~3,000 |
+| Metric                    | Value                        |
+| ------------------------- | ---------------------------- |
+| **Files deleted**         | 30                           |
+| **Code dependencies**     | 0 (safe to delete)           |
+| **Test lines removed**    | ~3,000                       |
 | **Coverage by ETL audit** | 100% (all scenarios covered) |
-| **Risk level** | 🟢 LOW |
+| **Risk level**            | 🟢 LOW                       |
 
 ---
 
