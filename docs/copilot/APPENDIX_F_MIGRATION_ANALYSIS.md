@@ -8,10 +8,10 @@
 
 ## 1. Located Paths (Confirmed)
 
-| File | Path | Lines | Status |
-|------|------|-------|--------|
-| **Source** | `docs/latex/latest/configuration_manual_full.tex` | 309 | ✅ Exists (standalone) |
-| **Target** | `docs/latex/latest/appendix_f.tex` | 238 | ✅ Exists (appendix) |
+| File       | Path                                              | Lines | Status                 |
+| ---------- | ------------------------------------------------- | ----- | ---------------------- |
+| **Source** | `docs/latex/latest/configuration_manual_full.tex` | 309   | ✅ Exists (standalone) |
+| **Target** | `docs/latex/latest/appendix_f.tex`                | 238   | ✅ Exists (appendix)   |
 
 Both files confirmed present and readable.
 
@@ -24,34 +24,42 @@ Both files confirmed present and readable.
 #### Configuration Manual Full (`configuration_manual_full.tex`)
 
 **Preamble (Lines 1–48):**
+
 - Standalone document class (`\documentclass[12pt,a4paper]{article}`)
 - Full package imports (inputenc, fontenc, geometry, hyperref, etc.)
 - Title, author, date metadata
 - `\maketitle`, `\tableofcontents`, `\newpage`
 
 **Content Sections (Lines 51–309):**
+
 1. **Section 1: Introduction** (Line 51)
+
    - Brief overview of manual purpose
    - References "A Deterministic N-of-1 Pipeline..." paper title
 
 2. **Section 2: System Architecture** (Line 57)
+
    - Components description
    - **Figure 1:** `system-architecture-paper-v3.png` (Line 62)
 
 3. **Section 3: Environment Setup** (Line 70)
+
    - Subsection 3.1: Requirements
    - Python 3.11+ dependency reference
 
 4. **Section 4: Data Management and Preprocessing** (Line 77)
+
    - Detailed prose on data sources (Apple Health, Amazfit GTR2/GTR4, SoM)
    - **Figure 2:** `etl-pipeline-paper.png` (Line 86)
 
 5. **Section 5: Ethics and Governance** (Line 95)
+
    - Privacy, autonomy, data governance discussion
    - REC approval context (self-tracking exception)
    - Future multi-participant extension requirements
 
 6. **Section 7: Reproducibility and Version Control** (Line 109)
+
    - **Subsection 7.1:** Repository and Code Access
    - **Subsection 7.2:** Data Availability and Privacy
    - **Subsection 7.3:** Snapshot Parameters
@@ -72,11 +80,13 @@ Both files confirmed present and readable.
 #### Appendix F (`appendix_f.tex`)
 
 **Header (Lines 1–6):**
+
 - `\section*{Appendix F --- Configuration Manual (Pipeline v4.3.1)}`
 - `\addcontentsline{toc}{section}{...}`
 - Introductory paragraph
 
 **Content Sections (Lines 8–237):**
+
 - **F.1:** Repository and Code Access
 - **F.2:** Data Availability and Privacy
 - **F.3:** Snapshot Parameters
@@ -92,22 +102,22 @@ Both files confirmed present and readable.
 
 ### 2.2 Content Mapping
 
-| Configuration Manual Section | Appendix F Section | Status |
-|------------------------------|-------------------|--------|
-| **1. Introduction** | *(missing)* | ❌ Not in Appendix F |
-| **2. System Architecture** | *(missing)* | ❌ Not in Appendix F |
-| **3. Environment Setup** | *(missing)* | ❌ Not in Appendix F |
-| **4. Data Management** | *(missing)* | ❌ Not in Appendix F |
-| **5. Ethics and Governance** | *(missing)* | ❌ Not in Appendix F |
-| **7.1 Repository Access** | **F.1** | ✅ Equivalent |
-| **7.2 Data Availability** | **F.2** | ✅ Equivalent |
-| **7.3 Snapshot Parameters** | **F.3** | ✅ Equivalent |
-| **7.4 Directory Structure** | **F.4** | ✅ Equivalent |
-| **7.5 Entry Points** | **F.5** | ✅ Equivalent |
-| **7.6 Determinism** | **F.6** | ✅ Equivalent |
-| **7.7 QC** | **F.7** | ✅ Equivalent |
-| **7.8 Reproduction Guide** | **F.8** | ✅ Equivalent |
-| **8. Future Work** | *(missing)* | ❌ Not in Appendix F |
+| Configuration Manual Section | Appendix F Section | Status               |
+| ---------------------------- | ------------------ | -------------------- |
+| **1. Introduction**          | _(missing)_        | ❌ Not in Appendix F |
+| **2. System Architecture**   | _(missing)_        | ❌ Not in Appendix F |
+| **3. Environment Setup**     | _(missing)_        | ❌ Not in Appendix F |
+| **4. Data Management**       | _(missing)_        | ❌ Not in Appendix F |
+| **5. Ethics and Governance** | _(missing)_        | ❌ Not in Appendix F |
+| **7.1 Repository Access**    | **F.1**            | ✅ Equivalent        |
+| **7.2 Data Availability**    | **F.2**            | ✅ Equivalent        |
+| **7.3 Snapshot Parameters**  | **F.3**            | ✅ Equivalent        |
+| **7.4 Directory Structure**  | **F.4**            | ✅ Equivalent        |
+| **7.5 Entry Points**         | **F.5**            | ✅ Equivalent        |
+| **7.6 Determinism**          | **F.6**            | ✅ Equivalent        |
+| **7.7 QC**                   | **F.7**            | ✅ Equivalent        |
+| **7.8 Reproduction Guide**   | **F.8**            | ✅ Equivalent        |
+| **8. Future Work**           | _(missing)_        | ❌ Not in Appendix F |
 
 ---
 
@@ -118,6 +128,7 @@ Both files confirmed present and readable.
 **Status:** ✅ **EQUIVALENT**
 
 **Evidence:**
+
 - Sections 7.1–7.8 in `configuration_manual_full.tex` are **semantically identical** to F.1–F.8 in `appendix_f.tex`
 - Diff analysis shows only formatting differences:
   - `\subsection{1. ...}` → `\subsection*{F.1 ...}` (numbering style)
@@ -126,6 +137,7 @@ Both files confirmed present and readable.
   - Line wrapping variations (no semantic change)
 
 **Critical Parameters Match:**
+
 - Participant: `P000001`
 - Snapshot: `2025-12-09`
 - Seed: `42`
@@ -138,27 +150,32 @@ Both files confirmed present and readable.
 **Missing from Appendix F (5 sections):**
 
 1. **Introduction** (Section 1)
+
    - ~3 lines
    - Generic manual purpose statement
    - Paper title reference
 
 2. **System Architecture** (Section 2)
+
    - ~15 lines prose + 1 figure
    - Components: Apple Health, Amazfit GTR2/GTR4, SoM
    - **Figure:** `system-architecture-paper-v3.png`
 
 3. **Environment Setup** (Section 3)
+
    - ~3 lines
    - Python 3.11+ requirement
    - Reference to requirements.txt
 
 4. **Data Management and Preprocessing** (Section 4)
+
    - ~18 lines prose + 1 figure
    - Data sources narrative
    - ETL pipeline overview
    - **Figure:** `etl-pipeline-paper.png`
 
 5. **Ethics and Governance** (Section 5)
+
    - ~17 lines
    - Privacy, autonomy, data governance
    - REC approval discussion
@@ -186,12 +203,12 @@ All content in Appendix F is present (and equivalent) in Configuration Manual Se
 
 ### 4.1 Formatting Differences (Not Semantic)
 
-| Configuration Manual | Appendix F | Impact |
-|---------------------|-----------|--------|
-| `\subsection{1. Repository...}` | `\subsection*{F.1 Repository...}` | Numbering only |
-| `% Daily CSVs` | `# Daily CSVs` | Comment style in verbatim |
-| `2,868` | `2{,}868` | LaTeX comma formatting |
-| Line breaks | Wrapped differently | Whitespace only |
+| Configuration Manual            | Appendix F                        | Impact                    |
+| ------------------------------- | --------------------------------- | ------------------------- |
+| `\subsection{1. Repository...}` | `\subsection*{F.1 Repository...}` | Numbering only            |
+| `% Daily CSVs`                  | `# Daily CSVs`                    | Comment style in verbatim |
+| `2,868`                         | `2{,}868`                         | LaTeX comma formatting    |
+| Line breaks                     | Wrapped differently               | Whitespace only           |
 
 **Verdict:** No semantic differences — content identical.
 
@@ -267,20 +284,21 @@ All CLI commands, paths, snapshot IDs, and configuration values match exactly.
 
 **In `appendix_f.tex`:**
 
-| New Section | Insert After Line | Content Source (config_manual) |
-|-------------|------------------|-------------------------------|
-| **F.0.1 Overview** | Line 6 (after intro) | Lines 51–53 |
-| **F.0.2 System Architecture** | After F.0.1 | Lines 57–67 + Figure (Line 62) |
-| **F.0.3 Environment** | After F.0.2 | Lines 70–73 |
-| **F.0.4 Data Sources** | After F.0.3 | Lines 77–91 + Figure (Line 86) |
-| **F.0.5 Ethics** | After F.0.4 | Lines 95–106 |
-| **F.9 Future Work** | After F.8 (Line 237) | Lines 297–309 |
+| New Section                   | Insert After Line    | Content Source (config_manual) |
+| ----------------------------- | -------------------- | ------------------------------ |
+| **F.0.1 Overview**            | Line 6 (after intro) | Lines 51–53                    |
+| **F.0.2 System Architecture** | After F.0.1          | Lines 57–67 + Figure (Line 62) |
+| **F.0.3 Environment**         | After F.0.2          | Lines 70–73                    |
+| **F.0.4 Data Sources**        | After F.0.3          | Lines 77–91 + Figure (Line 86) |
+| **F.0.5 Ethics**              | After F.0.4          | Lines 95–106                   |
+| **F.9 Future Work**           | After F.8 (Line 237) | Lines 297–309                  |
 
 ### 5.4 Figure Path Adjustments
 
 **Required Changes:**
 
 1. **system-architecture-paper-v3.png**
+
    - Original path: `docs/figures/system-architecture-paper-v3.png`
    - No change needed (path is correct for Overleaf)
 
@@ -302,20 +320,24 @@ All CLI commands, paths, snapshot IDs, and configuration values match exactly.
 **Total after merge:** ~316 lines
 
 **Comparison:**
+
 - Configuration Manual (full): 309 lines
 - Appendix F (merged): ~316 lines (includes appendix header)
 
 **Page Count Estimate:**
+
 - Current Appendix F: ~5 pages
 - Merged Appendix F: ~7–8 pages
 
 ### 6.2 Research Paper Length Constraints
 
 **Typical NCI MSc Thesis Constraints:**
+
 - Main body: 10,000–15,000 words
 - Appendices: No strict limit (but should be reasonable)
 
 **Assessment:**
+
 - Adding 2 pages to Appendix F is **acceptable**
 - Appendices are supplementary — reviewers expect detailed configuration
 - Alternative (if space critical): Move F.9 (Future Work) to main paper Section 6 (Discussion)
@@ -323,11 +345,13 @@ All CLI commands, paths, snapshot IDs, and configuration values match exactly.
 ### 6.3 Compression Strategy (If Needed)
 
 **Option 1: Minimal Compression (Recommended)**
+
 - Keep all F.0.x sections as-is
 - No content loss
 - Preserve scientific fidelity
 
 **Option 2: Aggressive Compression (Only if required)**
+
 - **F.0.1 Overview:** Reduce to 1 sentence (merge into intro)
 - **F.0.3 Environment:** Merge into F.1 (Repository section)
 - **F.0.5 Ethics:** Move to main paper Section 6 (Discussion)
@@ -347,22 +371,24 @@ All paths, commands, snapshot IDs, and parameters are consistent between both fi
 
 ### 7.2 Potential Risks
 
-| Risk | Severity | Mitigation |
-|------|----------|------------|
-| **Figures missing in Overleaf** | 🟡 Medium | Verify `docs/figures/*.png` exist before merge |
-| **LaTeX compilation errors** | 🟡 Medium | Test compile after each section insertion |
-| **Appendix too long (8+ pages)** | 🟢 Low | Acceptable for MSc thesis format |
-| **Numbering confusion (F.0.x)** | 🟢 Low | F.0.x clearly indicates "introductory" |
-| **Duplicate content** | 🟢 Low | No overlap detected (sections are disjoint) |
+| Risk                             | Severity  | Mitigation                                     |
+| -------------------------------- | --------- | ---------------------------------------------- |
+| **Figures missing in Overleaf**  | 🟡 Medium | Verify `docs/figures/*.png` exist before merge |
+| **LaTeX compilation errors**     | 🟡 Medium | Test compile after each section insertion      |
+| **Appendix too long (8+ pages)** | 🟢 Low    | Acceptable for MSc thesis format               |
+| **Numbering confusion (F.0.x)**  | 🟢 Low    | F.0.x clearly indicates "introductory"         |
+| **Duplicate content**            | 🟢 Low    | No overlap detected (sections are disjoint)    |
 
 ### 7.3 Resolution Plan
 
 **Before Merge:**
+
 1. ✅ Verify figure files exist: `system-architecture-paper-v3.png`, `etl-pipeline-paper.png`
 2. ✅ Confirm Overleaf project has `appendix_f.tex` write access
 3. ✅ Create backup: `cp appendix_f.tex appendix_f_backup.tex`
 
 **During Merge:**
+
 1. Insert F.0.1–F.0.5 sections (test compile after each)
 2. Verify figures render correctly
 3. Check cross-references (e.g., "Section 7" → "Section F.5")
@@ -370,6 +396,7 @@ All paths, commands, snapshot IDs, and parameters are consistent between both fi
 5. Full compile + PDF review
 
 **After Merge:**
+
 1. Update `main.tex` to remove `configuration_manual_full.tex` reference (if present)
 2. Archive `configuration_manual_full.tex` (move to `docs/latex/archive/`)
 3. Update README to document canonical source: `appendix_f.tex`
@@ -381,10 +408,12 @@ All paths, commands, snapshot IDs, and parameters are consistent between both fi
 ### 8.1 Merge Execution Plan
 
 **Phase 1: Preparation (5 minutes)**
+
 - Verify figures exist in Overleaf
 - Backup `appendix_f.tex`
 
 **Phase 2: Content Insertion (20 minutes)**
+
 - Add F.0.1 (Overview) after intro paragraph
 - Add F.0.2 (System Architecture) with figure
 - Add F.0.3 (Environment)
@@ -393,16 +422,19 @@ All paths, commands, snapshot IDs, and parameters are consistent between both fi
 - Test compile (should succeed)
 
 **Phase 3: Future Work (5 minutes)**
+
 - Add F.9 (Future Work) after F.8.2
 - Test compile
 
 **Phase 4: Validation (10 minutes)**
+
 - Full PDF review
 - Check figure rendering
 - Verify cross-references
 - Compare against configuration_manual_full.tex (ensure zero content loss)
 
 **Phase 5: Cleanup (5 minutes)**
+
 - Archive `configuration_manual_full.tex`
 - Update main paper references (if needed)
 - Commit changes with clear message
@@ -412,6 +444,7 @@ All paths, commands, snapshot IDs, and parameters are consistent between both fi
 ### 8.2 Content Fidelity Assurance
 
 **Zero-Loss Guarantee:**
+
 - All 309 lines from `configuration_manual_full.tex` will be present in merged `appendix_f.tex`
 - All CLI commands preserved verbatim
 - All file paths unchanged
@@ -419,6 +452,7 @@ All paths, commands, snapshot IDs, and parameters are consistent between both fi
 - Both figures included
 
 **Verification Checklist:**
+
 - [ ] Introduction content → F.0.1
 - [ ] System Architecture + Figure 1 → F.0.2
 - [ ] Environment Setup → F.0.3
@@ -433,11 +467,13 @@ All paths, commands, snapshot IDs, and parameters are consistent between both fi
 ### 8.3 Post-Merge Actions
 
 **Required:**
+
 1. ✅ Remove or deprecate `configuration_manual_full.tex`
 2. ✅ Update `main.tex` (remove references to standalone config manual)
 3. ✅ Update README: "Appendix F is the canonical configuration source"
 
 **Recommended:**
+
 1. ✅ Archive `configuration_manual_full.tex` to `docs/latex/archive/`
 2. ✅ Add comment in archived file: "Merged into appendix_f.tex on 2026-01-23"
 3. ✅ Update CHANGELOG.md: "Consolidated configuration manual into Appendix F"
@@ -449,6 +485,7 @@ All paths, commands, snapshot IDs, and parameters are consistent between both fi
 ### 9.1 Structural Verdict
 
 **Configuration Manual vs Appendix F:**
+
 - **Sections 7.1–7.8** (Config Manual) ≡ **F.1–F.8** (Appendix F) → ✅ **EQUIVALENT**
 - **Sections 1–5, 8** (Config Manual) → ❌ **MISSING** from Appendix F
 - **Total Missing:** 6 sections (~77 lines + 2 figures)
@@ -458,6 +495,7 @@ All paths, commands, snapshot IDs, and parameters are consistent between both fi
 **Recommendation:** ✅ **PROCEED WITH MERGE**
 
 **Proposed Structure:**
+
 ```
 Appendix F
 ├── Intro (existing)
@@ -471,6 +509,7 @@ Appendix F
 ```
 
 **Outcome:**
+
 - ✅ Zero content loss
 - ✅ All CLI commands preserved
 - ✅ All paths/parameters unchanged
@@ -490,11 +529,13 @@ Appendix F
 ### 9.4 Next Steps
 
 **Immediate:**
+
 1. Get user approval to proceed with merge
 2. Execute Phase 1 (Preparation)
 3. Begin Phase 2 (Content Insertion)
 
 **Post-Merge:**
+
 1. Archive standalone configuration manual
 2. Update main paper references
 3. Document changes in CHANGELOG.md
